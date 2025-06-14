@@ -8,11 +8,21 @@
     <meta name="description" content="Sistema de Gestão VERSYS para Consultoria em Segurança Portuária" />
     <meta name="author" content="VERSYS Consultoria" />
 
+    <!-- PWA Meta Tags -->
+    <meta name="theme-color" content="#1e40af" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="default" />
+    <meta name="apple-mobile-web-app-title" content="VERSYS" />
+    <link rel="apple-touch-icon" href="/lovable-uploads/a4359bba-bc5d-4bf2-98b0-566712fd53b8.png" />
+    <link rel="manifest" href="/manifest.json" />
+
+    <!-- Open Graph Meta Tags -->
     <meta property="og:title" content="VERSYS - Consultoria em Segurança Portuária" />
     <meta property="og:description" content="Sistema de Gestão VERSYS para Consultoria em Segurança Portuária" />
     <meta property="og:type" content="website" />
     <meta property="og:image" content="https://lovable.dev/opengraph-image-p98pqg.png" />
 
+    <!-- Twitter Meta Tags -->
     <meta name="twitter:card" content="summary_large_image" />
     <meta name="twitter:site" content="@lovable_dev" />
     <meta name="twitter:image" content="https://lovable.dev/opengraph-image-p98pqg.png" />
@@ -21,5 +31,20 @@
   <body>
     <div id="root"></div>
     <script type="module" src="/src/main.tsx"></script>
+    
+    <!-- PWA Service Worker Registration -->
+    <script>
+      if ('serviceWorker' in navigator) {
+        window.addEventListener('load', () => {
+          navigator.serviceWorker.register('/sw.js')
+            .then((registration) => {
+              console.log('SW registered: ', registration);
+            })
+            .catch((registrationError) => {
+              console.log('SW registration failed: ', registrationError);
+            });
+        });
+      }
+    </script>
   </body>
 </html>
