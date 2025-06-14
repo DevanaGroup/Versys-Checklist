@@ -50,104 +50,109 @@ export function AppSidebar() {
   };
 
   return (
-    <Sidebar className="bg-gradient-to-b from-versys-primary to-versys-secondary border-r-0">
-      <SidebarHeader className="p-4">
-        <div className="flex items-center space-x-3">
-          <img 
-            src="/lovable-uploads/a4359bba-bc5d-4bf2-98b0-566712fd53b8.png" 
-            alt="VERSYS Logo" 
-            className="h-8 w-auto"
-          />
-          {!isCollapsed && (
-            <span className="text-white font-semibold text-lg">VERSYS</span>
-          )}
-        </div>
-      </SidebarHeader>
+    <div className="relative">
+      <Sidebar className="border-r-0">
+        <div className="absolute inset-0 bg-gradient-to-b from-versys-primary to-versys-secondary"></div>
+        <div className="relative z-10 h-full">
+          <SidebarHeader className="p-4">
+            <div className="flex items-center space-x-3">
+              <img 
+                src="/lovable-uploads/a4359bba-bc5d-4bf2-98b0-566712fd53b8.png" 
+                alt="VERSYS Logo" 
+                className="h-8 w-auto"
+              />
+              {!isCollapsed && (
+                <span className="text-white font-semibold text-lg">VERSYS</span>
+              )}
+            </div>
+          </SidebarHeader>
 
-      <Separator className="bg-white/20" />
+          <Separator className="bg-white/20" />
 
-      <SidebarContent className="px-2">
-        <div className="py-4">
-          <div className="flex items-center space-x-3 px-3 py-2">
-            <Avatar className="h-8 w-8">
-              <AvatarImage src="" />
-              <AvatarFallback className="bg-white/20 text-white text-sm">
-                AD
-              </AvatarFallback>
-            </Avatar>
-            {!isCollapsed && (
-              <div className="flex flex-col">
-                <span className="text-white text-sm font-medium">Admin</span>
-                <span className="text-white/70 text-xs">Administrador</span>
+          <SidebarContent className="px-2">
+            <div className="py-4">
+              <div className="flex items-center space-x-3 px-3 py-2">
+                <Avatar className="h-8 w-8">
+                  <AvatarImage src="" />
+                  <AvatarFallback className="bg-white/20 text-white text-sm">
+                    AD
+                  </AvatarFallback>
+                </Avatar>
+                {!isCollapsed && (
+                  <div className="flex flex-col">
+                    <span className="text-white text-sm font-medium">Admin</span>
+                    <span className="text-white/70 text-xs">Administrador</span>
+                  </div>
+                )}
               </div>
-            )}
-          </div>
+            </div>
+
+            <Separator className="bg-white/20" />
+
+            <SidebarGroup className="py-4">
+              <SidebarGroupContent>
+                <SidebarMenu>
+                  {menuItems.map((item) => (
+                    <SidebarMenuItem key={item.title}>
+                      <SidebarMenuButton 
+                        asChild
+                        className={`${
+                          isActive(item.url) 
+                            ? "bg-white/20 text-white" 
+                            : "text-white/80 hover:bg-white/10 hover:text-white"
+                        }`}
+                      >
+                        <NavLink to={item.url}>
+                          <item.icon className="h-4 w-4" />
+                          {!isCollapsed && <span>{item.title}</span>}
+                        </NavLink>
+                      </SidebarMenuButton>
+                    </SidebarMenuItem>
+                  ))}
+                </SidebarMenu>
+              </SidebarGroupContent>
+            </SidebarGroup>
+
+            <Separator className="bg-white/20" />
+
+            <SidebarGroup className="py-4">
+              <SidebarGroupContent>
+                <SidebarMenu>
+                  {supportItems.map((item) => (
+                    <SidebarMenuItem key={item.title}>
+                      <SidebarMenuButton 
+                        asChild
+                        className={`${
+                          isActive(item.url) 
+                            ? "bg-white/20 text-white" 
+                            : "text-white/80 hover:bg-white/10 hover:text-white"
+                        }`}
+                      >
+                        <NavLink to={item.url}>
+                          <item.icon className="h-4 w-4" />
+                          {!isCollapsed && <span>{item.title}</span>}
+                        </NavLink>
+                      </SidebarMenuButton>
+                    </SidebarMenuItem>
+                  ))}
+                </SidebarMenu>
+              </SidebarGroupContent>
+            </SidebarGroup>
+          </SidebarContent>
+
+          <SidebarFooter className="p-2">
+            <Separator className="bg-white/20 mb-2" />
+            <Button 
+              variant="ghost" 
+              onClick={handleLogout}
+              className="w-full justify-start text-white/80 hover:bg-white/10 hover:text-white"
+            >
+              <LogOut className="h-4 w-4" />
+              {!isCollapsed && <span className="ml-2">Sair</span>}
+            </Button>
+          </SidebarFooter>
         </div>
-
-        <Separator className="bg-white/20" />
-
-        <SidebarGroup className="py-4">
-          <SidebarGroupContent>
-            <SidebarMenu>
-              {menuItems.map((item) => (
-                <SidebarMenuItem key={item.title}>
-                  <SidebarMenuButton 
-                    asChild
-                    className={`${
-                      isActive(item.url) 
-                        ? "bg-white/20 text-white" 
-                        : "text-white/80 hover:bg-white/10 hover:text-white"
-                    }`}
-                  >
-                    <NavLink to={item.url}>
-                      <item.icon className="h-4 w-4" />
-                      {!isCollapsed && <span>{item.title}</span>}
-                    </NavLink>
-                  </SidebarMenuButton>
-                </SidebarMenuItem>
-              ))}
-            </SidebarMenu>
-          </SidebarGroupContent>
-        </SidebarGroup>
-
-        <Separator className="bg-white/20" />
-
-        <SidebarGroup className="py-4">
-          <SidebarGroupContent>
-            <SidebarMenu>
-              {supportItems.map((item) => (
-                <SidebarMenuItem key={item.title}>
-                  <SidebarMenuButton 
-                    asChild
-                    className={`${
-                      isActive(item.url) 
-                        ? "bg-white/20 text-white" 
-                        : "text-white/80 hover:bg-white/10 hover:text-white"
-                    }`}
-                  >
-                    <NavLink to={item.url}>
-                      <item.icon className="h-4 w-4" />
-                      {!isCollapsed && <span>{item.title}</span>}
-                    </NavLink>
-                  </SidebarMenuButton>
-                </SidebarMenuItem>
-              ))}
-            </SidebarMenu>
-          </SidebarGroupContent>
-        </SidebarGroup>
-      </SidebarContent>
-
-      <SidebarFooter className="p-2">
-        <Separator className="bg-white/20 mb-2" />
-        <Button 
-          variant="ghost" 
-          onClick={handleLogout}
-          className="w-full justify-start text-white/80 hover:bg-white/10 hover:text-white"
-        >
-          <LogOut className="h-4 w-4" />
-          {!isCollapsed && <span className="ml-2">Sair</span>}
-        </Button>
-      </SidebarFooter>
-    </Sidebar>
+      </Sidebar>
+    </div>
   );
 }
