@@ -48,7 +48,7 @@ export function AppSidebar() {
       <Sidebar className="border-r-0">
         <div className="absolute inset-0 bg-gradient-to-b from-versys-primary to-versys-secondary"></div>
         <div className="relative z-10 h-full">
-          <SidebarHeader className="p-4">
+          <SidebarHeader className="p-4 flex items-center justify-center ">
             <div className="flex items-center space-x-3">
               <img src="/lovable-uploads/a4359bba-bc5d-4bf2-98b0-566712fd53b8.png" alt="VERSYS Logo" className="h-14 w-auto" />
               {!isCollapsed}
