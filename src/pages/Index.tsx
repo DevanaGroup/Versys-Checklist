@@ -1,11 +1,25 @@
-// Update this page (the content is just a fallback if you fail to update the page)
+
+import { useEffect } from "react";
+import { useNavigate } from "react-router-dom";
 
 const Index = () => {
+  const navigate = useNavigate();
+
+  useEffect(() => {
+    // Verifica se o usuário já está logado
+    const user = localStorage.getItem("versys_user");
+    if (user) {
+      navigate("/dashboard");
+    } else {
+      navigate("/");
+    }
+  }, [navigate]);
+
   return (
-    <div className="min-h-screen flex items-center justify-center bg-background">
-      <div className="text-center">
-        <h1 className="text-4xl font-bold mb-4">Welcome to Your Blank App</h1>
-        <p className="text-xl text-muted-foreground">Start building your amazing project here!</p>
+    <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-versys-primary to-versys-secondary">
+      <div className="text-center text-white">
+        <h1 className="text-4xl font-bold mb-4">VERSYS Consultoria</h1>
+        <p className="text-xl">Segurança Portuária</p>
       </div>
     </div>
   );
