@@ -12,22 +12,22 @@ const Dashboard = () => {
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
         <div className="bg-white p-6 rounded-lg shadow-sm border border-gray-200">
           <h3 className="text-lg font-semibold text-versys-primary mb-2">Projetos Ativos</h3>
-          <p className="text-3xl font-bold text-versys-secondary">4</p>
+          <p className="text-3xl font-bold text-versys-secondary">0</p>
         </div>
         
         <div className="bg-white p-6 rounded-lg shadow-sm border border-gray-200">
           <h3 className="text-lg font-semibold text-versys-primary mb-2">Relatórios</h3>
-          <p className="text-3xl font-bold text-versys-secondary">12</p>
+          <p className="text-3xl font-bold text-versys-secondary">0</p>
         </div>
         
         <div className="bg-white p-6 rounded-lg shadow-sm border border-gray-200">
           <h3 className="text-lg font-semibold text-versys-primary mb-2">Pendências</h3>
-          <p className="text-3xl font-bold text-versys-accent">3</p>
+          <p className="text-3xl font-bold text-versys-accent">0</p>
         </div>
         
         <div className="bg-white p-6 rounded-lg shadow-sm border border-gray-200">
           <h3 className="text-lg font-semibold text-versys-primary mb-2">Concluídos</h3>
-          <p className="text-3xl font-bold text-green-600">8</p>
+          <p className="text-3xl font-bold text-green-600">0</p>
         </div>
       </div>
     </div>

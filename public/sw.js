@@ -1,9 +1,16 @@
 
-const CACHE_NAME = 'versys-pwa-v1';
+const CACHE_NAME = 'versys-pwa-v2';
 const urlsToCache = [
   '/',
   '/static/js/bundle.js',
   '/static/css/main.css',
+  '/favicon.ico',
+  '/favicon-16x16.png',
+  '/favicon-32x32.png',
+  '/apple-touch-icon.png',
+  '/icon-192x192.png',
+  '/icon-512x512.png',
+  '/versys-logo.png',
   '/lovable-uploads/a4359bba-bc5d-4bf2-98b0-566712fd53b8.png',
   '/lovable-uploads/d4ef3de2-1ab1-45f0-9e85-afac3edece7d.png'
 ];
