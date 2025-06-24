@@ -50,7 +50,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     console.log('AuthContext: Firebase user mudou:', user);
     
     if (user) {
-      // Quando há um usuário Firebase, criamos os dados do usuário
+      // Quando há um usuário Firebase, criamos os dados do usuário imediatamente
       const userType = determineUserType(user.email || '');
       console.log('AuthContext: Tipo de usuário determinado:', userType, 'para email:', user.email);
       
@@ -72,31 +72,10 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         company: userType === 'client' ? (user.displayName || user.email?.split('@')[0]) : undefined
       }));
     } else {
-      // Verifica se há dados no localStorage como fallback
-      const localUserData = localStorage.getItem("versys_user");
-      console.log('AuthContext: Dados no localStorage:', localUserData);
-      
-      if (localUserData) {
-        try {
-          const localUser = JSON.parse(localUserData);
-          const fallbackUserData: UserData = {
-            uid: localUser.email, // Usa email como uid para compatibilidade
-            email: localUser.email,
-            displayName: localUser.name,
-            type: localUser.type,
-            company: localUser.company,
-            projects: localUser.projects,
-          };
-          console.log('AuthContext: Definindo userData com dados do localStorage:', fallbackUserData);
-          setUserData(fallbackUserData);
-        } catch (error) {
-          console.error('AuthContext: Erro ao parsear dados do localStorage:', error);
-          setUserData(null);
-        }
-      } else {
-        console.log('AuthContext: Nenhum usuário encontrado, definindo userData como null');
-        setUserData(null);
-      }
+      // Quando não há usuário Firebase, limpa os dados
+      console.log('AuthContext: Nenhum usuário Firebase encontrado, limpando userData');
+      setUserData(null);
+      localStorage.removeItem("versys_user");
     }
   }, [user]);
 
@@ -140,7 +119,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     currentUser: user,
     userData,
     loading,
-    isAuthenticated: !!user || !!userData,
+    // Mudança principal: Priorizar o Firebase user para determinar se está autenticado
+    isAuthenticated: !!user,
     login,
     loginWithGoogle,
     logout,

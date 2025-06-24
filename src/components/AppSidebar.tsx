@@ -1,4 +1,4 @@
-import { Home, FolderOpen, FileText, Settings, HelpCircle, LogOut, User, Users, UserCheck } from "lucide-react";
+import { Home, FolderOpen, FileText, Settings, HelpCircle, LogOut, User, Users, UserCheck, MessageSquareMore } from "lucide-react";
 import { NavLink, useNavigate, useLocation } from "react-router-dom";
 import { Sidebar, SidebarContent, SidebarGroup, SidebarGroupContent, SidebarGroupLabel, SidebarMenu, SidebarMenuButton, SidebarMenuItem, SidebarHeader, SidebarFooter, useSidebar } from "@/components/ui/sidebar";
 import { Separator } from "@/components/ui/separator";
@@ -8,7 +8,7 @@ import { useEffect, useState } from "react";
 import { useAuthContext } from "@/contexts/AuthContext";
 import { toast } from "sonner";
 
-const menuItems = [{
+const adminMenuItems = [{
   title: "Dashboard",
   url: "/dashboard",
   icon: Home
@@ -16,6 +16,10 @@ const menuItems = [{
   title: "Projetos",
   url: "/projetos",
   icon: FolderOpen
+}, {
+  title: "Gestão de Projetos",
+  url: "/projetos/manage",
+  icon: MessageSquareMore
 }, {
   title: "Clientes",
   url: "/clientes",
@@ -32,6 +36,16 @@ const menuItems = [{
   title: "Configurações",
   url: "/configuracoes",
   icon: Settings
+}];
+
+const clientMenuItems = [{
+  title: "Dashboard",
+  url: "/client-dashboard",
+  icon: Home
+}, {
+  title: "Meus Projetos",
+  url: "/client-dashboard",
+  icon: FolderOpen
 }];
 
 const supportItems = [{
@@ -71,6 +85,9 @@ export function AppSidebar() {
     if (path === "/dashboard") {
       return currentPath === "/dashboard";
     }
+    if (path === "/client-dashboard") {
+      return currentPath === "/client-dashboard";
+    }
     return currentPath.startsWith(path);
   };
 
@@ -89,6 +106,10 @@ export function AppSidebar() {
   const getUserRole = () => {
     if (!userData) return "Usuário";
     return userData.type === "admin" ? "Administrador" : "Cliente";
+  };
+
+  const getMenuItems = () => {
+    return userData?.type === "client" ? clientMenuItems : adminMenuItems;
   };
 
   return (
@@ -127,7 +148,7 @@ export function AppSidebar() {
             <SidebarGroup className="py-4">
               <SidebarGroupContent>
                 <SidebarMenu>
-                  {menuItems.map(item => (
+                  {getMenuItems().map(item => (
                     <SidebarMenuItem key={item.title}>
                       <SidebarMenuButton 
                         asChild 

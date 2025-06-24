@@ -118,4 +118,38 @@ export const testClientesCollection = async () => {
     console.error('Erro ao testar coleções:', error);
     return { error };
   }
+};
+
+// Função para testar se os projetos estão sendo salvos corretamente
+export const testProjetosCollection = async () => {
+  try {
+    console.log('🔍 Testando coleção projetos...');
+    const projetosRef = collection(db, 'projetos');
+    const q = query(projetosRef, orderBy('dataCriacao', 'desc'));
+    const querySnapshot = await getDocs(q);
+    
+    console.log('📊 Número de documentos na coleção projetos:', querySnapshot.size);
+    
+    if (querySnapshot.size > 0) {
+      querySnapshot.forEach((doc) => {
+        const data = doc.data();
+        console.log('📄 Projeto encontrado:', {
+          id: doc.id,
+          nome: data.nome,
+          cliente: data.cliente?.nome || 'Sem cliente',
+          status: data.status,
+          dataCriacao: data.dataCriacao,
+          itensCount: data.itens?.length || 0,
+          accordionsCount: data.customAccordions?.length || 0
+        });
+      });
+    } else {
+      console.log('📭 Nenhum projeto encontrado na coleção.');
+    }
+    
+    return { projetosCount: querySnapshot.size };
+  } catch (error) {
+    console.error('❌ Erro ao testar coleção projetos:', error);
+    return { error };
+  }
 }; 

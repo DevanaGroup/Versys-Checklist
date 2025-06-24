@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -8,46 +8,83 @@ import { Progress } from "@/components/ui/progress";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Plus, Building, Calendar, User, FileText, MessageSquare, CheckCircle, Clock, AlertCircle } from "lucide-react";
+import { collection, getDocs, query, orderBy } from "firebase/firestore";
+import { db } from "@/lib/firebase";
+import { toast } from "sonner";
 
 interface ProjectDetails {
-  id: number;
+  id: string;
   nome: string;
   status: string;
   progresso: number;
-  cliente: {
+  cliente?: {
+    id: string;
     nome: string;
-    contato: string;
     email: string;
+    empresa: string;
   };
-  consultor: string;
+  consultor?: string;
   dataInicio: string;
-  previsaoConclusao: string;
-  descricao: string;
-  atividades: Array<{
-    id: string;
-    titulo: string;
-    status: "Concluído" | "Em Andamento" | "Pendente";
-    descricao: string;
-  }>;
-  documentos: Array<{
-    id: string;
-    nome: string;
-    tipo: string;
-    status: "Aprovado" | "Em Análise" | "Pendente";
-  }>;
-  historico: Array<{
-    id: string;
-    data: string;
-    acao: string;
-    responsavel: string;
-  }>;
+  dataCriacao: string;
+  previsaoConclusao?: string;
+  descricao?: string;
+  customAccordions?: any[];
+  itens?: any[];
+  observacoes?: string;
 }
-
-const projetos: ProjectDetails[] = [];
 
 const Projetos = () => {
   const navigate = useNavigate();
+  const [projetos, setProjetos] = useState<ProjectDetails[]>([]);
+  const [loading, setLoading] = useState(true);
   const [selectedProject, setSelectedProject] = useState<ProjectDetails | null>(null);
+
+  useEffect(() => {
+    loadProjetos();
+  }, []);
+
+  const loadProjetos = async () => {
+    try {
+      setLoading(true);
+      const projetosRef = collection(db, 'projetos');
+      const q = query(projetosRef, orderBy('dataCriacao', 'desc'));
+      const querySnapshot = await getDocs(q);
+      
+      const projetosData = querySnapshot.docs.map(doc => {
+        const data = doc.data();
+        return {
+          id: doc.id,
+          nome: data.nome,
+          status: data.status || 'Iniciado',
+          progresso: data.progresso || 0,
+          cliente: data.cliente || null,
+          consultor: data.consultor || 'Não definido',
+          dataInicio: data.dataInicio,
+          dataCriacao: data.dataCriacao,
+          previsaoConclusao: data.previsaoConclusao || calculatePrevisao(data.dataInicio),
+          descricao: data.observacoes || '',
+          customAccordions: data.customAccordions || [],
+          itens: data.itens || [],
+          observacoes: data.observacoes || ''
+        };
+      }) as ProjectDetails[];
+      
+      setProjetos(projetosData);
+      console.log('Projetos carregados:', projetosData.length);
+    } catch (error) {
+      console.error('Erro ao carregar projetos:', error);
+      toast.error('Erro ao carregar projetos');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const calculatePrevisao = (dataInicio: string) => {
+    const inicio = new Date(dataInicio);
+    const previsao = new Date(inicio);
+    previsao.setMonth(previsao.getMonth() + 3); // 3 meses de previsão padrão
+    return previsao.toISOString();
+  };
 
   const getStatusColor = (status: string) => {
     switch (status) {
@@ -59,14 +96,7 @@ const Projetos = () => {
     }
   };
 
-  const getActivityStatusIcon = (status: string) => {
-    switch (status) {
-      case "Concluído": return <CheckCircle className="h-4 w-4 text-green-600" />;
-      case "Em Andamento": return <Clock className="h-4 w-4 text-blue-600" />;
-      case "Pendente": return <AlertCircle className="h-4 w-4 text-gray-600" />;
-      default: return <AlertCircle className="h-4 w-4 text-gray-600" />;
-    }
-  };
+
 
   return (
     <div className="space-y-6">
@@ -96,8 +126,17 @@ const Projetos = () => {
           </CardContent>
         </Card>
 
-        {/* Cards dos Projetos */}
-        {projetos.map((projeto) => (
+        {/* Loading ou Cards dos Projetos */}
+        {loading ? (
+          <div className="col-span-full flex items-center justify-center h-48">
+            <p className="text-gray-500">Carregando projetos...</p>
+          </div>
+        ) : projetos.length === 0 ? (
+          <div className="col-span-full flex items-center justify-center h-48">
+            <p className="text-gray-500">Nenhum projeto encontrado. Crie seu primeiro projeto!</p>
+          </div>
+        ) : (
+          projetos.map((projeto) => (
           <Card key={projeto.id} className="hover:shadow-lg transition-shadow">
             <CardHeader>
               <div className="flex items-center justify-between">
@@ -127,10 +166,16 @@ const Projetos = () => {
                     <User className="h-3 w-3" />
                     <span>Consultor: {projeto.consultor}</span>
                   </div>
-                  <div className="flex items-center space-x-1">
+                  <div className="flex items-center space-x-1 mb-1">
                     <Calendar className="h-3 w-3" />
-                    <span>Previsão: {new Date(projeto.previsaoConclusao).toLocaleDateString('pt-BR')}</span>
+                    <span>Previsão: {projeto.previsaoConclusao ? new Date(projeto.previsaoConclusao).toLocaleDateString('pt-BR') : 'Não definida'}</span>
                   </div>
+                  {projeto.cliente && (
+                    <div className="flex items-center space-x-1">
+                      <Building className="h-3 w-3" />
+                      <span>Cliente: {projeto.cliente.nome}</span>
+                    </div>
+                  )}
                 </div>
                 
                 <Dialog>
@@ -156,8 +201,8 @@ const Projetos = () => {
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-4 p-4 bg-gray-50 rounded-lg">
                           <div>
                             <p className="text-sm font-medium text-gray-600">Cliente</p>
-                            <p className="text-sm">{selectedProject.cliente.nome}</p>
-                            <p className="text-xs text-gray-500">{selectedProject.cliente.email}</p>
+                            <p className="text-sm">{selectedProject.cliente?.nome || 'Nenhum cliente'}</p>
+                            <p className="text-xs text-gray-500">{selectedProject.cliente?.email || ''}</p>
                           </div>
                           <div>
                             <p className="text-sm font-medium text-gray-600">Consultor Responsável</p>
@@ -169,7 +214,7 @@ const Projetos = () => {
                           </div>
                           <div>
                             <p className="text-sm font-medium text-gray-600">Previsão de Conclusão</p>
-                            <p className="text-sm">{new Date(selectedProject.previsaoConclusao).toLocaleDateString('pt-BR')}</p>
+                            <p className="text-sm">{selectedProject.previsaoConclusao ? new Date(selectedProject.previsaoConclusao).toLocaleDateString('pt-BR') : 'Não definida'}</p>
                           </div>
                         </div>
 
@@ -185,72 +230,41 @@ const Projetos = () => {
                           <p className="text-right text-sm text-gray-600">{selectedProject.progresso}%</p>
                         </div>
 
-                        {/* Tabs */}
-                        <Tabs defaultValue="atividades" className="w-full">
-                          <TabsList className="grid w-full grid-cols-3">
-                            <TabsTrigger value="atividades">Atividades</TabsTrigger>
-                            <TabsTrigger value="documentos">Documentos</TabsTrigger>
-                            <TabsTrigger value="historico">Histórico</TabsTrigger>
-                          </TabsList>
+                        {/* Informações Adicionais */}
+                        <div className="space-y-4">
+                          <div>
+                            <h4 className="text-sm font-medium text-gray-700 mb-2">Itens do Projeto</h4>
+                            <div className="bg-gray-50 p-3 rounded-lg">
+                              <p className="text-sm text-gray-600">
+                                {selectedProject.itens && selectedProject.itens.length > 0 
+                                  ? `${selectedProject.itens.length} itens selecionados`
+                                  : 'Nenhum item selecionado'
+                                }
+                              </p>
+                            </div>
+                          </div>
                           
-                          <TabsContent value="atividades" className="mt-4">
-                            <ScrollArea className="h-48">
-                              <div className="space-y-3">
-                                {selectedProject.atividades.map((atividade) => (
-                                  <div key={atividade.id} className="flex items-start space-x-3 p-3 border rounded-lg">
-                                    {getActivityStatusIcon(atividade.status)}
-                                    <div className="flex-1">
-                                      <p className="font-medium text-sm">{atividade.titulo}</p>
-                                      <p className="text-xs text-gray-600">{atividade.descricao}</p>
-                                      <Badge variant="outline" className="mt-1 text-xs">
-                                        {atividade.status}
-                                      </Badge>
-                                    </div>
-                                  </div>
-                                ))}
-                              </div>
-                            </ScrollArea>
-                          </TabsContent>
+                          <div>
+                            <h4 className="text-sm font-medium text-gray-700 mb-2">Observações</h4>
+                            <div className="bg-gray-50 p-3 rounded-lg">
+                              <p className="text-sm text-gray-600">
+                                {selectedProject.observacoes || 'Nenhuma observação adicionada'}
+                              </p>
+                            </div>
+                          </div>
                           
-                          <TabsContent value="documentos" className="mt-4">
-                            <ScrollArea className="h-48">
-                              <div className="space-y-3">
-                                {selectedProject.documentos.map((documento) => (
-                                  <div key={documento.id} className="flex items-center justify-between p-3 border rounded-lg">
-                                    <div className="flex items-center space-x-3">
-                                      <FileText className="h-4 w-4 text-blue-600" />
-                                      <div>
-                                        <p className="font-medium text-sm">{documento.nome}</p>
-                                        <p className="text-xs text-gray-600">{documento.tipo}</p>
-                                      </div>
-                                    </div>
-                                    <Badge variant="outline" className={getStatusColor(documento.status)}>
-                                      {documento.status}
-                                    </Badge>
-                                  </div>
-                                ))}
-                              </div>
-                            </ScrollArea>
-                          </TabsContent>
-                          
-                          <TabsContent value="historico" className="mt-4">
-                            <ScrollArea className="h-48">
-                              <div className="space-y-3">
-                                {selectedProject.historico.map((item) => (
-                                  <div key={item.id} className="p-3 border rounded-lg">
-                                    <div className="flex items-center justify-between mb-1">
-                                      <p className="font-medium text-sm">{item.acao}</p>
-                                      <p className="text-xs text-gray-500">
-                                        {new Date(item.data).toLocaleDateString('pt-BR')}
-                                      </p>
-                                    </div>
-                                    <p className="text-xs text-gray-600">Por: {item.responsavel}</p>
-                                  </div>
-                                ))}
-                              </div>
-                            </ScrollArea>
-                          </TabsContent>
-                        </Tabs>
+                          <div>
+                            <h4 className="text-sm font-medium text-gray-700 mb-2">Estrutura do Projeto</h4>
+                            <div className="bg-gray-50 p-3 rounded-lg">
+                              <p className="text-sm text-gray-600">
+                                {selectedProject.customAccordions && selectedProject.customAccordions.length > 0 
+                                  ? `${selectedProject.customAccordions.length} seções organizadas`
+                                  : 'Nenhuma seção organizada'
+                                }
+                              </p>
+                            </div>
+                          </div>
+                        </div>
                       </div>
                     )}
                   </DialogContent>
@@ -258,7 +272,8 @@ const Projetos = () => {
               </div>
             </CardContent>
           </Card>
-        ))}
+          ))
+        )}
       </div>
     </div>
   );

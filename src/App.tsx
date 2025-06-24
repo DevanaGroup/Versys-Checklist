@@ -14,6 +14,7 @@ import Clientes from "./pages/Clientes";
 import Colaboradores from "./pages/Colaboradores";
 import ColaboradorFirstLogin from "./pages/ColaboradorFirstLogin";
 import ClienteFirstLogin from "./pages/ClienteFirstLogin";
+import AdminProjectManagement from "./pages/AdminProjectManagement";
 import { AuthProvider, useAuthContext } from "./contexts/AuthContext";
 
 const queryClient = new QueryClient();
@@ -29,11 +30,20 @@ const ProtectedRoute = ({ children, requiredType }: { children: React.ReactNode,
   }
   
   if (!isAuthenticated) {
+    console.log('ProtectedRoute: Usuário não autenticado, redirecionando para login');
     return <Navigate to="/" replace />;
+  }
+
+  // Aguarda userData ser definido antes de verificar tipo
+  if (!userData) {
+    return <div className="flex items-center justify-center min-h-screen">
+      <div className="animate-spin rounded-full h-32 w-32 border-b-2 border-versys-primary"></div>
+    </div>;
   }
   
   // Verifica tipo de usuário se necessário
-  if (requiredType && userData?.type && userData.type !== requiredType) {
+  if (requiredType && userData.type !== requiredType) {
+    console.log('ProtectedRoute: Tipo de usuário não autorizado, redirecionando para dashboard apropriado');
     // Se o tipo não corresponde, redireciona para o dashboard apropriado
     if (userData.type === "admin") {
       return <Navigate to="/dashboard" replace />;
@@ -72,6 +82,7 @@ const App = () => (
             }>
               <Route index element={<Projetos />} />
               <Route path="new" element={<NewProject />} />
+              <Route path="manage" element={<AdminProjectManagement />} />
             </Route>
             <Route path="/clientes" element={
               <ProtectedRoute requiredType="admin">
@@ -112,9 +123,11 @@ const App = () => (
             {/* Rota para Clientes */}
             <Route path="/client-dashboard" element={
               <ProtectedRoute requiredType="client">
-                <ClientDashboard />
+                <DashboardLayout />
               </ProtectedRoute>
-            } />
+            }>
+              <Route index element={<ClientDashboard />} />
+            </Route>
             
             <Route path="*" element={<NotFound />} />
           </Routes>

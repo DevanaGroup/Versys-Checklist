@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -7,6 +7,7 @@ import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { toast } from "sonner";
 import { useAuth } from "@/hooks/useAuth";
+import { useAuthContext } from "@/contexts/AuthContext";
 
 
 const Login = () => {
@@ -14,8 +15,19 @@ const Login = () => {
   const [clientCredentials, setClientCredentials] = useState({ email: "", password: "" });
   const navigate = useNavigate();
   const { signIn, signInWithGoogle, loading } = useAuth();
+  const { isAuthenticated, userData } = useAuthContext();
 
-
+  // Effect para redirecionar automaticamente quando autenticado
+  useEffect(() => {
+    if (isAuthenticated && userData) {
+      console.log('Login: Usuário autenticado detectado, redirecionando...');
+      if (userData.type === 'admin') {
+        navigate("/dashboard", { replace: true });
+      } else if (userData.type === 'client') {
+        navigate("/client-dashboard", { replace: true });
+      }
+    }
+  }, [isAuthenticated, userData, navigate]);
 
   const handleAdminLogin = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -23,7 +35,7 @@ const Login = () => {
     try {
       await signIn(adminCredentials.email, adminCredentials.password);
       toast.success("Login realizado com sucesso!");
-      navigate("/dashboard");
+      // O redirecionamento será feito pelo useEffect acima
     } catch (error) {
       toast.error("Erro ao fazer login. Verifique suas credenciais.");
     }
@@ -35,7 +47,7 @@ const Login = () => {
     try {
       await signIn(clientCredentials.email, clientCredentials.password);
       toast.success("Login realizado com sucesso!");
-      navigate("/client-dashboard");
+      // O redirecionamento será feito pelo useEffect acima
     } catch (error) {
       toast.error("Erro ao fazer login. Verifique suas credenciais.");
     }
@@ -45,7 +57,7 @@ const Login = () => {
     try {
       await signInWithGoogle();
       toast.success("Login com Google realizado com sucesso!");
-      navigate("/dashboard");
+      // O redirecionamento será feito pelo useEffect acima
     } catch (error) {
       toast.error("Erro ao fazer login com Google.");
     }
@@ -117,15 +129,7 @@ const Login = () => {
                 </Button>
               </form>
 
-              <div className="mt-4 text-center space-y-2">
-                <Button
-                  variant="link"
-                  onClick={() => navigate("/colaborador/primeiro-acesso")}
-                  className="text-sm text-versys-primary hover:text-versys-secondary"
-                >
-                  Primeiro acesso? Criar conta de colaborador
-                </Button>
-              </div>
+
             </TabsContent>
             
             <TabsContent value="client">
@@ -175,14 +179,7 @@ const Login = () => {
                   Entrar com Google
                 </Button>
                 
-                <div className="mt-4 p-3 bg-blue-50 rounded-lg">
-                  <p className="text-sm font-medium text-blue-800 mb-2">Autenticação Firebase:</p>
-                  <div className="text-xs text-blue-600 space-y-1">
-                    <p>• Use suas credenciais cadastradas no sistema</p>
-                    <p>• Ou faça login com Google</p>
-                    <p>• Entre em contato com o administrador para criar uma conta</p>
-                  </div>
-                </div>
+
               </form>
             </TabsContent>
           </Tabs>
@@ -193,22 +190,7 @@ const Login = () => {
             </button>
           </div>
 
-          <div className="mt-4 text-center space-y-2">
-            <Button
-              variant="link"
-              onClick={() => navigate("/colaborador/primeiro-acesso")}
-              className="text-sm text-versys-primary hover:text-versys-secondary"
-            >
-              Primeiro acesso? Criar conta de colaborador
-            </Button>
-            <Button
-              variant="link"
-              onClick={() => navigate("/cliente/primeiro-acesso")}
-              className="text-sm text-green-600 hover:text-green-700"
-            >
-              Cliente? Ativar sua conta
-            </Button>
-          </div>
+
 
         </CardContent>
       </Card>
