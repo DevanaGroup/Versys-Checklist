@@ -101,6 +101,9 @@ const Clientes = () => {
         clientesData = clientesFromUsers;
       }
       
+      // Carregar contagem de projetos para cada cliente
+      await atualizarContagemProjetos(clientesData);
+      
       setClientes(clientesData);
       console.log('Total de clientes carregados:', clientesData.length);
     } catch (error) {
@@ -108,6 +111,37 @@ const Clientes = () => {
       toast.error('Erro ao carregar clientes');
     } finally {
       setLoading(false);
+    }
+  };
+
+  const atualizarContagemProjetos = async (clientesData: Cliente[]) => {
+    try {
+      console.log('Atualizando contagem de projetos...');
+      
+      // Buscar todos os projetos
+      const projetosRef = collection(db, 'projetos');
+      const projetosSnapshot = await getDocs(projetosRef);
+      
+      // Contar projetos por cliente
+      const contagemProjetos: { [clienteId: string]: number } = {};
+      
+      projetosSnapshot.docs.forEach(doc => {
+        const projetoData = doc.data();
+        const clienteId = projetoData.clienteId || projetoData.cliente?.id;
+        
+        if (clienteId) {
+          contagemProjetos[clienteId] = (contagemProjetos[clienteId] || 0) + 1;
+        }
+      });
+      
+      // Atualizar os dados dos clientes com a contagem correta
+      clientesData.forEach(cliente => {
+        cliente.projetos = contagemProjetos[cliente.id] || 0;
+      });
+      
+      console.log('Contagem de projetos atualizada:', contagemProjetos);
+    } catch (error) {
+      console.error('Erro ao atualizar contagem de projetos:', error);
     }
   };
 

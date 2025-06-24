@@ -1,4 +1,4 @@
-import { Home, FolderOpen, FileText, Settings, HelpCircle, LogOut, User, Users, UserCheck, MessageSquareMore } from "lucide-react";
+import { Home, FolderOpen, FileText, Settings, HelpCircle, LogOut, User, Users, UserCheck } from "lucide-react";
 import { NavLink, useNavigate, useLocation } from "react-router-dom";
 import { Sidebar, SidebarContent, SidebarGroup, SidebarGroupContent, SidebarGroupLabel, SidebarMenu, SidebarMenuButton, SidebarMenuItem, SidebarHeader, SidebarFooter, useSidebar } from "@/components/ui/sidebar";
 import { Separator } from "@/components/ui/separator";
@@ -16,10 +16,6 @@ const adminMenuItems = [{
   title: "Projetos",
   url: "/projetos",
   icon: FolderOpen
-}, {
-  title: "Gestão de Projetos",
-  url: "/projetos/manage",
-  icon: MessageSquareMore
 }, {
   title: "Clientes",
   url: "/clientes",

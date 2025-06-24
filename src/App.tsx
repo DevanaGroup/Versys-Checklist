@@ -14,7 +14,7 @@ import Clientes from "./pages/Clientes";
 import Colaboradores from "./pages/Colaboradores";
 import ColaboradorFirstLogin from "./pages/ColaboradorFirstLogin";
 import ClienteFirstLogin from "./pages/ClienteFirstLogin";
-import AdminProjectManagement from "./pages/AdminProjectManagement";
+
 import { AuthProvider, useAuthContext } from "./contexts/AuthContext";
 
 const queryClient = new QueryClient();
@@ -82,7 +82,6 @@ const App = () => (
             }>
               <Route index element={<Projetos />} />
               <Route path="new" element={<NewProject />} />
-              <Route path="manage" element={<AdminProjectManagement />} />
             </Route>
             <Route path="/clientes" element={
               <ProtectedRoute requiredType="admin">
