@@ -286,12 +286,6 @@ const Colaboradores = () => {
   };
 
   const handleDeletarColaborador = async (colaboradorId: string) => {
-    const colaborador = colaboradores.find(c => c.id === colaboradorId);
-    if (colaborador && colaborador.projetosAtivos > 0) {
-      toast.error("Não é possível deletar colaborador com projetos ativos");
-      return;
-    }
-
     try {
       await deleteDoc(doc(db, 'users', colaboradorId));
       setColaboradores(colaboradores.filter(c => c.id !== colaboradorId));
@@ -530,21 +524,19 @@ const Colaboradores = () => {
                 <TableHead>Nível</TableHead>
                 <TableHead>Tipo</TableHead>
                 <TableHead>Status</TableHead>
-                <TableHead>Projetos</TableHead>
-                <TableHead>Admissão</TableHead>
                 <TableHead className="text-center">Ações</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
               {loading ? (
                 <TableRow>
-                  <TableCell colSpan={7} className="text-center py-8">
+                  <TableCell colSpan={5} className="text-center py-8">
                     Carregando colaboradores...
                   </TableCell>
                 </TableRow>
               ) : colaboradoresFiltrados.length === 0 ? (
                 <TableRow>
-                  <TableCell colSpan={7} className="text-center py-8 text-gray-500">
+                  <TableCell colSpan={5} className="text-center py-8 text-gray-500">
                     {filtroNome || filtroStatus !== "todos" 
                       ? "Nenhum colaborador encontrado com os filtros aplicados" 
                       : "Nenhum colaborador cadastrado"}
@@ -562,8 +554,6 @@ const Colaboradores = () => {
                     <TableCell>{getNivelBadge(colaborador.nivel)}</TableCell>
                     <TableCell>{getTipoBadge(colaborador.tipo)}</TableCell>
                     <TableCell>{getStatusBadge(colaborador.status)}</TableCell>
-                    <TableCell>{colaborador.projetosAtivos}</TableCell>
-                    <TableCell>{new Date(colaborador.dataAdmissao).toLocaleDateString('pt-BR')}</TableCell>
                     <TableCell className="text-center">
                       <div className="flex justify-center gap-2">
                         {/* Botão Editar */}
@@ -608,8 +598,7 @@ const Colaboradores = () => {
                               variant="outline"
                               size="sm"
                               className="text-red-600 border-red-600 hover:bg-red-50"
-                              disabled={colaborador.projetosAtivos > 0}
-                              title={colaborador.projetosAtivos > 0 ? 'Não é possível deletar colaborador com projetos ativos' : 'Deletar colaborador'}
+                              title="Deletar colaborador"
                             >
                               <Trash2 className="h-4 w-4" />
                             </Button>

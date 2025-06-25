@@ -4,7 +4,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Progress } from "@/components/ui/progress";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Textarea } from "@/components/ui/textarea";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -15,12 +15,7 @@ import {
   CheckCircle, 
   Clock, 
   AlertCircle, 
-  FileText, 
-  MessageSquare, 
-  Download,
   User,
-  Send,
-  Upload,
   ClipboardCheck,
   XCircle,
   AlertTriangle,
@@ -29,7 +24,7 @@ import {
 } from "lucide-react";
 import { toast } from "sonner";
 import { useAuthContext } from "@/contexts/AuthContext";
-import { collection, query, where, getDocs, addDoc, orderBy, updateDoc, doc } from "firebase/firestore";
+import { collection, query, orderBy, getDocs, updateDoc, doc } from "firebase/firestore";
 import { db } from "@/lib/firebase";
 import { testClientProjects } from "@/lib/testClientProjects";
 
@@ -106,8 +101,7 @@ const ClientDashboard = () => {
   const { userData, logout: authLogout } = useAuthContext();
   const [projectDetails, setProjectDetails] = useState<ProjectDetail[]>([]);
   const [loading, setLoading] = useState(true);
-  const [newMessage, setNewMessage] = useState<{ [projectId: string]: string }>({});
-  const [sendingMessage, setSendingMessage] = useState<{ [projectId: string]: boolean }>({});
+
   const [updatingItem, setUpdatingItem] = useState<{ [itemId: string]: boolean }>({});
 
   useEffect(() => {
@@ -339,53 +333,7 @@ const ClientDashboard = () => {
     }
   };
 
-  const handleSendMessage = async (projectId: string, solicitacaoId?: string) => {
-    const message = newMessage[projectId]?.trim();
-    if (!message) return;
 
-    const messageKey = solicitacaoId || projectId;
-    
-    try {
-      setSendingMessage(prev => ({ ...prev, [messageKey]: true }));
-      
-      const novaComunicacao = {
-        id: Date.now().toString(),
-        de: userData?.uid || '',
-        para: 'admin',
-        assunto: solicitacaoId ? `Resposta à solicitação` : 'Mensagem do cliente',
-        mensagem: message,
-        data: new Date().toISOString(),
-        tipo: 'resposta' as const,
-        lida: false
-      };
-
-      const projectRef = doc(db, 'projetos', projectId);
-      const project = projectDetails.find(p => p.id === projectId);
-      
-      if (project) {
-        const comunicacoesAtualizadas = [...(project.comunicacoes || []), novaComunicacao];
-        
-        await updateDoc(projectRef, {
-          comunicacoes: comunicacoesAtualizadas
-        });
-
-        setProjectDetails(prev => prev.map(p => 
-          p.id === projectId 
-            ? { ...p, comunicacoes: comunicacoesAtualizadas }
-            : p
-        ));
-
-        setNewMessage(prev => ({ ...prev, [projectId]: '' }));
-        toast.success('Mensagem enviada!');
-      }
-      
-    } catch (error) {
-      console.error('Erro ao enviar mensagem:', error);
-      toast.error('Erro ao enviar mensagem');
-    } finally {
-      setSendingMessage(prev => ({ ...prev, [messageKey]: false }));
-    }
-  };
 
   const handleLogout = async () => {
     try {
@@ -410,23 +358,7 @@ const ClientDashboard = () => {
     }
   };
 
-  const getRequirementStatusIcon = (status: string) => {
-    switch (status) {
-      case "Concluído": return <CheckCircle className="h-4 w-4 text-green-600" />;
-      case "Pendente": return <Clock className="h-4 w-4 text-yellow-600" />;
-      case "Rejeitada": return <XCircle className="h-4 w-4 text-red-600" />;
-      default: return <AlertCircle className="h-4 w-4 text-gray-600" />;
-    }
-  };
 
-  const getMessageIcon = (type: string) => {
-    switch (type) {
-      case "solicitacao": return <AlertTriangle className="h-4 w-4 text-yellow-600" />;
-      case "info": return <MessageSquare className="h-4 w-4 text-blue-600" />;
-      case "alerta": return <AlertCircle className="h-4 w-4 text-red-600" />;
-      default: return <MessageSquare className="h-4 w-4 text-gray-600" />;
-    }
-  };
 
   const getSubItemStatusIcon = (subItem: SubItem) => {
     if (subItem.completed) {
@@ -506,35 +438,9 @@ const ClientDashboard = () => {
                   </div>
                 </CardHeader>
 
-                <CardContent className="p-0">
-                  <Tabs defaultValue="checklist" className="w-full">
-                    <TabsList className="grid w-full grid-cols-3">
-                      <TabsTrigger value="checklist" className="flex items-center space-x-2">
-                        <ClipboardCheck className="h-4 w-4" />
-                        <span>Lista de Verificação</span>
-                      </TabsTrigger>
-                      <TabsTrigger value="solicitacoes" className="flex items-center space-x-2">
-                        <FileText className="h-4 w-4" />
-                        <span>Solicitações</span>
-                        {project.solicitacoes && project.solicitacoes.length > 0 && (
-                          <Badge variant="secondary" className="ml-1">
-                            {project.solicitacoes.length}
-                          </Badge>
-                        )}
-                      </TabsTrigger>
-                      <TabsTrigger value="comunicacao" className="flex items-center space-x-2">
-                        <MessageSquare className="h-4 w-4" />
-                        <span>Comunicação</span>
-                        {project.comunicacoes && project.comunicacoes.filter(c => !c.lida).length > 0 && (
-                          <Badge variant="destructive" className="ml-1">
-                            {project.comunicacoes.filter(c => !c.lida).length}
-                          </Badge>
-                        )}
-                      </TabsTrigger>
-                    </TabsList>
-
-                    {/* Lista de Verificação */}
-                    <TabsContent value="checklist" className="p-6">
+                <CardContent className="p-6">
+                  {/* Lista de Verificação */}
+                  <div>
                       <div className="mb-4">
                         <h3 className="text-lg font-semibold text-versys-primary mb-2">
                           Itens para Verificação
@@ -680,187 +586,7 @@ const ClientDashboard = () => {
                           </p>
                         </div>
                       )}
-                    </TabsContent>
-
-                    {/* Solicitações */}
-                    <TabsContent value="solicitacoes" className="p-6">
-                      <div className="mb-4">
-                        <h3 className="text-lg font-semibold text-versys-primary mb-2">
-                          Solicitações e Documentos
-                        </h3>
-                        <p className="text-sm text-gray-600">
-                          Documentos e informações solicitados pela nossa equipe.
-                        </p>
-                      </div>
-
-                      {project.solicitacoes && project.solicitacoes.length > 0 ? (
-                        <div className="space-y-4">
-                          {project.solicitacoes.map((solicitacao) => (
-                            <Card key={solicitacao.id}>
-                              <CardHeader className="pb-3">
-                                <div className="flex items-center justify-between">
-                                  <CardTitle className="text-lg">
-                                    {solicitacao.titulo}
-                                  </CardTitle>
-                                  <div className="flex items-center space-x-2">
-                                    {getRequirementStatusIcon(solicitacao.status)}
-                                    <Badge className={getStatusColor(solicitacao.status)}>
-                                      {solicitacao.status}
-                                    </Badge>
-                                  </div>
-                                </div>
-                                {solicitacao.dataLimite && (
-                                  <p className="text-sm text-gray-600">
-                                    Prazo: {new Date(solicitacao.dataLimite).toLocaleDateString('pt-BR')}
-                                  </p>
-                                )}
-                              </CardHeader>
-                              <CardContent>
-                                <p className="text-sm text-gray-700 mb-4">
-                                  {solicitacao.descricao}
-                                </p>
-                                
-                                {solicitacao.comentarios && (
-                                  <div className="bg-gray-50 p-3 rounded-lg mb-4">
-                                    <p className="text-sm text-gray-700">
-                                      <strong>Comentários:</strong> {solicitacao.comentarios}
-                                    </p>
-                                  </div>
-                                )}
-
-                                <div className="flex items-center space-x-2">
-                                  <Textarea
-                                    placeholder="Digite sua resposta ou comentários..."
-                                    value={newMessage[`${project.id}_${solicitacao.id}`] || ''}
-                                    onChange={(e) => setNewMessage(prev => ({
-                                      ...prev,
-                                      [`${project.id}_${solicitacao.id}`]: e.target.value
-                                    }))}
-                                    className="flex-1"
-                                    rows={3}
-                                  />
-                                  <div className="flex flex-col space-y-2">
-                                    <Button
-                                      onClick={() => handleSendMessage(project.id, solicitacao.id)}
-                                      disabled={
-                                        !newMessage[`${project.id}_${solicitacao.id}`]?.trim() || 
-                                        sendingMessage[solicitacao.id]
-                                      }
-                                      size="sm"
-                                      className="bg-versys-primary hover:bg-versys-secondary"
-                                    >
-                                      {sendingMessage[solicitacao.id] ? (
-                                        <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
-                                      ) : (
-                                        <Send className="h-4 w-4" />
-                                      )}
-                                    </Button>
-                                    <Button
-                                      variant="outline"
-                                      size="sm"
-                                      className="text-versys-primary border-versys-primary"
-                                    >
-                                      <Upload className="h-4 w-4" />
-                                    </Button>
-                                  </div>
-                                </div>
-                              </CardContent>
-                            </Card>
-                          ))}
-                        </div>
-                      ) : (
-                        <div className="text-center py-8">
-                          <FileText className="h-12 w-12 text-gray-400 mx-auto mb-4" />
-                          <p className="text-gray-600">
-                            Nenhuma solicitação pendente no momento.
-                          </p>
-                        </div>
-                      )}
-                    </TabsContent>
-
-                    {/* Comunicação */}
-                    <TabsContent value="comunicacao" className="p-6">
-                      <div className="mb-4">
-                        <h3 className="text-lg font-semibold text-versys-primary mb-2">
-                          Comunicação com a Equipe
-                        </h3>
-                        <p className="text-sm text-gray-600">
-                          Histórico de mensagens e comunicações do projeto.
-                        </p>
-                      </div>
-
-                      <div className="space-y-4 mb-6">
-                        {project.comunicacoes && project.comunicacoes.length > 0 ? (
-                          <ScrollArea className="h-80">
-                            <div className="space-y-3">
-                              {project.comunicacoes.map((comunicacao) => (
-                                <div key={comunicacao.id} className="flex items-start space-x-3 p-4 border rounded-lg">
-                                  {getMessageIcon(comunicacao.tipo)}
-                                  <div className="flex-1">
-                                    <div className="flex items-center justify-between mb-1">
-                                      <p className="text-sm font-medium">
-                                        {comunicacao.assunto}
-                                      </p>
-                                      <p className="text-xs text-gray-500">
-                                        {new Date(comunicacao.data).toLocaleDateString('pt-BR')} às{' '}
-                                        {new Date(comunicacao.data).toLocaleTimeString('pt-BR', { 
-                                          hour: '2-digit', 
-                                          minute: '2-digit' 
-                                        })}
-                                      </p>
-                                    </div>
-                                    <p className="text-sm text-gray-700">
-                                      {comunicacao.mensagem}
-                                    </p>
-                                  </div>
-                                </div>
-                              ))}
-                            </div>
-                          </ScrollArea>
-                        ) : (
-                          <div className="text-center py-8">
-                            <MessageSquare className="h-12 w-12 text-gray-400 mx-auto mb-4" />
-                            <p className="text-gray-600">
-                              Nenhuma mensagem ainda. Inicie uma conversa!
-                            </p>
-                          </div>
-                        )}
-                      </div>
-
-                      {/* Nova mensagem */}
-                      <div className="border-t pt-4">
-                        <div className="flex items-end space-x-2">
-                          <div className="flex-1">
-                            <Label htmlFor={`message-${project.id}`} className="text-sm font-medium">
-                              Enviar mensagem
-                            </Label>
-                            <Textarea
-                              id={`message-${project.id}`}
-                              placeholder="Digite sua mensagem..."
-                              value={newMessage[project.id] || ''}
-                              onChange={(e) => setNewMessage(prev => ({
-                                ...prev,
-                                [project.id]: e.target.value
-                              }))}
-                              className="mt-1"
-                              rows={3}
-                            />
-                          </div>
-                          <Button
-                            onClick={() => handleSendMessage(project.id)}
-                            disabled={!newMessage[project.id]?.trim() || sendingMessage[project.id]}
-                            className="bg-versys-primary hover:bg-versys-secondary"
-                          >
-                            {sendingMessage[project.id] ? (
-                              <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
-                            ) : (
-                              <Send className="h-4 w-4" />
-                            )}
-                          </Button>
-                        </div>
-                      </div>
-                    </TabsContent>
-                  </Tabs>
+                  </div>
                 </CardContent>
               </Card>
             ))}

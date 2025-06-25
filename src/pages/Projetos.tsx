@@ -13,7 +13,7 @@ import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
-import { Plus, Building, Calendar, User, FileText, MessageSquare, CheckCircle, Clock, AlertCircle, ArrowLeft, Send, Download, CheckCircle2, XCircle, AlertTriangle, Eye, ClipboardCheck, Trash2, MoreVertical } from "lucide-react";
+import { Plus, Building, Calendar, User, FileText, CheckCircle, Clock, AlertCircle, ArrowLeft, Send, Download, CheckCircle2, XCircle, AlertTriangle, Eye, ClipboardCheck, Trash2, MoreVertical, Edit } from "lucide-react";
 import { collection, getDocs, query, orderBy, doc, updateDoc, deleteDoc } from "firebase/firestore";
 import { db } from "@/lib/firebase";
 import { useAuthContext } from "@/contexts/AuthContext";
@@ -90,12 +90,7 @@ const Projetos = () => {
   const [loading, setLoading] = useState(true);
   const [selectedProject, setSelectedProject] = useState<ProjectDetails | null>(null);
   const [viewMode, setViewMode] = useState<'list' | 'details'>('list');
-  const [solicitacaoForm, setSolicitacaoForm] = useState({
-    titulo: '',
-    descricao: '',
-    dataLimite: ''
-  });
-  const [enviandoSolicitacao, setEnviandoSolicitacao] = useState(false);
+
   const [updatingStatus, setUpdatingStatus] = useState<{ [itemId: string]: boolean }>({});
   const [deletingProject, setDeletingProject] = useState<string | null>(null);
 
@@ -253,56 +248,7 @@ const Projetos = () => {
     }
   };
 
-  const handleCriarSolicitacao = async () => {
-    if (!selectedProject || !solicitacaoForm.titulo.trim() || !solicitacaoForm.descricao.trim()) {
-      toast.error('Preencha todos os campos obrigatórios');
-      return;
-    }
 
-    try {
-      setEnviandoSolicitacao(true);
-      
-      const novaSolicitacao = {
-        id: Date.now().toString(),
-        titulo: solicitacaoForm.titulo.trim(),
-        descricao: solicitacaoForm.descricao.trim(),
-        status: "Pendente" as const,
-        dataLimite: solicitacaoForm.dataLimite || undefined,
-        criadoPor: userData?.displayName || userData?.email || 'Admin',
-        criadoEm: new Date().toISOString()
-      };
-
-      const solicitacoesAtualizadas = [...(selectedProject.solicitacoes || []), novaSolicitacao];
-      
-      const projectRef = doc(db, 'projetos', selectedProject.id);
-      await updateDoc(projectRef, {
-        solicitacoes: solicitacoesAtualizadas
-      });
-
-      // Atualizar estado local
-      const projetosAtualizados = projetos.map(p => 
-        p.id === selectedProject.id 
-          ? { ...p, solicitacoes: solicitacoesAtualizadas }
-          : p
-      );
-      setProjetos(projetosAtualizados);
-      setSelectedProject(prev => prev ? { ...prev, solicitacoes: solicitacoesAtualizadas } : null);
-
-      // Limpar formulário
-      setSolicitacaoForm({
-        titulo: '',
-        descricao: '',
-        dataLimite: ''
-      });
-
-      toast.success('Solicitação criada com sucesso!');
-    } catch (error) {
-      console.error('Erro ao criar solicitação:', error);
-      toast.error('Erro ao criar solicitação');
-    } finally {
-      setEnviandoSolicitacao(false);
-    }
-  };
 
   const calculateProgress = (accordions: any[]): number => {
     if (!accordions || accordions.length === 0) return 0;
@@ -369,47 +315,13 @@ const Projetos = () => {
               </p>
             </div>
           </div>
-          
-          {isAdmin && (
-            <AlertDialog>
-              <AlertDialogTrigger asChild>
-                <Button 
-                  variant="outline" 
-                  className="border-red-600 text-red-600 hover:bg-red-600 hover:text-white"
-                  disabled={deletingProject === selectedProject.id}
-                >
-                  <Trash2 className="h-4 w-4 mr-2" />
-                  {deletingProject === selectedProject.id ? 'Deletando...' : 'Excluir Projeto'}
-                </Button>
-              </AlertDialogTrigger>
-              <AlertDialogContent>
-                <AlertDialogHeader>
-                  <AlertDialogTitle>Confirmar Exclusão</AlertDialogTitle>
-                  <AlertDialogDescription>
-                    Tem certeza que deseja excluir o projeto "{selectedProject.nome}"? 
-                    Esta ação não pode ser desfeita e todos os dados relacionados ao projeto serão perdidos permanentemente.
-                  </AlertDialogDescription>
-                </AlertDialogHeader>
-                <AlertDialogFooter>
-                  <AlertDialogCancel>Cancelar</AlertDialogCancel>
-                  <AlertDialogAction
-                    onClick={() => {
-                      handleDeleteProject(selectedProject.id);
-                      handleBackToList(); // Volta para a lista após deletar
-                    }}
-                    className="bg-red-600 hover:bg-red-700"
-                  >
-                    Confirmar Exclusão
-                  </AlertDialogAction>
-                </AlertDialogFooter>
-              </AlertDialogContent>
-            </AlertDialog>
-          )}
+
+
         </div>
 
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        <div className="space-y-6">
           {/* Informações do Projeto */}
-          <div className="lg:col-span-2">
+          <div>
             <Card>
               <CardHeader>
                 <div className="flex items-center justify-between">
@@ -472,120 +384,19 @@ const Projetos = () => {
             </Card>
           </div>
 
-          {/* Painel de Solicitações */}
-          <div>
-            <Card>
-              <CardHeader>
-                <CardTitle className="flex items-center space-x-2">
-                  <MessageSquare className="h-5 w-5 text-versys-primary" />
-                  <span>Nova Solicitação</span>
-                </CardTitle>
-              </CardHeader>
-              <CardContent>
-                <div className="space-y-4">
-                  <div>
-                    <Label htmlFor="titulo">Título da Solicitação</Label>
-                    <Input
-                      id="titulo"
-                      value={solicitacaoForm.titulo}
-                      onChange={(e) => setSolicitacaoForm(prev => ({ ...prev, titulo: e.target.value }))}
-                      placeholder="Digite o título da solicitação"
-                    />
-                  </div>
-                  <div>
-                    <Label htmlFor="descricao">Descrição</Label>
-                    <Textarea
-                      id="descricao"
-                      value={solicitacaoForm.descricao}
-                      onChange={(e) => setSolicitacaoForm(prev => ({ ...prev, descricao: e.target.value }))}
-                      placeholder="Descreva o que precisa ser feito"
-                      rows={3}
-                    />
-                  </div>
-                  <div>
-                    <Label htmlFor="dataLimite">Data Limite (opcional)</Label>
-                    <Input
-                      id="dataLimite"
-                      type="date"
-                      value={solicitacaoForm.dataLimite}
-                      onChange={(e) => setSolicitacaoForm(prev => ({ ...prev, dataLimite: e.target.value }))}
-                    />
-                  </div>
-                  <Button 
-                    onClick={handleCriarSolicitacao}
-                    disabled={enviandoSolicitacao}
-                    className="w-full"
-                  >
-                    <Send className="h-4 w-4 mr-2" />
-                    {enviandoSolicitacao ? 'Enviando...' : 'Enviar Solicitação'}
-                  </Button>
-                </div>
-              </CardContent>
-            </Card>
-          </div>
+
         </div>
 
         {/* Seção de Tabs */}
-        <Tabs defaultValue="solicitacoes" className="space-y-4">
-          <TabsList className="grid w-full grid-cols-3">
-            <TabsTrigger value="solicitacoes" className="flex items-center space-x-2">
-              <MessageSquare className="h-4 w-4" />
-              <span>Solicitações</span>
-            </TabsTrigger>
+        <Tabs defaultValue="checklist" className="space-y-4">
+          <TabsList className="grid w-full grid-cols-1">
             <TabsTrigger value="checklist" className="flex items-center space-x-2">
               <ClipboardCheck className="h-4 w-4" />
               <span>Checklist</span>
             </TabsTrigger>
-            <TabsTrigger value="comunicacoes" className="flex items-center space-x-2">
-              <MessageSquare className="h-4 w-4" />
-              <span>Comunicações</span>
-            </TabsTrigger>
           </TabsList>
 
-          <TabsContent value="solicitacoes">
-            <Card>
-              <CardHeader>
-                <CardTitle>Solicitações do Projeto</CardTitle>
-              </CardHeader>
-              <CardContent>
-                <ScrollArea className="h-96">
-                  {selectedProject.solicitacoes && selectedProject.solicitacoes.length > 0 ? (
-                    <div className="space-y-4">
-                      {selectedProject.solicitacoes.map((solicitacao) => (
-                        <div key={solicitacao.id} className="border rounded-lg p-4">
-                          <div className="flex items-start justify-between mb-2">
-                            <h4 className="font-medium text-versys-primary">{solicitacao.titulo}</h4>
-                            <Badge variant={
-                              solicitacao.status === "Pendente" ? "secondary" :
-                              solicitacao.status === "Em Análise" ? "default" :
-                              solicitacao.status === "Atendida" ? "secondary" : "destructive"
-                            }>
-                              {solicitacao.status}
-                            </Badge>
-                          </div>
-                          <p className="text-sm text-gray-600 mb-2">{solicitacao.descricao}</p>
-                          <div className="flex justify-between text-xs text-gray-500">
-                            <span>Criado por: {solicitacao.criadoPor}</span>
-                            <span>Em: {new Date(solicitacao.criadoEm).toLocaleDateString('pt-BR')}</span>
-                          </div>
-                          {solicitacao.dataLimite && (
-                            <div className="text-xs text-gray-500 mt-1">
-                              Prazo: {new Date(solicitacao.dataLimite).toLocaleDateString('pt-BR')}
-                            </div>
-                          )}
-                        </div>
-                      ))}
-                    </div>
-                  ) : (
-                    <div className="text-center text-gray-500 py-8">
-                      <MessageSquare className="h-12 w-12 mx-auto mb-4 text-gray-300" />
-                      <p>Nenhuma solicitação criada ainda.</p>
-                    </div>
-                  )}
-                </ScrollArea>
-              </CardContent>
-            </Card>
-          </TabsContent>
+
 
           <TabsContent value="checklist">
             <Card>
@@ -683,21 +494,7 @@ const Projetos = () => {
             </Card>
           </TabsContent>
 
-          <TabsContent value="comunicacoes">
-            <Card>
-              <CardHeader>
-                <CardTitle>Comunicações</CardTitle>
-              </CardHeader>
-              <CardContent>
-                <ScrollArea className="h-96">
-                  <div className="text-center text-gray-500 py-8">
-                    <MessageSquare className="h-12 w-12 mx-auto mb-4 text-gray-300" />
-                    <p>Sistema de comunicações em desenvolvimento.</p>
-                  </div>
-                </ScrollArea>
-              </CardContent>
-            </Card>
-          </TabsContent>
+
         </Tabs>
       </div>
     );
@@ -742,7 +539,11 @@ const Projetos = () => {
           </div>
         ) : (
           projetos.map((projeto) => (
-          <Card key={projeto.id} className="hover:shadow-lg transition-shadow">
+          <Card 
+            key={projeto.id} 
+            className="hover:shadow-lg transition-shadow cursor-pointer"
+            onClick={() => handleViewDetails(projeto)}
+          >
             <CardHeader>
               <div className="flex items-center justify-between">
                 <div className="flex items-center space-x-2">
@@ -757,21 +558,38 @@ const Projetos = () => {
                 
                 <DropdownMenu>
                   <DropdownMenuTrigger asChild>
-                    <Button variant="ghost" className="h-8 w-8 p-0">
+                    <Button 
+                      variant="ghost" 
+                      className="h-8 w-8 p-0"
+                      onClick={(e) => e.stopPropagation()}
+                    >
                       <MoreVertical className="h-4 w-4" />
                     </Button>
                   </DropdownMenuTrigger>
                   <DropdownMenuContent align="end">
-                    <DropdownMenuItem onClick={() => handleViewDetails(projeto)}>
+                    <DropdownMenuItem onClick={(e) => {
+                      e.stopPropagation();
+                      handleViewDetails(projeto);
+                    }}>
                       <Eye className="h-4 w-4 mr-2" />
                       Ver Detalhes
                     </DropdownMenuItem>
+                    {isAdmin && (
+                      <DropdownMenuItem onClick={(e) => {
+                        e.stopPropagation();
+                        navigate(`/projetos/edit/${projeto.id}`);
+                      }}>
+                        <Edit className="h-4 w-4 mr-2" />
+                        Editar Projeto
+                      </DropdownMenuItem>
+                    )}
                     {isAdmin && (
                       <AlertDialog>
                         <AlertDialogTrigger asChild>
                           <DropdownMenuItem 
                             className="text-red-600 focus:text-red-600 focus:bg-red-50"
                             onSelect={(e) => e.preventDefault()}
+                            onClick={(e) => e.stopPropagation()}
                           >
                             <Trash2 className="h-4 w-4 mr-2" />
                             {deletingProject === projeto.id ? 'Deletando...' : 'Excluir Projeto'}
@@ -786,9 +604,14 @@ const Projetos = () => {
                             </AlertDialogDescription>
                           </AlertDialogHeader>
                           <AlertDialogFooter>
-                            <AlertDialogCancel>Cancelar</AlertDialogCancel>
+                            <AlertDialogCancel onClick={(e) => e.stopPropagation()}>
+                              Cancelar
+                            </AlertDialogCancel>
                             <AlertDialogAction
-                              onClick={() => handleDeleteProject(projeto.id)}
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                handleDeleteProject(projeto.id);
+                              }}
                               className="bg-red-600 hover:bg-red-700"
                             >
                               Confirmar Exclusão

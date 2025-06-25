@@ -8,6 +8,7 @@ import { DashboardLayout } from "./components/DashboardLayout";
 import Dashboard from "./pages/Dashboard";
 import Projetos from "./pages/Projetos";
 import NewProject from "./pages/NewProject";
+import EditProject from "./pages/EditProject";
 import NotFound from "./pages/NotFound";
 import ClientDashboard from "./pages/ClientDashboard";
 import Clientes from "./pages/Clientes";
@@ -82,6 +83,7 @@ const App = () => (
             }>
               <Route index element={<Projetos />} />
               <Route path="new" element={<NewProject />} />
+              <Route path="edit/:projectId" element={<EditProject />} />
             </Route>
             <Route path="/clientes" element={
               <ProtectedRoute requiredType="admin">

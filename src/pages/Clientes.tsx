@@ -87,8 +87,8 @@ const Clientes = () => {
               nome: data.displayName || 'Nome não informado',
               email: data.email || '',
               empresa: data.company || 'Empresa não informada',
-              telefone: '',
-              endereco: '',
+              telefone: data.telefone || '',
+              endereco: data.endereco || '',
               status: 'ativo' as const,
               dataCriacao: data.createdAt?.toDate?.()?.toISOString() || new Date().toISOString(),
               projetos: data.projects?.length || 0,
@@ -221,17 +221,17 @@ const Clientes = () => {
       let updateData: any;
       
       if (clienteEditando.origem === 'users') {
-        // Para clientes da coleção users, usar o formato antigo
+        // Para clientes da coleção users, incluir todos os campos editáveis
+        // NOME E EMAIL NÃO SÃO EDITÁVEIS por questões de segurança
         updateData = {
-          displayName: clienteEditando.nome,
-          email: clienteEditando.email,
-          company: clienteEditando.empresa
+          company: clienteEditando.empresa,
+          telefone: clienteEditando.telefone,
+          endereco: clienteEditando.endereco
         };
       } else {
         // Para clientes da coleção clientes, usar o formato novo
+        // NOME E EMAIL NÃO SÃO EDITÁVEIS por questões de segurança
         updateData = {
-          nome: clienteEditando.nome,
-          email: clienteEditando.email,
           empresa: clienteEditando.empresa,
           telefone: clienteEditando.telefone,
           endereco: clienteEditando.endereco
@@ -240,10 +240,8 @@ const Clientes = () => {
 
       await updateDoc(clienteRef, updateData);
       
-      // Atualizar o estado local - sempre incluir todos os campos
+      // Atualizar o estado local - apenas campos editáveis
       const dadosAtualizados = {
-        nome: clienteEditando.nome,
-        email: clienteEditando.email,
         empresa: clienteEditando.empresa,
         telefone: clienteEditando.telefone || '',
         endereco: clienteEditando.endereco || ''
@@ -532,11 +530,6 @@ const Clientes = () => {
                   <TableRow key={cliente.id}>
                     <TableCell className="font-medium">
                       {cliente.nome}
-                      {cliente.origem === 'users' && (
-                        <span className="ml-2 text-xs bg-blue-100 text-blue-800 px-2 py-1 rounded-full">
-                          Antigo
-                        </span>
-                      )}
                     </TableCell>
                     <TableCell>{cliente.empresa}</TableCell>
                     <TableCell>{cliente.email}</TableCell>
@@ -629,26 +622,30 @@ const Clientes = () => {
           <DialogHeader>
             <DialogTitle>Editar Cliente</DialogTitle>
             <DialogDescription>
-              Altere as informações do cliente
+              Altere as informações do cliente. Nome e E-mail não podem ser editados por questões de segurança.
             </DialogDescription>
           </DialogHeader>
           {clienteEditando && (
             <div className="grid gap-4 py-4">
               <div className="grid gap-2">
-                <Label htmlFor="edit-nome">Nome</Label>
+                <Label htmlFor="edit-nome" className="text-gray-500">Nome (Não editável)</Label>
                 <Input
                   id="edit-nome"
                   value={clienteEditando.nome}
-                  onChange={(e) => setClienteEditando({...clienteEditando, nome: e.target.value})}
+                  disabled
+                  className="bg-gray-50 cursor-not-allowed"
+                  title="Nome não pode ser alterado por questões de segurança"
                 />
               </div>
               <div className="grid gap-2">
-                <Label htmlFor="edit-email">E-mail</Label>
+                <Label htmlFor="edit-email" className="text-gray-500">E-mail (Não editável)</Label>
                 <Input
                   id="edit-email"
                   type="email"
                   value={clienteEditando.email}
-                  onChange={(e) => setClienteEditando({...clienteEditando, email: e.target.value})}
+                  disabled
+                  className="bg-gray-50 cursor-not-allowed"
+                  title="E-mail não pode ser alterado por estar vinculado à autenticação"
                 />
               </div>
               <div className="grid gap-2">
@@ -665,7 +662,7 @@ const Clientes = () => {
                   id="edit-telefone"
                   value={clienteEditando.telefone || ''}
                   onChange={(e) => setClienteEditando({...clienteEditando, telefone: e.target.value})}
-                  placeholder={clienteEditando.origem === 'users' ? 'Campo não disponível para clientes antigos' : 'Telefone do cliente'}
+                  placeholder="(11) 99999-9999"
                 />
               </div>
               <div className="grid gap-2">
@@ -674,7 +671,7 @@ const Clientes = () => {
                   id="edit-endereco"
                   value={clienteEditando.endereco || ''}
                   onChange={(e) => setClienteEditando({...clienteEditando, endereco: e.target.value})}
-                  placeholder={clienteEditando.origem === 'users' ? 'Campo não disponível para clientes antigos' : 'Endereço do cliente'}
+                  placeholder="Endereço completo do cliente"
                 />
               </div>
             </div>
