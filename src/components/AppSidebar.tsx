@@ -89,22 +89,48 @@ export function AppSidebar() {
 
   const getUserInitials = () => {
     if (!userData) return "U";
-    if (userData.type === "admin") return "AD";
-    return userData.company ? userData.company.substring(0, 2).toUpperCase() : "CL";
+    switch (userData.type) {
+      case "admin":
+        return "AD";
+      case "colaborador":
+        return "CO";
+      case "client":
+        return userData.company ? userData.company.substring(0, 2).toUpperCase() : "CL";
+      default:
+        return "U";
+    }
   };
 
   const getUserDisplayName = () => {
     if (!userData) return "Usuário";
-    if (userData.type === "admin") return userData.displayName || "Admin";
-    return userData.company || userData.displayName || "Cliente";
+    switch (userData.type) {
+      case "admin":
+        return userData.displayName || "Admin";
+      case "colaborador":
+        return userData.displayName || "Colaborador";
+      case "client":
+        return userData.company || userData.displayName || "Cliente";
+      default:
+        return userData.displayName || "Usuário";
+    }
   };
 
   const getUserRole = () => {
     if (!userData) return "Usuário";
-    return userData.type === "admin" ? "Administrador" : "Cliente";
+    switch (userData.type) {
+      case "admin":
+        return "Administrador";
+      case "colaborador":
+        return "Colaborador";
+      case "client":
+        return "Cliente";
+      default:
+        return "Usuário";
+    }
   };
 
   const getMenuItems = () => {
+    // Clientes têm menu específico, admin e colaborador têm menu completo
     return userData?.type === "client" ? clientMenuItems : adminMenuItems;
   };
 
@@ -112,47 +138,60 @@ export function AppSidebar() {
     <div className="relative">
       <Sidebar className="border-r-0">
         <div className="absolute inset-0 bg-gradient-to-b from-versys-primary to-versys-secondary"></div>
-        <div className="relative z-10 h-full">
-          <SidebarHeader className="p-4 flex items-center justify-center">
+        <div className="relative z-10 h-full flex flex-col">
+          {/* Header com logo */}
+          <SidebarHeader className="p-6 flex items-center justify-center border-b border-white/10">
             <div className="flex items-center space-x-3">
-              <img src="/lovable-uploads/a4359bba-bc5d-4bf2-98b0-566712fd53b8.png" alt="VERSYS Logo" className="h-14 w-auto" />
+              <img 
+                src="/lovable-uploads/a4359bba-bc5d-4bf2-98b0-566712fd53b8.png" 
+                alt="VERSYS Logo" 
+                className="h-12 w-auto transition-all duration-300" 
+              />
             </div>
           </SidebarHeader>
 
-          <Separator className="bg-white/20" />
-
-          <SidebarContent className="px-2">
-            <div className="py-4">
-              <div className="flex items-center space-x-3 px-3 py-2">
-                <Avatar className="h-8 w-8">
-                  <AvatarImage src="" />
-                  <AvatarFallback className="bg-white/20 text-white text-sm">
-                    {getUserInitials()}
-                  </AvatarFallback>
-                </Avatar>
-                {!isCollapsed && (
-                  <div className="flex flex-col">
-                    <span className="text-white text-sm font-medium">{getUserDisplayName()}</span>
-                    <span className="text-white/70 text-xs">{getUserRole()}</span>
-                  </div>
-                )}
-              </div>
+          {/* Área do usuário */}
+          <div className="px-4 py-6 border-b border-white/10">
+            <div className="flex items-center space-x-3">
+              <Avatar className="h-10 w-10 border-2 border-white/20">
+                <AvatarImage src="" />
+                <AvatarFallback className="bg-white/20 text-white text-sm font-medium">
+                  {getUserInitials()}
+                </AvatarFallback>
+              </Avatar>
+              {!isCollapsed && (
+                <div className="flex flex-col min-w-0 flex-1">
+                  <span className="text-white text-sm font-medium truncate">
+                    {getUserDisplayName()}
+                  </span>
+                  <span className="text-white/60 text-xs truncate">
+                    {getUserRole()}
+                  </span>
+                </div>
+              )}
             </div>
+          </div>
 
-            <Separator className="bg-white/20" />
-
-            <SidebarGroup className="py-4">
+          {/* Menu principal - ocupa o espaço disponível */}
+          <SidebarContent className="flex-1 px-3 py-4">
+            <SidebarGroup>
               <SidebarGroupContent>
-                <SidebarMenu>
+                <SidebarMenu className="space-y-1">
                   {getMenuItems().map(item => (
                     <SidebarMenuItem key={item.title}>
                       <SidebarMenuButton 
                         asChild 
-                        className={`${isActive(item.url) ? "bg-white/20 text-white" : "text-white/80 hover:bg-white/10 hover:text-white"}`}
+                        className={`
+                          h-10 px-3 py-2 rounded-lg transition-all duration-200
+                          ${isActive(item.url) 
+                            ? "bg-white/20 text-white font-medium shadow-sm" 
+                            : "text-white/80 hover:bg-white/10 hover:text-white"
+                          }
+                        `}
                       >
-                        <NavLink to={item.url}>
-                          <item.icon className="h-4 w-4" />
-                          {!isCollapsed && <span>{item.title}</span>}
+                        <NavLink to={item.url} className="flex items-center gap-3">
+                          <item.icon className="h-4 w-4 flex-shrink-0" />
+                          {!isCollapsed && <span className="truncate">{item.title}</span>}
                         </NavLink>
                       </SidebarMenuButton>
                     </SidebarMenuItem>
@@ -161,20 +200,30 @@ export function AppSidebar() {
               </SidebarGroupContent>
             </SidebarGroup>
 
-            <Separator className="bg-white/20" />
+            {/* Separador visual */}
+            <div className="my-6">
+              <Separator className="bg-white/10" />
+            </div>
 
-            <SidebarGroup className="py-4">
+            {/* Menu de suporte */}
+            <SidebarGroup>
               <SidebarGroupContent>
-                <SidebarMenu>
+                <SidebarMenu className="space-y-1">
                   {supportItems.map(item => (
                     <SidebarMenuItem key={item.title}>
                       <SidebarMenuButton 
                         asChild 
-                        className={`${isActive(item.url) ? "bg-white/20 text-white" : "text-white/80 hover:bg-white/10 hover:text-white"}`}
+                        className={`
+                          h-10 px-3 py-2 rounded-lg transition-all duration-200
+                          ${isActive(item.url) 
+                            ? "bg-white/20 text-white font-medium shadow-sm" 
+                            : "text-white/80 hover:bg-white/10 hover:text-white"
+                          }
+                        `}
                       >
-                        <NavLink to={item.url}>
-                          <item.icon className="h-4 w-4" />
-                          {!isCollapsed && <span>{item.title}</span>}
+                        <NavLink to={item.url} className="flex items-center gap-3">
+                          <item.icon className="h-4 w-4 flex-shrink-0" />
+                          {!isCollapsed && <span className="truncate">{item.title}</span>}
                         </NavLink>
                       </SidebarMenuButton>
                     </SidebarMenuItem>
@@ -184,11 +233,20 @@ export function AppSidebar() {
             </SidebarGroup>
           </SidebarContent>
 
-          <SidebarFooter className="p-2">
-            <Separator className="bg-white/20 mb-2" />
-            <Button variant="ghost" onClick={handleLogout} className="w-full justify-start text-white/80 hover:bg-white/10 hover:text-white">
-              <LogOut className="h-4 w-4" />
-              {!isCollapsed && <span className="ml-2">Sair</span>}
+          {/* Footer com botão de sair */}
+          <SidebarFooter className="p-4 border-t border-white/10 mt-auto">
+            <Button 
+              variant="ghost" 
+              onClick={handleLogout} 
+              className="
+                w-full h-10 px-3 py-2 rounded-lg
+                justify-start gap-3
+                text-white/80 hover:bg-white/10 hover:text-white
+                transition-all duration-200
+              "
+            >
+              <LogOut className="h-4 w-4 flex-shrink-0" />
+              {!isCollapsed && <span className="truncate">Sair</span>}
             </Button>
           </SidebarFooter>
         </div>

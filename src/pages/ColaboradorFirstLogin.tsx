@@ -11,53 +11,69 @@ import { useNavigate } from "react-router-dom";
 const ColaboradorFirstLogin = () => {
   const [formData, setFormData] = useState({
     email: "",
-    senhaTemporaria: "",
+    senhaFornecida: "",
     novaSenha: "",
     confirmarSenha: ""
   });
   const [mostrarSenhas, setMostrarSenhas] = useState({
-    temporaria: false,
+    fornecida: false,
     nova: false,
     confirmar: false
   });
   const [loading, setLoading] = useState(false);
-  const { signInAsColaborador } = useAuth();
+  const [verificandoTipoSenha, setVerificandoTipoSenha] = useState(false);
+  const [tipoSenha, setTipoSenha] = useState<'definitiva' | 'temporaria' | null>(null);
+  const { firstLoginColaborador } = useAuth();
   const navigate = useNavigate();
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     
-    if (!formData.email || !formData.senhaTemporaria || !formData.novaSenha) {
-      toast.error("Preencha todos os campos obrigatórios");
+    if (!formData.email || !formData.senhaFornecida) {
+      toast.error("Preencha email e senha fornecida");
       return;
     }
 
-    if (formData.novaSenha.length < 6) {
-      toast.error("A nova senha deve ter pelo menos 6 caracteres");
-      return;
-    }
+    // Se for senha temporária, exigir nova senha
+    if (tipoSenha === 'temporaria') {
+      if (!formData.novaSenha) {
+        toast.error("Para senhas temporárias, você deve definir uma nova senha");
+        return;
+      }
+      
+      if (formData.novaSenha.length < 6) {
+        toast.error("A nova senha deve ter pelo menos 6 caracteres");
+        return;
+      }
 
-    if (formData.novaSenha !== formData.confirmarSenha) {
-      toast.error("As senhas não coincidem");
-      return;
+      if (formData.novaSenha !== formData.confirmarSenha) {
+        toast.error("As senhas não coincidem");
+        return;
+      }
     }
 
     setLoading(true);
 
     try {
-      await signInAsColaborador(formData.email, formData.senhaTemporaria, formData.novaSenha);
+      // Para senha definitiva, usar apenas a senha fornecida
+      // Para senha temporária, usar nova senha
+      const novaSenhaParam = tipoSenha === 'temporaria' ? formData.novaSenha : undefined;
+      
+      await firstLoginColaborador(formData.email, formData.senhaFornecida, novaSenhaParam);
       toast.success("Conta criada com sucesso! Bem-vindo ao sistema.");
       navigate("/dashboard");
     } catch (error: any) {
-      console.error("Erro no primeiro login:", error);
+      console.error("Erro na criação da conta:", error);
       let errorMessage = "Erro ao criar conta";
       
       if (error.message.includes('Credenciais inválidas')) {
-        errorMessage = "Email ou senha temporária incorretos";
+        errorMessage = "Email ou senha incorretos";
+      } else if (error.message.includes('Senha incorreta')) {
+        errorMessage = "Senha incorreta";
       } else if (error.code === 'auth/email-already-in-use') {
         errorMessage = "Este email já possui uma conta ativa";
       } else if (error.code === 'auth/weak-password') {
-        errorMessage = "A senha é muito fraca";
+        errorMessage = "A nova senha deve ter pelo menos 6 caracteres";
       } else if (error.code === 'auth/invalid-email') {
         errorMessage = "Email inválido";
       }
@@ -95,13 +111,13 @@ const ColaboradorFirstLogin = () => {
             </div>
 
             <div className="space-y-2">
-              <Label htmlFor="senhaTemporaria">Senha Temporária</Label>
+              <Label htmlFor="senhaFornecida">Senha Fornecida</Label>
               <div className="relative">
                 <Input
-                  id="senhaTemporaria"
-                  type={mostrarSenhas.temporaria ? "text" : "password"}
-                  value={formData.senhaTemporaria}
-                  onChange={(e) => setFormData({...formData, senhaTemporaria: e.target.value})}
+                  id="senhaFornecida"
+                  type={mostrarSenhas.fornecida ? "text" : "password"}
+                  value={formData.senhaFornecida}
+                  onChange={(e) => setFormData({...formData, senhaFornecida: e.target.value})}
                   placeholder="Senha fornecida pelo administrador"
                   className="pr-10"
                   required
@@ -111,9 +127,9 @@ const ColaboradorFirstLogin = () => {
                   variant="ghost"
                   size="sm"
                   className="absolute right-0 top-0 h-full px-3 py-2 hover:bg-transparent"
-                  onClick={() => setMostrarSenhas({...mostrarSenhas, temporaria: !mostrarSenhas.temporaria})}
+                  onClick={() => setMostrarSenhas({...mostrarSenhas, fornecida: !mostrarSenhas.fornecida})}
                 >
-                  {mostrarSenhas.temporaria ? (
+                  {mostrarSenhas.fornecida ? (
                     <EyeOff className="h-4 w-4 text-gray-400" />
                   ) : (
                     <Eye className="h-4 w-4 text-gray-400" />

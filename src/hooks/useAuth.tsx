@@ -27,7 +27,7 @@ interface UserData {
   uid: string;
   email: string;
   displayName: string;
-  type: 'admin' | 'client';
+  type: 'admin' | 'client' | 'colaborador';
   company?: string;
   projects: string[];
   createdAt: Timestamp;
@@ -35,7 +35,7 @@ interface UserData {
 }
 
 // Função para determinar o tipo de usuário baseado no email
-const determineUserType = (email: string): 'admin' | 'client' => {
+const determineUserType = (email: string): 'admin' | 'client' | 'colaborador' => {
   if (email.includes('@devana.com.br') || email.includes('@versys')) {
     return 'admin';
   }
@@ -56,11 +56,15 @@ const createOrUpdateUserInFirestore = async (user: User, isFirstTimeColaborador 
     const userRef = doc(db, 'users', user.uid);
     const userSnap = await getDoc(userRef);
     
+    // Verificar se o usuário já existe e preservar dados existentes
+    const existingUserData = userSnap.exists() ? userSnap.data() : null;
+    
     const userData: Partial<UserData> = {
       uid: user.uid,
       email: user.email || '',
       displayName: user.displayName || user.email?.split('@')[0] || '',
-      type: determineUserType(user.email || ''),
+      // Preservar o tipo existente ou determinar novo
+      type: existingUserData?.type || determineUserType(user.email || ''),
       lastLogin: serverTimestamp() as Timestamp,
     };
 
@@ -99,27 +103,8 @@ export const useAuth = () => {
       console.log('useAuth: Estado de autenticação mudou:', user ? `Usuário: ${user.email}` : 'Nenhum usuário');
       
       if (user) {
-        // Verificar se é um colaborador
-        const colaboradoresRef = collection(db, 'colaboradores');
-        const qColaboradores = query(colaboradoresRef, where('firebaseUid', '==', user.uid));
-        const colaboradoresSnapshot = await getDocs(qColaboradores);
-        
-        // Verificar se é um cliente
-        const clientesRef = collection(db, 'clientes');
-        const qClientes = query(clientesRef, where('firebaseUid', '==', user.uid));
-        const clientesSnapshot = await getDocs(qClientes);
-        
-        const isColaborador = !colaboradoresSnapshot.empty;
-        const isCliente = !clientesSnapshot.empty;
-        
-        if (isColaborador) {
-          console.log('useAuth: Usuário identificado como colaborador, não criando na coleção users');
-        } else if (isCliente) {
-          console.log('useAuth: Usuário identificado como cliente, não criando na coleção users');
-        } else {
-          // Criar/atualizar apenas se não for colaborador nem cliente
-          await createOrUpdateUserInFirestore(user, false);
-        }
+        // Todos os usuários devem estar na coleção users
+        await createOrUpdateUserInFirestore(user, false);
       }
       
       setUser(user);
@@ -156,6 +141,8 @@ export const useAuth = () => {
     }
   };
 
+
+
   const signInWithGoogle = async () => {
     const provider = new GoogleAuthProvider();
     try {
@@ -169,17 +156,17 @@ export const useAuth = () => {
     }
   };
 
-  // Nova função para primeiro login de colaboradores
-  const signInAsColaborador = async (email: string, senhaTemporaria: string, novaSenha: string) => {
+  // Função para primeiro login de colaborador (criar conta no Auth)
+  const firstLoginColaborador = async (email: string, senhaInformada: string, novaSenha?: string) => {
     try {
       console.log('useAuth: Tentando primeiro login de colaborador:', email);
       
-      // Verificar se existe um colaborador com este email e senha temporária
-      const colaboradoresRef = collection(db, 'colaboradores');
-      const q = query(colaboradoresRef, 
+      // Verificar se existe um colaborador pendente na coleção users
+      const usersRef = collection(db, 'users');
+      const q = query(usersRef, 
         where('email', '==', email),
-        where('senhaTemporaria', '==', senhaTemporaria),
-        where('precisaCriarConta', '==', true)
+        where('precisaCriarConta', '==', true),
+        where('isColaborador', '==', true)
       );
       const querySnapshot = await getDocs(q);
       
@@ -187,21 +174,30 @@ export const useAuth = () => {
         throw new Error('Credenciais inválidas ou conta já ativada');
       }
       
-      const colaboradorDoc = querySnapshot.docs[0];
-      const colaboradorData = colaboradorDoc.data();
+      const userDoc = querySnapshot.docs[0];
+      const userData = userDoc.data();
+      
+      // Verificar senha temporária
+      if (userData.senhaTemporaria !== senhaInformada) {
+        throw new Error('Senha incorreta');
+      }
+      
+      // Usar nova senha se fornecida, senão usar a senha informada
+      const senhaParaAuth = novaSenha || senhaInformada;
       
       // Criar conta no Firebase Auth
-      const result = await createUserWithEmailAndPassword(auth, email, novaSenha);
+      const result = await createUserWithEmailAndPassword(auth, email, senhaParaAuth);
       
-      // Atualizar documento do colaborador
-      await updateDoc(doc(db, 'colaboradores', colaboradorDoc.id), {
-        firebaseUid: result.user.uid,
+      // Atualizar documento com o UID real do Firebase Auth
+      await updateDoc(doc(db, 'users', userDoc.id), {
+        uid: result.user.uid,
         precisaCriarConta: false,
-        senhaTemporaria: null // Remover senha temporária por segurança
+        senhaTemporaria: null, // Remover senha temporária
+        isColaborador: null, // Remover flag
+        lastLogin: new Date()
       });
       
       console.log('useAuth: Conta de colaborador criada com sucesso:', result.user.email);
-      // O onAuthStateChanged vai disparar, mas não criará na coleção users
       return result;
     } catch (error) {
       console.error('useAuth: Erro ao criar conta de colaborador:', error);
@@ -265,7 +261,7 @@ export const useAuth = () => {
     signIn,
     signUp,
     signInWithGoogle,
-    signInAsColaborador,
+    firstLoginColaborador,
     signInAsCliente,
     logout
   };

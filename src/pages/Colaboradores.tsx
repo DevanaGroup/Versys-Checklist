@@ -10,9 +10,8 @@ import { Badge } from "@/components/ui/badge";
 import { toast } from "sonner";
 import { Plus, Edit, Trash2, UserX, UserCheck, Search, Shield, User, Eye, EyeOff } from "lucide-react";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { createUserWithEmailAndPassword } from "firebase/auth";
 import { auth, db } from "@/lib/firebase";
-import { collection, addDoc, getDocs, doc, updateDoc, deleteDoc, query, orderBy, where } from "firebase/firestore";
+import { collection, addDoc, getDocs, doc, updateDoc, deleteDoc, query, orderBy, where, setDoc } from "firebase/firestore";
 
 interface Colaborador {
   id: string;
@@ -50,30 +49,70 @@ const Colaboradores = () => {
   });
 
   // Carregar colaboradores do Firestore
-  useEffect(() => {
-    const carregarColaboradores = async () => {
-      try {
-        const q = query(collection(db, 'colaboradores'), orderBy('dataAdmissao', 'desc'));
-        const querySnapshot = await getDocs(q);
-        const colaboradoresData: Colaborador[] = [];
+  const carregarColaboradores = async () => {
+    try {
+      // Buscar usuários que são colaboradores ou admins na coleção users
+      const usersRef = collection(db, 'users');
+      const q = query(usersRef, where('type', 'in', ['admin', 'colaborador']));
+      const querySnapshot = await getDocs(q);
+      const colaboradoresData: Colaborador[] = [];
+      
+      console.log('🔍 Iniciando busca de colaboradores...');
+      
+      querySnapshot.forEach((doc) => {
+        const userData = doc.data();
         
-        querySnapshot.forEach((doc) => {
-          colaboradoresData.push({
-            id: doc.id,
-            ...doc.data()
-          } as Colaborador);
+        console.log('👤 Usuário encontrado:', {
+          id: doc.id,
+          email: userData.email,
+          type: userData.type,
+          nivel: userData.nivel,
+          displayName: userData.displayName,
+          isColaborador: userData.isColaborador
         });
         
-        setColaboradores(colaboradoresData);
-        console.log('Colaboradores carregados:', colaboradoresData.length);
-      } catch (error) {
-        console.error('Erro ao carregar colaboradores:', error);
-        toast.error('Erro ao carregar colaboradores');
-      } finally {
-        setLoading(false);
-      }
-    };
+        // Pular apenas usuários que são clientes explicitamente
+        if (userData.type === 'client') {
+          console.log('❌ Ignorando cliente:', userData.email);
+          return;
+        }
+        
+        // Se é admin ou colaborador, incluir na lista
+        if (userData.type === 'admin' || userData.type === 'colaborador') {
+          const colaborador = {
+            id: doc.id,
+            nome: userData.displayName || userData.email,
+            email: userData.email,
+            nivel: userData.nivel || (userData.type === 'admin' ? 'administrador' : 'colaborador'),
+            tipo: userData.type,
+            telefone: userData.telefone || '',
+            status: userData.status || 'ativo',
+            dataAdmissao: userData.dataAdmissao || new Date().toISOString().split('T')[0],
+            projetosAtivos: userData.projetosAtivos || 0,
+            firebaseUid: userData.uid,
+            precisaCriarConta: userData.precisaCriarConta || false
+          } as Colaborador;
+          
+          console.log('✅ Adicionando colaborador:', colaborador.nome, colaborador.email);
+          colaboradoresData.push(colaborador);
+        }
+      });
+      
+      // Ordenar por data de admissão (mais recentes primeiro)
+      colaboradoresData.sort((a, b) => new Date(b.dataAdmissao).getTime() - new Date(a.dataAdmissao).getTime());
+      
+      setColaboradores(colaboradoresData);
+      console.log('📊 Total de colaboradores carregados:', colaboradoresData.length);
+      console.log('📋 Lista final:', colaboradoresData.map(c => ({ nome: c.nome, email: c.email, tipo: c.tipo })));
+    } catch (error) {
+      console.error('Erro ao carregar colaboradores:', error);
+      toast.error('Erro ao carregar colaboradores');
+    } finally {
+      setLoading(false);
+    }
+  };
 
+  useEffect(() => {
     carregarColaboradores();
   }, []);
 
@@ -98,42 +137,70 @@ const Colaboradores = () => {
     setCriandoColaborador(true);
 
     try {
-      // Verificar se já existe um colaborador com este email
-      const colaboradoresRef = collection(db, 'colaboradores');
-      const existingQuery = query(colaboradoresRef, where('email', '==', novoColaborador.email));
+      // Verificar se já existe um usuário com este email na coleção users
+      const usersRef = collection(db, 'users');
+      const existingQuery = query(usersRef, where('email', '==', novoColaborador.email));
       const existingDocs = await getDocs(existingQuery);
       
       if (!existingDocs.empty) {
-        toast.error("Já existe um colaborador com este e-mail");
+        toast.error("Já existe um usuário com este e-mail");
         setCriandoColaborador(false);
         return;
       }
 
-      const colaboradorData = {
-        nome: novoColaborador.nome!,
+      // Determinar se é senha definida pelo admin ou gerada automaticamente
+      const senhaDefinidaPeloAdmin = !!novoColaborador.senha?.trim();
+      const senhaFinal = senhaDefinidaPeloAdmin ? novoColaborador.senha! : generateRandomPassword();
+
+      // Determinar o tipo baseado no nível
+      const userType = novoColaborador.nivel === 'administrador' ? 'admin' : 'colaborador';
+
+      // CRIAR USUÁRIO VIA FIREBASE REST API (SEM AFETAR SESSÃO ATUAL)
+      const firebaseApiKey = "AIzaSyBfqnHWfO5cTSrHSdPRU2BrPGFZ6X53qiA";
+      
+      const response = await fetch(`https://identitytoolkit.googleapis.com/v1/accounts:signUp?key=${firebaseApiKey}`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          email: novoColaborador.email,
+          password: senhaFinal,
+          returnSecureToken: true
+        })
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.error?.message || 'Erro ao criar usuário no Firebase Auth');
+      }
+
+      const authData = await response.json();
+      const firebaseUid = authData.localId;
+
+      // Criar documento na coleção users com UID real do Firebase
+      const userData = {
+        uid: firebaseUid,
         email: novoColaborador.email!,
-        nivel: novoColaborador.nivel as 'administrador' | 'colaborador',
-        tipo: "admin" as 'admin' | 'colaborador',
+        displayName: novoColaborador.nome!,
+        type: userType,
+        company: userType === 'admin' ? 'Versys' : '',
+        projects: [],
         telefone: novoColaborador.telefone || "",
-        status: "ativo" as 'ativo' | 'suspenso' | 'inativo',
+        nivel: novoColaborador.nivel,
+        status: "ativo",
         dataAdmissao: new Date().toISOString().split('T')[0],
         projetosAtivos: 0,
-        // Não criar conta Firebase aqui - será criada quando o colaborador fizer primeiro login
-        firebaseUid: null,
-        senhaTemporaria: novoColaborador.senha || generateRandomPassword(),
-        precisaCriarConta: true // Flag para indicar que precisa criar conta
+        createdAt: new Date(),
+        lastLogin: new Date()
       };
 
-      // Salvar apenas no Firestore na coleção colaboradores
-      const docRef = await addDoc(collection(db, 'colaboradores'), colaboradorData);
+      // Salvar na coleção users com UID do Firebase
+      await setDoc(doc(db, 'users', firebaseUid), userData);
       
-      const novoColaboradorCompleto: Colaborador = {
-        id: docRef.id,
-        ...colaboradorData,
-        firebaseUid: colaboradorData.firebaseUid || undefined
-      };
+      // Atualizar lista local
+      await carregarColaboradores();
 
-      setColaboradores([novoColaboradorCompleto, ...colaboradores]);
       setNovoColaborador({
         nome: "",
         email: "",
@@ -145,10 +212,20 @@ const Colaboradores = () => {
       });
       setDialogAberto(false);
       
-      toast.success(`Colaborador criado com sucesso!\n\nInstruções para o colaborador:\n1. Acesse: ${window.location.origin}/colaborador/primeiro-acesso\n2. Use o email: ${novoColaboradorCompleto.email}\n3. Use a senha temporária: ${colaboradorData.senhaTemporaria}\n4. Crie uma nova senha no primeiro acesso`);
+      toast.success(`✅ Colaborador criado com sucesso!\n\n🔑 Credenciais:\nEmail: ${userData.email}\nSenha: ${senhaFinal}\n\n📝 Conta criada no Firebase Authentication\n📄 Dados salvos no Firestore\n\n🎉 Sua sessão permaneceu ativa!`);
     } catch (error: any) {
       console.error("Erro ao criar colaborador:", error);
-      toast.error("Erro ao criar colaborador");
+      let errorMessage = "Erro ao criar colaborador";
+      
+      if (error.message?.includes('EMAIL_EXISTS')) {
+        errorMessage = "Este email já possui uma conta no sistema";
+      } else if (error.message?.includes('WEAK_PASSWORD')) {
+        errorMessage = "A senha é muito fraca. Use pelo menos 6 caracteres";
+      } else if (error.message?.includes('INVALID_EMAIL')) {
+        errorMessage = "Email inválido";
+      }
+      
+      toast.error(errorMessage);
     } finally {
       setCriandoColaborador(false);
     }
@@ -168,11 +245,12 @@ const Colaboradores = () => {
     if (!colaboradorEditando) return;
 
     try {
-      const colaboradorRef = doc(db, 'colaboradores', colaboradorEditando.id);
-      await updateDoc(colaboradorRef, {
-        nome: colaboradorEditando.nome,
+      const userRef = doc(db, 'users', colaboradorEditando.id);
+      await updateDoc(userRef, {
+        displayName: colaboradorEditando.nome,
         email: colaboradorEditando.email,
         nivel: colaboradorEditando.nivel,
+        type: colaboradorEditando.nivel === 'administrador' ? 'admin' : 'colaborador',
         telefone: colaboradorEditando.telefone,
         status: colaboradorEditando.status
       });
@@ -191,8 +269,8 @@ const Colaboradores = () => {
 
   const handleAlterarStatus = async (colaboradorId: string, novoStatus: 'ativo' | 'suspenso' | 'inativo') => {
     try {
-      const colaboradorRef = doc(db, 'colaboradores', colaboradorId);
-      await updateDoc(colaboradorRef, { status: novoStatus });
+      const userRef = doc(db, 'users', colaboradorId);
+      await updateDoc(userRef, { status: novoStatus });
 
       setColaboradores(colaboradores.map(c => 
         c.id === colaboradorId ? { ...c, status: novoStatus } : c
@@ -215,7 +293,7 @@ const Colaboradores = () => {
     }
 
     try {
-      await deleteDoc(doc(db, 'colaboradores', colaboradorId));
+      await deleteDoc(doc(db, 'users', colaboradorId));
       setColaboradores(colaboradores.filter(c => c.id !== colaboradorId));
       toast.success("Colaborador deletado com sucesso!");
     } catch (error) {
@@ -385,9 +463,7 @@ const Colaboradores = () => {
                     Gerar
                   </Button>
                 </div>
-                <p className="text-xs text-gray-500">
-                  Uma senha temporária será fornecida ao colaborador. Ele deverá criar uma nova senha no primeiro acesso.
-                </p>
+
               </div>
             </div>
             <DialogFooter>
@@ -638,6 +714,8 @@ const Colaboradores = () => {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+
     </div>
   );
 };
