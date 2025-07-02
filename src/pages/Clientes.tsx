@@ -5,14 +5,14 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Badge } from '@/components/ui/badge';
-import { Plus, Edit, Trash2, UserX, UserCheck, Search, Eye, EyeOff } from 'lucide-react';
+import { Plus, Edit, Trash2, UserX, UserCheck, Search, Eye, EyeOff, Database } from 'lucide-react';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from '@/components/ui/alert-dialog';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { toast } from 'sonner';
 import { collection, addDoc, getDocs, doc, updateDoc, deleteDoc, query, orderBy, where } from 'firebase/firestore';
 import { db } from '@/lib/firebase';
-import { testClientesCollection } from '@/lib/testFirestore';
+import { migrateClientesToUsers, deleteClientesCollection, testMigration } from '@/lib/migrate-clientes';
 
 interface Cliente {
   id: string;
@@ -27,7 +27,6 @@ interface Cliente {
   firebaseUid?: string;
   senhaTemporaria?: string;
   precisaCriarConta?: boolean;
-  origem?: 'clientes' | 'users'; // Para identificar de onde veio o cliente
 }
 
 const Clientes = () => {
@@ -40,6 +39,7 @@ const Clientes = () => {
   const [filtroNome, setFiltroNome] = useState('');
   const [filtroStatus, setFiltroStatus] = useState('todos');
   const [mostrarSenha, setMostrarSenha] = useState(false);
+  const [migrationLoading, setMigrationLoading] = useState(false);
   const [novoCliente, setNovoCliente] = useState({
     nome: '',
     email: '',
@@ -51,61 +51,81 @@ const Clientes = () => {
 
   useEffect(() => {
     carregarClientes();
-    testClientesCollection(); // Teste para debug
   }, []);
 
   const carregarClientes = async () => {
     try {
       setLoading(true);
-      console.log('Carregando clientes da coleção clientes...');
+      console.log('Carregando clientes da coleção users...');
       
-      // Tentar carregar da coleção clientes primeiro
-      const clientesRef = collection(db, 'clientes');
-      const q = query(clientesRef, orderBy('dataCriacao', 'desc'));
-      const querySnapshot = await getDocs(q);
+      // Buscar apenas na coleção 'users' filtrando por type: 'client'
+      const usersRef = collection(db, 'users');
+      const q = query(usersRef, where('type', '==', 'client'), orderBy('createdAt', 'desc'));
       
-      let clientesData = querySnapshot.docs.map(doc => ({
-        id: doc.id,
-        ...doc.data(),
-        origem: 'clientes' as const
-      })) as Cliente[];
-      
-      console.log('Clientes encontrados na coleção clientes:', clientesData.length);
-      
-      // Se não houver clientes na coleção 'clientes', verificar na coleção 'users'
-      if (clientesData.length === 0) {
-        console.log('Nenhum cliente na coleção clientes, verificando coleção users...');
-        const usersRef = collection(db, 'users');
-        const usersSnapshot = await getDocs(usersRef);
+      try {
+        const querySnapshot = await getDocs(q);
         
-        const clientesFromUsers = usersSnapshot.docs
-          .filter(doc => doc.data().type === 'client')
-          .map(doc => {
-            const data = doc.data();
-            return {
-              id: doc.id,
-              nome: data.displayName || 'Nome não informado',
-              email: data.email || '',
-              empresa: data.company || 'Empresa não informada',
-              telefone: data.telefone || '',
-              endereco: data.endereco || '',
-              status: 'ativo' as const,
-              dataCriacao: data.createdAt?.toDate?.()?.toISOString() || new Date().toISOString(),
-              projetos: data.projects?.length || 0,
-              firebaseUid: data.uid,
-              origem: 'users' as const
-            };
-          }) as Cliente[];
+        const clientesData = querySnapshot.docs.map(doc => {
+          const data = doc.data();
+          return {
+            id: doc.id,
+            nome: data.displayName || data.nome || 'Nome não informado',
+            email: data.email || '',
+            empresa: data.company || data.empresa || 'Empresa não informada',
+            telefone: data.telefone || '',
+            endereco: data.endereco || '',
+            status: data.status || 'ativo' as const,
+            dataCriacao: data.createdAt?.toDate?.()?.toISOString() || new Date().toISOString(),
+            projetos: 0,
+            firebaseUid: data.uid || doc.id,
+            senhaTemporaria: data.senhaTemporaria,
+            precisaCriarConta: data.precisaCriarConta || false
+          };
+        }) as Cliente[];
         
-        console.log('Clientes encontrados na coleção users:', clientesFromUsers.length);
-        clientesData = clientesFromUsers;
+        console.log('Clientes encontrados na coleção users:', clientesData.length);
+        
+        // Carregar contagem de projetos para cada cliente
+        await atualizarContagemProjetos(clientesData);
+        
+        setClientes(clientesData);
+        console.log('Total de clientes carregados:', clientesData.length);
+      } catch (error) {
+        console.error('Erro ao executar query ordenada, tentando sem ordenação:', error);
+        
+        // Tentar sem ordenação caso o índice não exista
+        const q2 = query(usersRef, where('type', '==', 'client'));
+        const querySnapshot = await getDocs(q2);
+        
+        const clientesData = querySnapshot.docs.map(doc => {
+          const data = doc.data();
+          return {
+            id: doc.id,
+            nome: data.displayName || data.nome || 'Nome não informado',
+            email: data.email || '',
+            empresa: data.company || data.empresa || 'Empresa não informada',
+            telefone: data.telefone || '',
+            endereco: data.endereco || '',
+            status: data.status || 'ativo' as const,
+            dataCriacao: data.createdAt?.toDate?.()?.toISOString() || new Date().toISOString(),
+            projetos: 0,
+            firebaseUid: data.uid || doc.id,
+            senhaTemporaria: data.senhaTemporaria,
+            precisaCriarConta: data.precisaCriarConta || false
+          };
+        }) as Cliente[];
+        
+        // Ordenar no cliente se não conseguir no servidor
+        clientesData.sort((a, b) => new Date(b.dataCriacao).getTime() - new Date(a.dataCriacao).getTime());
+        
+        console.log('Clientes encontrados na coleção users (sem ordenação):', clientesData.length);
+        
+        // Carregar contagem de projetos para cada cliente
+        await atualizarContagemProjetos(clientesData);
+        
+        setClientes(clientesData);
+        console.log('Total de clientes carregados:', clientesData.length);
       }
-      
-      // Carregar contagem de projetos para cada cliente
-      await atualizarContagemProjetos(clientesData);
-      
-      setClientes(clientesData);
-      console.log('Total de clientes carregados:', clientesData.length);
     } catch (error) {
       console.error('Erro ao carregar clientes:', error);
       toast.error('Erro ao carregar clientes');
@@ -165,6 +185,23 @@ const Clientes = () => {
       const senhaTemporaria = novoCliente.senha || generateRandomPassword();
       
       const clienteData = {
+        displayName: novoCliente.nome,
+        email: novoCliente.email,
+        company: novoCliente.empresa,
+        telefone: novoCliente.telefone,
+        endereco: novoCliente.endereco,
+        type: 'client',
+        status: 'ativo' as const,
+        createdAt: new Date(),
+        uid: '', // Será preenchido quando o usuário criar a conta
+        senhaTemporaria: senhaTemporaria,
+        precisaCriarConta: true
+      };
+
+      const docRef = await addDoc(collection(db, 'users'), clienteData);
+      
+      const novoClienteCompleto: Cliente = {
+        id: docRef.id,
         nome: novoCliente.nome,
         email: novoCliente.email,
         empresa: novoCliente.empresa,
@@ -173,15 +210,9 @@ const Clientes = () => {
         status: 'ativo' as const,
         dataCriacao: new Date().toISOString(),
         projetos: 0,
+        firebaseUid: docRef.id,
         senhaTemporaria: senhaTemporaria,
         precisaCriarConta: true
-      };
-
-      const docRef = await addDoc(collection(db, 'clientes'), clienteData);
-      
-      const novoClienteCompleto: Cliente = {
-        id: docRef.id,
-        ...clienteData
       };
 
       setClientes([novoClienteCompleto, ...clientes]);
@@ -214,37 +245,25 @@ const Clientes = () => {
     if (!clienteEditando) return;
 
     try {
-      // Determinar a coleção correta baseada na origem
-      const colecao = clienteEditando.origem === 'users' ? 'users' : 'clientes';
-      const clienteRef = doc(db, colecao, clienteEditando.id);
+      // Atualizar sempre na coleção 'users'
+      const clienteRef = doc(db, 'users', clienteEditando.id);
       
-      let updateData: any;
-      
-      if (clienteEditando.origem === 'users') {
-        // Para clientes da coleção users, incluir todos os campos editáveis
-        // NOME E EMAIL NÃO SÃO EDITÁVEIS por questões de segurança
-        updateData = {
-          company: clienteEditando.empresa,
-          telefone: clienteEditando.telefone,
-          endereco: clienteEditando.endereco
-        };
-      } else {
-        // Para clientes da coleção clientes, usar o formato novo
-        // NOME E EMAIL NÃO SÃO EDITÁVEIS por questões de segurança
-        updateData = {
-          empresa: clienteEditando.empresa,
-          telefone: clienteEditando.telefone,
-          endereco: clienteEditando.endereco
-        };
-      }
+      // Campos editáveis na coleção users
+      const updateData = {
+        company: clienteEditando.empresa,
+        telefone: clienteEditando.telefone,
+        endereco: clienteEditando.endereco,
+        status: clienteEditando.status
+      };
 
       await updateDoc(clienteRef, updateData);
       
-      // Atualizar o estado local - apenas campos editáveis
+      // Atualizar o estado local
       const dadosAtualizados = {
         empresa: clienteEditando.empresa,
         telefone: clienteEditando.telefone || '',
-        endereco: clienteEditando.endereco || ''
+        endereco: clienteEditando.endereco || '',
+        status: clienteEditando.status
       };
       
       setClientes(clientes.map(cliente => 
@@ -265,13 +284,9 @@ const Clientes = () => {
       const cliente = clientes.find(c => c.id === clienteId);
       if (!cliente) return;
 
-      const colecao = cliente.origem === 'users' ? 'users' : 'clientes';
-      const clienteRef = doc(db, colecao, clienteId);
-      
-      // Para clientes da coleção users, não há campo status, então vamos simular localmente
-      if (cliente.origem !== 'users') {
-        await updateDoc(clienteRef, { status: novoStatus });
-      }
+      // Atualizar sempre na coleção 'users'
+      const clienteRef = doc(db, 'users', clienteId);
+      await updateDoc(clienteRef, { status: novoStatus });
       
       setClientes(clientes.map(c => 
         c.id === clienteId ? { ...c, status: novoStatus } : c
@@ -289,8 +304,8 @@ const Clientes = () => {
       const cliente = clientes.find(c => c.id === clienteId);
       if (!cliente) return;
 
-      const colecao = cliente.origem === 'users' ? 'users' : 'clientes';
-      const clienteRef = doc(db, colecao, clienteId);
+      // Deletar sempre da coleção 'users'
+      const clienteRef = doc(db, 'users', clienteId);
       await deleteDoc(clienteRef);
       
       setClientes(clientes.filter(c => c.id !== clienteId));
@@ -331,6 +346,57 @@ const Clientes = () => {
     return matchNome && matchStatus;
   });
 
+  const executarMigracao = async () => {
+    setMigrationLoading(true);
+    try {
+      console.log('🚀 Iniciando processo de migração...');
+      
+      // 1. Testar situação atual
+      const testResult = await testMigration();
+      console.log('📊 Status atual:', testResult);
+      
+      if (testResult.clientesCollection === 0) {
+        toast.success('✅ Não há dados para migrar na coleção "clientes"');
+        return;
+      }
+      
+      // 2. Executar migração
+      const migrationResult = await migrateClientesToUsers();
+      console.log('📄 Resultado da migração:', migrationResult);
+      
+      if (migrationResult.success) {
+        toast.success(migrationResult.message);
+        
+        // 3. Se a migração foi bem-sucedida, perguntar se quer deletar coleção antiga
+        if (migrationResult.migrated > 0) {
+          const confirmDelete = window.confirm(
+            `Migração concluída com sucesso! ${migrationResult.migrated} clientes foram migrados.\n\n` +
+            'Deseja deletar a coleção "clientes" antiga? Esta ação não pode ser desfeita.'
+          );
+          
+          if (confirmDelete) {
+            const deleteResult = await deleteClientesCollection();
+            if (deleteResult.success) {
+              toast.success('🗑️ Coleção "clientes" deletada com sucesso!');
+            } else {
+              toast.error(`Erro ao deletar coleção: ${deleteResult.message}`);
+            }
+          }
+        }
+        
+        // Recarregar lista de clientes
+        await carregarClientes();
+      } else {
+        toast.error(`Erro na migração: ${migrationResult.message}`);
+      }
+    } catch (error) {
+      console.error('❌ Erro durante a migração:', error);
+      toast.error('Erro durante o processo de migração');
+    } finally {
+      setMigrationLoading(false);
+    }
+  };
+
   return (
     <div className="container mx-auto p-6 space-y-6">
       <div className="flex justify-between items-center">
@@ -339,121 +405,134 @@ const Clientes = () => {
           <p className="text-gray-600 mt-1">Gerencie todos os clientes da plataforma</p>
         </div>
         
-        <Dialog open={dialogAberto} onOpenChange={setDialogAberto}>
-          <DialogTrigger asChild>
-            <Button className="bg-versys-primary hover:bg-versys-secondary">
-              <Plus className="h-4 w-4 mr-2" />
-              Novo Cliente
-            </Button>
-          </DialogTrigger>
-          <DialogContent className="sm:max-w-[500px]">
-            <DialogHeader>
-              <DialogTitle>Criar Novo Cliente</DialogTitle>
-              <DialogDescription>
-                Preencha as informações do novo cliente. Uma conta será criada automaticamente para acesso ao sistema.
-              </DialogDescription>
-            </DialogHeader>
-            <div className="grid gap-4 py-4">
-              <div className="grid gap-2">
-                <Label htmlFor="nome">Nome *</Label>
-                <Input
-                  id="nome"
-                  value={novoCliente.nome}
-                  onChange={(e) => setNovoCliente({...novoCliente, nome: e.target.value})}
-                  placeholder="Nome completo"
-                />
-              </div>
-              <div className="grid gap-2">
-                <Label htmlFor="email">E-mail *</Label>
-                <Input
-                  id="email"
-                  type="email"
-                  value={novoCliente.email}
-                  onChange={(e) => setNovoCliente({...novoCliente, email: e.target.value})}
-                  placeholder="cliente@empresa.com"
-                />
-              </div>
-              <div className="grid gap-2">
-                <Label htmlFor="empresa">Empresa *</Label>
-                <Input
-                  id="empresa"
-                  value={novoCliente.empresa}
-                  onChange={(e) => setNovoCliente({...novoCliente, empresa: e.target.value})}
-                  placeholder="Nome da empresa"
-                />
-              </div>
-              <div className="grid gap-2">
-                <Label htmlFor="telefone">Telefone</Label>
-                <Input
-                  id="telefone"
-                  value={novoCliente.telefone}
-                  onChange={(e) => setNovoCliente({...novoCliente, telefone: e.target.value})}
-                  placeholder="(11) 99999-9999"
-                />
-              </div>
-              <div className="grid gap-2">
-                <Label htmlFor="endereco">Endereço</Label>
-                <Textarea
-                  id="endereco"
-                  value={novoCliente.endereco}
-                  onChange={(e) => setNovoCliente({...novoCliente, endereco: e.target.value})}
-                  placeholder="Endereço completo"
-                />
-              </div>
-              <div className="grid gap-2">
-                <Label htmlFor="senha">Senha Temporária (Opcional)</Label>
-                <div className="flex gap-2">
-                  <div className="relative flex-1">
-                    <Input
-                      id="senha"
-                      type={mostrarSenha ? "text" : "password"}
-                      value={novoCliente.senha}
-                      onChange={(e) => setNovoCliente({...novoCliente, senha: e.target.value})}
-                      placeholder="Deixe em branco para gerar automaticamente"
-                      className="pr-10"
-                    />
+        <div className="flex gap-2">
+          {/* Botão de Migração (temporário) */}
+          <Button 
+            onClick={executarMigracao} 
+            disabled={migrationLoading}
+            variant="outline"
+            className="text-blue-600 border-blue-600 hover:bg-blue-50"
+          >
+            <Database className="h-4 w-4 mr-2" />
+            {migrationLoading ? 'Migrando...' : 'Migrar Dados'}
+          </Button>
+          
+          <Dialog open={dialogAberto} onOpenChange={setDialogAberto}>
+            <DialogTrigger asChild>
+              <Button className="bg-versys-primary hover:bg-versys-secondary">
+                <Plus className="h-4 w-4 mr-2" />
+                Novo Cliente
+              </Button>
+            </DialogTrigger>
+            <DialogContent className="sm:max-w-[500px]">
+              <DialogHeader>
+                <DialogTitle>Criar Novo Cliente</DialogTitle>
+                <DialogDescription>
+                  Preencha as informações do novo cliente. Uma conta será criada automaticamente para acesso ao sistema.
+                </DialogDescription>
+              </DialogHeader>
+              <div className="grid gap-4 py-4">
+                <div className="grid gap-2">
+                  <Label htmlFor="nome">Nome *</Label>
+                  <Input
+                    id="nome"
+                    value={novoCliente.nome}
+                    onChange={(e) => setNovoCliente({...novoCliente, nome: e.target.value})}
+                    placeholder="Nome completo"
+                  />
+                </div>
+                <div className="grid gap-2">
+                  <Label htmlFor="email">E-mail *</Label>
+                  <Input
+                    id="email"
+                    type="email"
+                    value={novoCliente.email}
+                    onChange={(e) => setNovoCliente({...novoCliente, email: e.target.value})}
+                    placeholder="cliente@empresa.com"
+                  />
+                </div>
+                <div className="grid gap-2">
+                  <Label htmlFor="empresa">Empresa *</Label>
+                  <Input
+                    id="empresa"
+                    value={novoCliente.empresa}
+                    onChange={(e) => setNovoCliente({...novoCliente, empresa: e.target.value})}
+                    placeholder="Nome da empresa"
+                  />
+                </div>
+                <div className="grid gap-2">
+                  <Label htmlFor="telefone">Telefone</Label>
+                  <Input
+                    id="telefone"
+                    value={novoCliente.telefone}
+                    onChange={(e) => setNovoCliente({...novoCliente, telefone: e.target.value})}
+                    placeholder="(11) 99999-9999"
+                  />
+                </div>
+                <div className="grid gap-2">
+                  <Label htmlFor="endereco">Endereço</Label>
+                  <Textarea
+                    id="endereco"
+                    value={novoCliente.endereco}
+                    onChange={(e) => setNovoCliente({...novoCliente, endereco: e.target.value})}
+                    placeholder="Endereço completo"
+                  />
+                </div>
+                <div className="grid gap-2">
+                  <Label htmlFor="senha">Senha Temporária (Opcional)</Label>
+                  <div className="flex gap-2">
+                    <div className="relative flex-1">
+                      <Input
+                        id="senha"
+                        type={mostrarSenha ? "text" : "password"}
+                        value={novoCliente.senha}
+                        onChange={(e) => setNovoCliente({...novoCliente, senha: e.target.value})}
+                        placeholder="Deixe em branco para gerar automaticamente"
+                        className="pr-10"
+                      />
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="sm"
+                        className="absolute right-0 top-0 h-full px-3 py-2 hover:bg-transparent"
+                        onClick={() => setMostrarSenha(!mostrarSenha)}
+                      >
+                        {mostrarSenha ? (
+                          <EyeOff className="h-4 w-4 text-gray-400" />
+                        ) : (
+                          <Eye className="h-4 w-4 text-gray-400" />
+                        )}
+                      </Button>
+                    </div>
                     <Button
                       type="button"
-                      variant="ghost"
-                      size="sm"
-                      className="absolute right-0 top-0 h-full px-3 py-2 hover:bg-transparent"
-                      onClick={() => setMostrarSenha(!mostrarSenha)}
+                      variant="outline"
+                      onClick={gerarSenhaAleatoria}
+                      className="whitespace-nowrap"
                     >
-                      {mostrarSenha ? (
-                        <EyeOff className="h-4 w-4 text-gray-400" />
-                      ) : (
-                        <Eye className="h-4 w-4 text-gray-400" />
-                      )}
+                      Gerar
                     </Button>
                   </div>
-                  <Button
-                    type="button"
-                    variant="outline"
-                    onClick={gerarSenhaAleatoria}
-                    className="whitespace-nowrap"
-                  >
-                    Gerar
-                  </Button>
+                  <p className="text-xs text-gray-500">
+                    Uma senha temporária será fornecida ao cliente. Ele deverá criar uma nova senha no primeiro acesso.
+                  </p>
                 </div>
-                <p className="text-xs text-gray-500">
-                  Uma senha temporária será fornecida ao cliente. Ele deverá criar uma nova senha no primeiro acesso.
-                </p>
               </div>
-            </div>
-            <DialogFooter>
-              <Button variant="outline" onClick={() => setDialogAberto(false)} disabled={criandoCliente}>
-                Cancelar
-              </Button>
-              <Button 
-                onClick={handleCriarCliente} 
-                className="bg-versys-primary hover:bg-versys-secondary"
-                disabled={criandoCliente}
-              >
-                {criandoCliente ? "Criando..." : "Criar Cliente"}
-              </Button>
-            </DialogFooter>
-          </DialogContent>
-        </Dialog>
+              <DialogFooter>
+                <Button variant="outline" onClick={() => setDialogAberto(false)} disabled={criandoCliente}>
+                  Cancelar
+                </Button>
+                <Button 
+                  onClick={handleCriarCliente} 
+                  className="bg-versys-primary hover:bg-versys-secondary"
+                  disabled={criandoCliente}
+                >
+                  {criandoCliente ? "Criando..." : "Criar Cliente"}
+                </Button>
+              </DialogFooter>
+            </DialogContent>
+          </Dialog>
+        </div>
       </div>
 
       {/* Filtros */}
@@ -558,7 +637,6 @@ const Clientes = () => {
                             size="sm"
                             onClick={() => handleAlterarStatus(cliente.id, 'suspenso')}
                             className="text-orange-600 border-orange-600 hover:bg-orange-50"
-                            title={cliente.origem === 'users' ? 'Status alterado apenas localmente (cliente do sistema antigo)' : 'Suspender cliente'}
                           >
                             <UserX className="h-4 w-4" />
                           </Button>
@@ -568,7 +646,6 @@ const Clientes = () => {
                             size="sm"
                             onClick={() => handleAlterarStatus(cliente.id, 'ativo')}
                             className="text-green-600 border-green-600 hover:bg-green-50"
-                            title={cliente.origem === 'users' ? 'Status alterado apenas localmente (cliente do sistema antigo)' : 'Ativar cliente'}
                           >
                             <UserCheck className="h-4 w-4" />
                           </Button>

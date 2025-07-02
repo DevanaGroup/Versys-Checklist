@@ -210,10 +210,11 @@ export const useAuth = () => {
     try {
       console.log('useAuth: Tentando primeiro login de cliente:', email);
       
-      // Verificar se existe um cliente com este email e senha temporária
-      const clientesRef = collection(db, 'clientes');
-      const q = query(clientesRef, 
+      // Verificar se existe um cliente com este email e senha temporária na coleção 'users'
+      const usersRef = collection(db, 'users');
+      const q = query(usersRef, 
         where('email', '==', email),
+        where('type', '==', 'client'),
         where('senhaTemporaria', '==', senhaTemporaria),
         where('precisaCriarConta', '==', true)
       );
@@ -229,11 +230,12 @@ export const useAuth = () => {
       // Criar conta no Firebase Auth
       const result = await createUserWithEmailAndPassword(auth, email, novaSenha);
       
-      // Atualizar documento do cliente
-      await updateDoc(doc(db, 'clientes', clienteDoc.id), {
-        firebaseUid: result.user.uid,
+      // Atualizar documento do cliente na coleção 'users'
+      await updateDoc(doc(db, 'users', clienteDoc.id), {
+        uid: result.user.uid,
         precisaCriarConta: false,
-        senhaTemporaria: null // Remover senha temporária por segurança
+        senhaTemporaria: null, // Remover senha temporária por segurança
+        lastLogin: new Date()
       });
       
       console.log('useAuth: Conta de cliente criada com sucesso:', result.user.email);

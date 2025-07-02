@@ -88,32 +88,27 @@ export const testFirestoreConnection = async () => {
 
 export const testClientesCollection = async () => {
   try {
-    console.log('Testando coleção clientes...');
-    const clientesRef = collection(db, 'clientes');
-    const q = query(clientesRef, orderBy('dataCriacao', 'desc'));
-    const querySnapshot = await getDocs(q);
+    console.log('Testando coleção users (clientes)...');
     
-    console.log('Número de documentos na coleção clientes:', querySnapshot.size);
-    
-    querySnapshot.forEach((doc) => {
-      console.log('Documento cliente:', doc.id, doc.data());
-    });
-    
-    // Testar também coleção users para ver se há clientes lá
+    // Testar coleção users para ver clientes
     console.log('\nTestando coleção users...');
     const usersRef = collection(db, 'users');
     const usersSnapshot = await getDocs(usersRef);
     
     console.log('Número de documentos na coleção users:', usersSnapshot.size);
     
+    let clientsCount = 0;
     usersSnapshot.forEach((doc) => {
       const data = doc.data();
       if (data.type === 'client') {
         console.log('Cliente encontrado na coleção users:', doc.id, data);
+        clientsCount++;
       }
     });
     
-    return { clientesCount: querySnapshot.size, usersCount: usersSnapshot.size };
+    console.log('Total de clientes na coleção users:', clientsCount);
+    
+    return { usersCount: usersSnapshot.size, clientsCount };
   } catch (error) {
     console.error('Erro ao testar coleções:', error);
     return { error };

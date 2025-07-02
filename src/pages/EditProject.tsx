@@ -268,76 +268,32 @@ const EditProject = () => {
       setLoadingClients(true);
       console.log('🔍 Carregando clientes...');
       
-      let clientsData: Cliente[] = [];
+      // Buscar apenas na coleção 'users' filtrando por type: 'client'
+      const usersRef = collection(db, 'users');
+      const usersQuery = query(usersRef, where('type', '==', 'client'));
+      const usersSnapshot = await getDocs(usersQuery);
       
-      // Primeiro, tentar carregar da coleção 'clientes'
-      try {
-        console.log('📋 Buscando na coleção "clientes"...');
-        const clientesRef = collection(db, 'clientes');
-        const clientesSnapshot = await getDocs(clientesRef);
-        
-        const clientesFromClientes = clientesSnapshot.docs.map(doc => {
-          const data = doc.data();
-          console.log('👤 Cliente encontrado na coleção clientes:', {
-            id: doc.id,
-            nome: data.nome,
-            empresa: data.empresa,
-            email: data.email
-          });
-          
-          return {
-            id: doc.id,
-            nome: data.nome || 'Nome não definido',
-            email: data.email || '',
-            empresa: data.empresa || 'Empresa não definida'
-          };
+      const clientsData = usersSnapshot.docs.map(doc => {
+        const data = doc.data();
+        console.log('👤 Cliente encontrado:', {
+          id: doc.id,
+          nome: data.displayName || data.nome,
+          empresa: data.company || data.empresa,
+          email: data.email
         });
         
-        clientsData = [...clientsData, ...clientesFromClientes];
-        console.log('✅ Clientes da coleção "clientes":', clientesFromClientes.length);
-      } catch (error) {
-        console.error('⚠️ Erro ao buscar na coleção clientes:', error);
-      }
+        return {
+          id: doc.id,
+          nome: data.displayName || data.nome || 'Nome não definido',
+          email: data.email || '',
+          empresa: data.company || data.empresa || 'Empresa não definida'
+        };
+      });
       
-      // Depois, tentar carregar da coleção 'users' (clientes que têm contas)
-      try {
-        console.log('👥 Buscando na coleção "users"...');
-        const usersRef = collection(db, 'users');
-        const usersQuery = query(usersRef, where('type', '==', 'client'));
-        const usersSnapshot = await getDocs(usersQuery);
-        
-        const clientesFromUsers = usersSnapshot.docs.map(doc => {
-          const data = doc.data();
-          console.log('👤 Cliente encontrado na coleção users:', {
-            id: doc.id,
-            nome: data.displayName || data.name,
-            empresa: data.company,
-            email: data.email
-          });
-          
-          return {
-            id: doc.id,
-            nome: data.displayName || data.name || data.nome || 'Nome não definido',
-            email: data.email || '',
-            empresa: data.company || data.empresa || 'Empresa não definida'
-          };
-        });
-        
-        clientsData = [...clientsData, ...clientesFromUsers];
-        console.log('✅ Clientes da coleção "users":', clientesFromUsers.length);
-      } catch (error) {
-        console.error('⚠️ Erro ao buscar na coleção users:', error);
-      }
+      console.log('📊 Total de clientes encontrados:', clientsData.length);
+      console.log('📋 Lista de clientes:', clientsData);
       
-      // Remover duplicatas baseado no email
-      const clientsUnique = clientsData.filter((client, index, self) => 
-        index === self.findIndex(c => c.email === client.email)
-      );
-      
-      console.log('📊 Total de clientes únicos encontrados:', clientsUnique.length);
-      console.log('📋 Lista de clientes:', clientsUnique);
-      
-      setClients(clientsUnique);
+      setClients(clientsData);
     } catch (error) {
       console.error('❌ Erro ao carregar clientes:', error);
       toast.error('Erro ao carregar clientes');
@@ -394,8 +350,6 @@ const EditProject = () => {
         : accordion
     ));
   };
-
-
 
   const toggleItemExpansion = (accordionId: string, itemId: string) => {
     setCustomAccordions(customAccordions.map(accordion =>
@@ -560,8 +514,6 @@ const EditProject = () => {
         : accordion
     ));
   };
-
-
 
   const updateItemPriority = (accordionId: string, itemId: string, priority: "alta" | "media" | "baixa") => {
     setCustomAccordions(customAccordions.map(accordion =>
