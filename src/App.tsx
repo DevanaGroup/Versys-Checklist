@@ -15,6 +15,7 @@ import Clientes from "./pages/Clientes";
 import Colaboradores from "./pages/Colaboradores";
 import ColaboradorFirstLogin from "./pages/ColaboradorFirstLogin";
 import ClienteFirstLogin from "./pages/ClienteFirstLogin";
+import Presets from "./pages/Presets";
 
 import { AuthProvider, useAuthContext } from "./contexts/AuthContext";
 
@@ -84,6 +85,13 @@ const App = () => (
               <Route index element={<Projetos />} />
               <Route path="new" element={<NewProject />} />
               <Route path="edit/:projectId" element={<EditProject />} />
+            </Route>
+            <Route path="/presets" element={
+              <ProtectedRoute requiredType="admin">
+                <DashboardLayout />
+              </ProtectedRoute>
+            }>
+              <Route index element={<Presets />} />
             </Route>
             <Route path="/clientes" element={
               <ProtectedRoute requiredType="admin">
