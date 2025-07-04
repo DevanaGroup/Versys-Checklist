@@ -8,7 +8,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from 
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Badge } from "@/components/ui/badge";
-import { Plus, Edit2, Trash2, Eye, Save, X, Settings, ChevronRight } from "lucide-react";
+import { Plus, Edit2, Trash2, Eye, Save, X, Settings, ChevronRight, ChevronDown } from "lucide-react";
 import { toast } from "sonner";
 import { collection, addDoc, getDocs, deleteDoc, doc, updateDoc } from "firebase/firestore";
 import { db } from "@/lib/firebase";
@@ -182,6 +182,7 @@ const Presets = () => {
   const openViewDialog = (preset: Preset) => {
     setSelectedPreset(preset);
     setShowViewDialog(true);
+    toast.success("Visualização completa do preset carregada! Role para ver todos os itens.");
   };
 
   const addNewAccordion = () => {
@@ -189,6 +190,9 @@ const Presets = () => {
       ...prev,
       accordions: [...prev.accordions, { title: "", items: [] }]
     }));
+    // Selecionar automaticamente o novo acordeão criado
+    setSelectedAccordionIndex(formData.accordions.length);
+    toast.success("Novo acordeão criado e selecionado!");
   };
 
   const updateAccordionTitle = (accordionIndex: number, title: string) => {
@@ -205,6 +209,10 @@ const Presets = () => {
       ...prev,
       accordions: prev.accordions.filter((_, i) => i !== accordionIndex)
     }));
+    // Ajustar o índice selecionado após remoção
+    if (selectedAccordionIndex >= accordionIndex) {
+      setSelectedAccordionIndex(Math.max(0, selectedAccordionIndex - 1));
+    }
   };
 
   const addItemToSelectedAccordion = (item: string, category: string) => {
@@ -402,23 +410,34 @@ const Presets = () => {
 
             {/* Seção 3: Seletor de Acordeão */}
             {formData.accordions.length > 0 && (
-              <div className="bg-gray-50 p-3 rounded-lg">
-                <Label className="text-sm font-medium">Adicionar itens ao acordeão:</Label>
+              <div className="bg-blue-50 border border-blue-200 p-4 rounded-lg">
+                <div className="flex items-center gap-2 mb-3">
+                  <div className="w-3 h-3 bg-blue-500 rounded-full animate-pulse"></div>
+                  <Label className="text-sm font-medium text-blue-800">
+                    Adicionar itens ao acordeão selecionado:
+                  </Label>
+                </div>
                 <Select 
                   value={selectedAccordionIndex.toString()} 
                   onValueChange={(value) => setSelectedAccordionIndex(parseInt(value))}
                 >
-                  <SelectTrigger className="w-full mt-2">
+                  <SelectTrigger className="w-full border-blue-300 focus:ring-blue-500">
                     <SelectValue placeholder="Selecione um acordeão" />
                   </SelectTrigger>
                   <SelectContent>
                     {formData.accordions.map((accordion, index) => (
                       <SelectItem key={index} value={index.toString()}>
-                        {accordion.title || `Acordeão ${index + 1}`}
+                        <div className="flex items-center gap-2">
+                          <span className="w-2 h-2 bg-blue-500 rounded-full"></span>
+                          {accordion.title || `Acordeão ${index + 1}`}
+                        </div>
                       </SelectItem>
                     ))}
                   </SelectContent>
                 </Select>
+                <p className="text-xs text-blue-600 mt-2">
+                  ↓ Os itens serão adicionados ao acordeão destacado na estrutura abaixo
+                </p>
               </div>
             )}
 
@@ -471,45 +490,116 @@ const Presets = () => {
                   <ScrollArea className="h-[400px]">
                     <div className="p-4 space-y-3">
                       {formData.accordions.map((accordion, accordionIndex) => (
-                        <div key={accordionIndex} className="border rounded-lg p-3 bg-gray-50">
-                          <div className="flex items-center gap-2 mb-3">
+                        <div 
+                          key={accordionIndex} 
+                          className={`border rounded-lg transition-all duration-200 ${
+                            selectedAccordionIndex === accordionIndex
+                              ? 'border-blue-500 bg-blue-50 shadow-md ring-2 ring-blue-200'
+                              : 'border-gray-200 bg-gray-50 hover:bg-gray-100'
+                          }`}
+                        >
+                          {/* Cabeçalho do Acordeão */}
+                          <div className="flex items-center gap-2 p-3">
+                            {/* Ícone de Expansão */}
+                            <Button
+                              type="button"
+                              variant="ghost"
+                              size="sm"
+                              onClick={() => setSelectedAccordionIndex(accordionIndex)}
+                              className="p-1 h-6 w-6"
+                              title={selectedAccordionIndex === accordionIndex ? "Recolher" : "Expandir"}
+                            >
+                              <ChevronDown 
+                                className={`h-4 w-4 transition-transform duration-200 ${
+                                  selectedAccordionIndex === accordionIndex ? 'rotate-0' : 'rotate-[-90deg]'
+                                }`}
+                              />
+                            </Button>
+
+                            {/* Indicador de Ativo */}
+                            {selectedAccordionIndex === accordionIndex && (
+                              <div className="flex items-center gap-2">
+                                <div className="w-3 h-3 bg-blue-500 rounded-full animate-pulse"></div>
+                                <span className="text-xs font-medium text-blue-700 bg-blue-100 px-2 py-1 rounded">
+                                  ATIVO
+                                </span>
+                              </div>
+                            )}
+
+                            {/* Campo de Título */}
                             <Input
                               value={accordion.title}
                               onChange={(e) => updateAccordionTitle(accordionIndex, e.target.value)}
                               placeholder="Título do acordeão"
-                              className="flex-1 text-sm"
+                              className={`flex-1 text-sm ${
+                                selectedAccordionIndex === accordionIndex
+                                  ? 'border-blue-300 focus:ring-blue-500'
+                                  : ''
+                              }`}
                             />
+
+                            {/* Badge com quantidade de itens */}
+                            <Badge variant="secondary" className="text-xs">
+                              {accordion.items.length} itens
+                            </Badge>
+
+                            {/* Botão Selecionar (quando não ativo) */}
+                            {selectedAccordionIndex !== accordionIndex && (
+                              <Button
+                                type="button"
+                                variant="ghost"
+                                size="sm"
+                                onClick={() => setSelectedAccordionIndex(accordionIndex)}
+                                className="text-blue-600 hover:text-blue-800"
+                                title="Selecionar este acordeão"
+                              >
+                                <span className="text-xs">SELECIONAR</span>
+                              </Button>
+                            )}
+
+                            {/* Botão Remover */}
                             <Button
                               type="button"
                               variant="ghost"
                               size="sm"
                               onClick={() => removeAccordion(accordionIndex)}
-                              className="text-red-500"
+                              className="text-red-500 hover:text-red-700"
                             >
                               <X className="h-4 w-4" />
                             </Button>
                           </div>
                           
-                          <div className="space-y-2">
-                            {accordion.items.map((item, itemIndex) => (
-                              <div key={itemIndex} className="flex items-start gap-2 p-2 bg-white rounded text-sm border">
-                                <span className="flex-1">{item}</span>
-                                <Button
-                                  type="button"
-                                  variant="ghost"
-                                  size="sm"
-                                  onClick={() => removeItemFromAccordion(accordionIndex, itemIndex)}
-                                  className="text-red-500 h-6 w-6 p-0"
-                                >
-                                  <X className="h-3 w-3" />
-                                </Button>
-                              </div>
-                            ))}
-                            {accordion.items.length === 0 && (
-                              <p className="text-xs text-gray-400 italic p-3 text-center border border-dashed rounded">
-                                Nenhum item adicionado. Selecione itens da coluna ao lado.
-                              </p>
-                            )}
+                          {/* Conteúdo Expansível */}
+                          <div 
+                            className={`overflow-hidden transition-all duration-300 ease-in-out ${
+                              selectedAccordionIndex === accordionIndex 
+                                ? 'max-h-96 opacity-100' 
+                                : 'max-h-0 opacity-0'
+                            }`}
+                          >
+                            <div className="px-3 pb-3 space-y-2">
+                              {accordion.items.map((item, itemIndex) => (
+                                <div key={itemIndex} className="flex items-start gap-2 p-2 bg-white rounded text-sm border shadow-sm">
+                                  <span className="flex-1">{item}</span>
+                                  <Button
+                                    type="button"
+                                    variant="ghost"
+                                    size="sm"
+                                    onClick={() => removeItemFromAccordion(accordionIndex, itemIndex)}
+                                    className="text-red-500 h-6 w-6 p-0"
+                                  >
+                                    <X className="h-3 w-3" />
+                                  </Button>
+                                </div>
+                              ))}
+                              {accordion.items.length === 0 && (
+                                <div className="p-4 text-center border-2 border-dashed border-gray-300 rounded-lg bg-gray-50">
+                                  <p className="text-xs text-gray-500 italic">
+                                    Nenhum item adicionado. Selecione itens da coluna ao lado.
+                                  </p>
+                                </div>
+                              )}
+                            </div>
                           </div>
                         </div>
                       ))}
@@ -594,23 +684,34 @@ const Presets = () => {
 
             {/* Seção 3: Seletor de Acordeão */}
             {formData.accordions.length > 0 && (
-              <div className="bg-gray-50 p-3 rounded-lg">
-                <Label className="text-sm font-medium">Adicionar itens ao acordeão:</Label>
+              <div className="bg-blue-50 border border-blue-200 p-4 rounded-lg">
+                <div className="flex items-center gap-2 mb-3">
+                  <div className="w-3 h-3 bg-blue-500 rounded-full animate-pulse"></div>
+                  <Label className="text-sm font-medium text-blue-800">
+                    Adicionar itens ao acordeão selecionado:
+                  </Label>
+                </div>
                 <Select 
                   value={selectedAccordionIndex.toString()} 
                   onValueChange={(value) => setSelectedAccordionIndex(parseInt(value))}
                 >
-                  <SelectTrigger className="w-full mt-2">
+                  <SelectTrigger className="w-full border-blue-300 focus:ring-blue-500">
                     <SelectValue placeholder="Selecione um acordeão" />
                   </SelectTrigger>
                   <SelectContent>
                     {formData.accordions.map((accordion, index) => (
                       <SelectItem key={index} value={index.toString()}>
-                        {accordion.title || `Acordeão ${index + 1}`}
+                        <div className="flex items-center gap-2">
+                          <span className="w-2 h-2 bg-blue-500 rounded-full"></span>
+                          {accordion.title || `Acordeão ${index + 1}`}
+                        </div>
                       </SelectItem>
                     ))}
                   </SelectContent>
                 </Select>
+                <p className="text-xs text-blue-600 mt-2">
+                  ↓ Os itens serão adicionados ao acordeão destacado na estrutura abaixo
+                </p>
               </div>
             )}
 
@@ -663,45 +764,116 @@ const Presets = () => {
                   <ScrollArea className="h-[400px]">
                     <div className="p-4 space-y-3">
                       {formData.accordions.map((accordion, accordionIndex) => (
-                        <div key={accordionIndex} className="border rounded-lg p-3 bg-gray-50">
-                          <div className="flex items-center gap-2 mb-3">
+                        <div 
+                          key={accordionIndex} 
+                          className={`border rounded-lg transition-all duration-200 ${
+                            selectedAccordionIndex === accordionIndex
+                              ? 'border-blue-500 bg-blue-50 shadow-md ring-2 ring-blue-200'
+                              : 'border-gray-200 bg-gray-50 hover:bg-gray-100'
+                          }`}
+                        >
+                          {/* Cabeçalho do Acordeão */}
+                          <div className="flex items-center gap-2 p-3">
+                            {/* Ícone de Expansão */}
+                            <Button
+                              type="button"
+                              variant="ghost"
+                              size="sm"
+                              onClick={() => setSelectedAccordionIndex(accordionIndex)}
+                              className="p-1 h-6 w-6"
+                              title={selectedAccordionIndex === accordionIndex ? "Recolher" : "Expandir"}
+                            >
+                              <ChevronDown 
+                                className={`h-4 w-4 transition-transform duration-200 ${
+                                  selectedAccordionIndex === accordionIndex ? 'rotate-0' : 'rotate-[-90deg]'
+                                }`}
+                              />
+                            </Button>
+
+                            {/* Indicador de Ativo */}
+                            {selectedAccordionIndex === accordionIndex && (
+                              <div className="flex items-center gap-2">
+                                <div className="w-3 h-3 bg-blue-500 rounded-full animate-pulse"></div>
+                                <span className="text-xs font-medium text-blue-700 bg-blue-100 px-2 py-1 rounded">
+                                  ATIVO
+                                </span>
+                              </div>
+                            )}
+
+                            {/* Campo de Título */}
                             <Input
                               value={accordion.title}
                               onChange={(e) => updateAccordionTitle(accordionIndex, e.target.value)}
                               placeholder="Título do acordeão"
-                              className="flex-1 text-sm"
+                              className={`flex-1 text-sm ${
+                                selectedAccordionIndex === accordionIndex
+                                  ? 'border-blue-300 focus:ring-blue-500'
+                                  : ''
+                              }`}
                             />
+
+                            {/* Badge com quantidade de itens */}
+                            <Badge variant="secondary" className="text-xs">
+                              {accordion.items.length} itens
+                            </Badge>
+
+                            {/* Botão Selecionar (quando não ativo) */}
+                            {selectedAccordionIndex !== accordionIndex && (
+                              <Button
+                                type="button"
+                                variant="ghost"
+                                size="sm"
+                                onClick={() => setSelectedAccordionIndex(accordionIndex)}
+                                className="text-blue-600 hover:text-blue-800"
+                                title="Selecionar este acordeão"
+                              >
+                                <span className="text-xs">SELECIONAR</span>
+                              </Button>
+                            )}
+
+                            {/* Botão Remover */}
                             <Button
                               type="button"
                               variant="ghost"
                               size="sm"
                               onClick={() => removeAccordion(accordionIndex)}
-                              className="text-red-500"
+                              className="text-red-500 hover:text-red-700"
                             >
                               <X className="h-4 w-4" />
                             </Button>
                           </div>
                           
-                          <div className="space-y-2">
-                            {accordion.items.map((item, itemIndex) => (
-                              <div key={itemIndex} className="flex items-start gap-2 p-2 bg-white rounded text-sm border">
-                                <span className="flex-1">{item}</span>
-                                <Button
-                                  type="button"
-                                  variant="ghost"
-                                  size="sm"
-                                  onClick={() => removeItemFromAccordion(accordionIndex, itemIndex)}
-                                  className="text-red-500 h-6 w-6 p-0"
-                                >
-                                  <X className="h-3 w-3" />
-                                </Button>
-                              </div>
-                            ))}
-                            {accordion.items.length === 0 && (
-                              <p className="text-xs text-gray-400 italic p-3 text-center border border-dashed rounded">
-                                Nenhum item adicionado. Selecione itens da coluna ao lado.
-                              </p>
-                            )}
+                          {/* Conteúdo Expansível */}
+                          <div 
+                            className={`overflow-hidden transition-all duration-300 ease-in-out ${
+                              selectedAccordionIndex === accordionIndex 
+                                ? 'max-h-96 opacity-100' 
+                                : 'max-h-0 opacity-0'
+                            }`}
+                          >
+                            <div className="px-3 pb-3 space-y-2">
+                              {accordion.items.map((item, itemIndex) => (
+                                <div key={itemIndex} className="flex items-start gap-2 p-2 bg-white rounded text-sm border shadow-sm">
+                                  <span className="flex-1">{item}</span>
+                                  <Button
+                                    type="button"
+                                    variant="ghost"
+                                    size="sm"
+                                    onClick={() => removeItemFromAccordion(accordionIndex, itemIndex)}
+                                    className="text-red-500 h-6 w-6 p-0"
+                                  >
+                                    <X className="h-3 w-3" />
+                                  </Button>
+                                </div>
+                              ))}
+                              {accordion.items.length === 0 && (
+                                <div className="p-4 text-center border-2 border-dashed border-gray-300 rounded-lg bg-gray-50">
+                                  <p className="text-xs text-gray-500 italic">
+                                    Nenhum item adicionado. Selecione itens da coluna ao lado.
+                                  </p>
+                                </div>
+                              )}
+                            </div>
                           </div>
                         </div>
                       ))}
@@ -733,71 +905,64 @@ const Presets = () => {
 
       {/* Dialog de Visualização */}
       <Dialog open={showViewDialog} onOpenChange={setShowViewDialog}>
-        <DialogContent className="max-w-3xl max-h-[80vh] flex flex-col">
-          <DialogHeader>
+        <DialogContent className="max-w-5xl max-h-[95vh] w-[98vw] p-0 flex flex-col">
+          <DialogHeader className="p-6 pb-4 border-b">
             <DialogTitle className="flex items-center gap-2">
               {selectedPreset?.nome}
-              <Badge variant="secondary">
-                Personalizado
-              </Badge>
+              <Badge variant="secondary">Personalizado</Badge>
             </DialogTitle>
-            <p className="text-sm text-muted-foreground">
-              {selectedPreset?.descricao}
-            </p>
+            <div className="flex items-center justify-between mt-2">
+              <p className="text-sm text-muted-foreground">{selectedPreset?.descricao}</p>
+              <div className="flex items-center gap-3 text-sm text-gray-600">
+                <span>{selectedPreset?.accordions.length || 0} acordeões</span>
+                <span>•</span>
+                <span>{selectedPreset ? getTotalItems(selectedPreset) : 0} itens</span>
+              </div>
+            </div>
           </DialogHeader>
           
-          <div className="flex-1 overflow-hidden">
-            <div className="space-y-4 h-full flex flex-col">
-              <div className="flex items-center justify-between">
-                <Label className="text-base font-semibold">Estrutura do Checklist</Label>
-                <Badge variant="outline">
-                  {selectedPreset?.accordions.length || 0} acordeões
-                </Badge>
-              </div>
-
-              <div className="flex-1 border rounded-lg overflow-hidden min-h-0">
-                <ScrollArea className="h-full">
-                  <div className="p-4 space-y-4">
-                    {selectedPreset?.accordions.map((accordion, accordionIndex) => (
-                      <div key={accordionIndex} className="border rounded-lg p-4 space-y-3">
-                        <div className="flex items-center gap-2">
-                          <ChevronRight className="h-4 w-4 text-gray-400" />
-                          <h3 className="font-medium text-sm">{accordion.title}</h3>
-                          <Badge variant="secondary" className="ml-auto">
-                            {accordion.items.length} itens
-                          </Badge>
+          <div className="flex-1 overflow-auto p-6">
+            <div className="space-y-6">
+              {selectedPreset?.accordions.map((accordion, accordionIndex) => (
+                <div key={accordionIndex} className="border rounded-lg p-4 bg-white shadow-sm">
+                  <div className="flex items-center gap-2 pb-3 border-b border-gray-100 mb-4">
+                    <div className="w-8 h-8 rounded-full bg-blue-100 flex items-center justify-center">
+                      <span className="text-sm font-bold text-blue-600">{accordionIndex + 1}</span>
+                    </div>
+                    <h3 className="font-semibold text-lg text-gray-800">{accordion.title}</h3>
+                    <Badge variant="secondary" className="ml-auto">
+                      {accordion.items.length} itens
+                    </Badge>
+                  </div>
+                  
+                  <div className="space-y-3 ml-10">
+                    {accordion.items.map((item, itemIndex) => (
+                      <div key={itemIndex} className="flex items-start gap-3 p-3 bg-gray-50 rounded border">
+                        <div className="w-6 h-6 rounded-full bg-gray-300 flex items-center justify-center flex-shrink-0 mt-1">
+                          <span className="text-xs font-medium text-gray-600">{itemIndex + 1}</span>
                         </div>
-                        <div className="space-y-2 ml-6">
-                          {accordion.items.map((item, itemIndex) => (
-                            <div key={itemIndex} className="flex items-start gap-2 p-2 bg-gray-50 rounded text-sm">
-                              <div className="w-2 h-2 rounded-full bg-gray-400 mt-2 flex-shrink-0"></div>
-                              <span className="flex-1">{item}</span>
-                            </div>
-                          ))}
-                          {accordion.items.length === 0 && (
-                            <p className="text-xs text-gray-400 italic p-2">
-                              Nenhum item configurado neste acordeão.
-                            </p>
-                          )}
-                        </div>
+                        <span className="flex-1 text-gray-700 leading-relaxed">{item}</span>
                       </div>
                     ))}
                     
-                    {(!selectedPreset?.accordions || selectedPreset.accordions.length === 0) && (
-                      <div className="text-center py-8 text-gray-400">
-                        <p className="text-sm">Nenhum acordeão configurado neste preset.</p>
-                      </div>
+                    {accordion.items.length === 0 && (
+                      <p className="text-sm text-gray-400 italic p-3">
+                        Nenhum item configurado neste acordeão.
+                      </p>
                     )}
                   </div>
-                </ScrollArea>
-              </div>
+                </div>
+              ))}
+              
+              {(!selectedPreset?.accordions || selectedPreset.accordions.length === 0) && (
+                <div className="text-center py-12 text-gray-400">
+                  <p className="text-lg">Nenhum acordeão configurado neste preset.</p>
+                </div>
+              )}
+              
+              {/* Espaço extra no final */}
+              <div className="h-16"></div>
             </div>
-          </div>
-          
-          <div className="flex justify-end gap-2 pt-4 border-t">
-            <Button variant="outline" onClick={() => setShowViewDialog(false)}>
-              Fechar
-            </Button>
           </div>
         </DialogContent>
       </Dialog>

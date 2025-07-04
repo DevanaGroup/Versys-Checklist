@@ -5,14 +5,13 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Badge } from '@/components/ui/badge';
-import { Plus, Edit, Trash2, UserX, UserCheck, Search, Eye, EyeOff, Database } from 'lucide-react';
+import { Plus, Edit, Trash2, UserX, UserCheck, Search, Eye, EyeOff } from 'lucide-react';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from '@/components/ui/alert-dialog';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { toast } from 'sonner';
 import { collection, addDoc, getDocs, doc, updateDoc, deleteDoc, query, orderBy, where } from 'firebase/firestore';
 import { db } from '@/lib/firebase';
-import { migrateClientesToUsers, deleteClientesCollection, testMigration } from '@/lib/migrate-clientes';
 
 interface Cliente {
   id: string;
@@ -39,7 +38,6 @@ const Clientes = () => {
   const [filtroNome, setFiltroNome] = useState('');
   const [filtroStatus, setFiltroStatus] = useState('todos');
   const [mostrarSenha, setMostrarSenha] = useState(false);
-  const [migrationLoading, setMigrationLoading] = useState(false);
   const [novoCliente, setNovoCliente] = useState({
     nome: '',
     email: '',
@@ -346,56 +344,7 @@ const Clientes = () => {
     return matchNome && matchStatus;
   });
 
-  const executarMigracao = async () => {
-    setMigrationLoading(true);
-    try {
-      console.log('🚀 Iniciando processo de migração...');
-      
-      // 1. Testar situação atual
-      const testResult = await testMigration();
-      console.log('📊 Status atual:', testResult);
-      
-      if (testResult.clientesCollection === 0) {
-        toast.success('✅ Não há dados para migrar na coleção "clientes"');
-        return;
-      }
-      
-      // 2. Executar migração
-      const migrationResult = await migrateClientesToUsers();
-      console.log('📄 Resultado da migração:', migrationResult);
-      
-      if (migrationResult.success) {
-        toast.success(migrationResult.message);
-        
-        // 3. Se a migração foi bem-sucedida, perguntar se quer deletar coleção antiga
-        if (migrationResult.migrated > 0) {
-          const confirmDelete = window.confirm(
-            `Migração concluída com sucesso! ${migrationResult.migrated} clientes foram migrados.\n\n` +
-            'Deseja deletar a coleção "clientes" antiga? Esta ação não pode ser desfeita.'
-          );
-          
-          if (confirmDelete) {
-            const deleteResult = await deleteClientesCollection();
-            if (deleteResult.success) {
-              toast.success('🗑️ Coleção "clientes" deletada com sucesso!');
-            } else {
-              toast.error(`Erro ao deletar coleção: ${deleteResult.message}`);
-            }
-          }
-        }
-        
-        // Recarregar lista de clientes
-        await carregarClientes();
-      } else {
-        toast.error(`Erro na migração: ${migrationResult.message}`);
-      }
-    } catch (error) {
-      console.error('❌ Erro durante a migração:', error);
-      toast.error('Erro durante o processo de migração');
-    } finally {
-      setMigrationLoading(false);
-    }
-  };
+
 
   return (
     <div className="container mx-auto p-6 space-y-6">
@@ -406,17 +355,6 @@ const Clientes = () => {
         </div>
         
         <div className="flex gap-2">
-          {/* Botão de Migração (temporário) */}
-          <Button 
-            onClick={executarMigracao} 
-            disabled={migrationLoading}
-            variant="outline"
-            className="text-blue-600 border-blue-600 hover:bg-blue-50"
-          >
-            <Database className="h-4 w-4 mr-2" />
-            {migrationLoading ? 'Migrando...' : 'Migrar Dados'}
-          </Button>
-          
           <Dialog open={dialogAberto} onOpenChange={setDialogAberto}>
             <DialogTrigger asChild>
               <Button className="bg-versys-primary hover:bg-versys-secondary">

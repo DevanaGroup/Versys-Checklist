@@ -20,12 +20,13 @@ import { Textarea } from "@/components/ui/textarea";
 interface SubItem {
   id: string;
   title: string;
-  evaluation: "sim" | "nc" | "r" | "na" | "";
+  evaluation: "nc" | "r" | "na" | "";
   completed: boolean;
   clientResponse?: string;
   adminFeedback?: string;
   required: boolean;
   description?: string;
+  currentSituation?: string;
 }
 
 interface SelectedItem {
@@ -405,27 +406,7 @@ const EditProject = () => {
     ));
   };
 
-  const updateSubItemTitle = (accordionId: string, itemId: string, subItemId: string, title: string) => {
-    setCustomAccordions(customAccordions.map(accordion =>
-      accordion.id === accordionId
-        ? {
-            ...accordion,
-            items: accordion.items.map(item =>
-              item.id === itemId
-                ? {
-                    ...item,
-                    subItems: item.subItems.map(sub =>
-                      sub.id === subItemId
-                        ? { ...sub, title }
-                        : sub
-                    )
-                  }
-                : item
-            )
-          }
-        : accordion
-    ));
-  };
+
 
   const updateSubItemDescription = (accordionId: string, itemId: string, subItemId: string, description: string) => {
     setCustomAccordions(customAccordions.map(accordion =>
@@ -439,6 +420,28 @@ const EditProject = () => {
                     subItems: item.subItems.map(sub =>
                       sub.id === subItemId
                         ? { ...sub, description }
+                        : sub
+                    )
+                  }
+                : item
+            )
+          }
+        : accordion
+    ));
+  };
+
+  const updateSubItemCurrentSituation = (accordionId: string, itemId: string, subItemId: string, currentSituation: string) => {
+    setCustomAccordions(customAccordions.map(accordion =>
+      accordion.id === accordionId
+        ? {
+            ...accordion,
+            items: accordion.items.map(item =>
+              item.id === itemId
+                ? {
+                    ...item,
+                    subItems: item.subItems.map(sub =>
+                      sub.id === subItemId
+                        ? { ...sub, currentSituation }
                         : sub
                     )
                   }
@@ -880,12 +883,9 @@ const EditProject = () => {
                                               <div key={subItem.id} className="border border-gray-200 rounded-lg p-3 bg-gray-50">
                                                 <div className="space-y-2">
                                                   <div className="flex items-center justify-between">
-                                                    <Input
-                                                      value={subItem.title}
-                                                      onChange={(e) => updateSubItemTitle(accordion.id, item.id, subItem.id, e.target.value)}
-                                                      className="flex-1 text-sm"
-                                                      placeholder="Título do sub-item"
-                                                    />
+                                                    <div className="flex-1 text-sm p-2 bg-gray-100 rounded-md border border-gray-200">
+                                                      {subItem.title || "Título do sub-item"}
+                                                    </div>
                                                     <div className="flex items-center space-x-2 ml-2">
                                                       <div className="flex items-center space-x-1">
                                                         <input
@@ -930,6 +930,17 @@ const EditProject = () => {
                                                   </div>
                                                   
                                                   <div>
+                                                    <Label className="text-xs text-gray-600">Situação atual:</Label>
+                                                    <Textarea
+                                                      value={subItem.currentSituation || ''}
+                                                      onChange={(e) => updateSubItemCurrentSituation(accordion.id, item.id, subItem.id, e.target.value)}
+                                                      placeholder="Descreva a situação atual do item..."
+                                                      className="text-xs mt-1"
+                                                      rows={2}
+                                                    />
+                                                  </div>
+                                                  
+                                                  <div>
                                                     <Label className="text-xs text-gray-600">Descrição/Orientação para o cliente:</Label>
                                                     <Textarea
                                                       value={subItem.description || ''}
@@ -951,12 +962,8 @@ const EditProject = () => {
                                                         className="flex items-center space-x-3 mt-1"
                                                       >
                                                         <div className="flex items-center space-x-1">
-                                                          <RadioGroupItem value="sim" id={`${subItem.id}-sim`} className="h-3 w-3" />
-                                                          <Label htmlFor={`${subItem.id}-sim`} className="text-xs">Sim</Label>
-                                                        </div>
-                                                        <div className="flex items-center space-x-1">
                                                           <RadioGroupItem value="nc" id={`${subItem.id}-nc`} className="h-3 w-3" />
-                                                          <Label htmlFor={`${subItem.id}-nc`} className="text-xs">NC - Não Conformidade</Label>
+                                                          <Label htmlFor={`${subItem.id}-nc`} className="text-xs">Inconforme</Label>
                                                         </div>
                                                         <div className="flex items-center space-x-1">
                                                           <RadioGroupItem value="r" id={`${subItem.id}-r`} className="h-3 w-3" />

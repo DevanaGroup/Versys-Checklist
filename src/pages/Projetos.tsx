@@ -22,7 +22,7 @@ import { toast } from "sonner";
 interface SubItem {
   id: string;
   title: string;
-  evaluation: "sim" | "nc" | "r" | "na" | "";
+  evaluation: "nc" | "r" | "na" | "";
   completed: boolean;
   clientResponse?: string;
   adminFeedback?: string;
@@ -174,14 +174,12 @@ const Projetos = () => {
 
   const getSubItemStatusIcon = (subItem: SubItem) => {
     switch (subItem.evaluation) {
-      case "sim":
-        return <CheckCircle2 className="h-4 w-4 text-green-600" />;
       case "nc":
         return <XCircle className="h-4 w-4 text-red-600" />;
       case "r":
         return <AlertTriangle className="h-4 w-4 text-yellow-600" />;
       case "na":
-        return <Eye className="h-4 w-4 text-gray-600" />;
+        return <CheckCircle2 className="h-4 w-4 text-green-600" />;
       default:
         return <Clock className="h-4 w-4 text-gray-400" />;
     }
@@ -208,7 +206,7 @@ const Projetos = () => {
                     if (subItem.id === subItemId) {
                       return {
                         ...subItem,
-                        evaluation: (newStatus === "aprovado" ? "sim" : newStatus === "rejeitado" ? "nc" : "") as SubItem['evaluation'],
+                        evaluation: (newStatus === "aprovado" ? "na" : newStatus === "rejeitado" ? "nc" : "") as SubItem['evaluation'],
                         adminFeedback: adminFeedback || subItem.adminFeedback
                       };
                     }
@@ -260,7 +258,7 @@ const Projetos = () => {
       accordion.items.forEach((item: any) => {
         item.subItems.forEach((subItem: any) => {
           totalItems++;
-          if (subItem.evaluation === "sim") {
+          if (subItem.evaluation === "na") {
             completedItems++;
           }
         });

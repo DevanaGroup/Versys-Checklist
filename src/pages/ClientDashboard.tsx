@@ -31,7 +31,7 @@ import { testClientProjects } from "@/lib/testClientProjects";
 interface SubItem {
   id: string;
   title: string;
-  evaluation: "sim" | "nc" | "r" | "na" | "";
+  evaluation: "nc" | "r" | "na" | "";
   completed: boolean;
   clientResponse?: string;
   adminFeedback?: string;

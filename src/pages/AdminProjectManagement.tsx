@@ -35,7 +35,7 @@ import { useAuthContext } from "@/contexts/AuthContext";
 interface SubItem {
   id: string;
   title: string;
-  evaluation: "sim" | "nc" | "r" | "na" | "";
+  evaluation: "nc" | "r" | "na" | "";
   completed: boolean;
   clientResponse?: string;
   adminFeedback?: string;
@@ -281,14 +281,14 @@ const AdminProjectManagement = () => {
   };
 
   const getSubItemStatusIcon = (subItem: SubItem) => {
-    if (subItem.evaluation === "sim") {
-      return <CheckCircle2 className="h-4 w-4 text-green-600" />;
-    }
     if (subItem.evaluation === "nc") {
       return <XCircle className="h-4 w-4 text-red-600" />;
     }
     if (subItem.evaluation === "r") {
       return <AlertTriangle className="h-4 w-4 text-yellow-600" />;
+    }
+    if (subItem.evaluation === "na") {
+      return <CheckCircle2 className="h-4 w-4 text-green-600" />;
     }
     if (subItem.completed) {
       return <Clock className="h-4 w-4 text-blue-600" />;
@@ -308,7 +308,7 @@ const AdminProjectManagement = () => {
           if (item.subItems) {
             totalItems += item.subItems.length;
             completedItems += item.subItems.filter((subItem: any) => 
-              subItem.completed || subItem.evaluation === "sim" || subItem.evaluation === "na"
+              subItem.completed || subItem.evaluation === "na"
             ).length;
           }
         });
@@ -338,8 +338,7 @@ const AdminProjectManagement = () => {
         reportContent += `Prioridade: ${item.priority || 'Média'}\n\n`;
         
         item.subItems.forEach((subItem, subIndex) => {
-          const status = subItem.evaluation === "sim" ? "✓ CONFORME" : 
-                        subItem.evaluation === "nc" ? "✗ NÃO CONFORME" : 
+          const status = subItem.evaluation === "nc" ? "✗ NÃO CONFORME" : 
                         subItem.evaluation === "r" ? "⚠ REQUER ATENÇÃO" : 
                         subItem.evaluation === "na" ? "N/A" : 
                         subItem.completed ? "⏳ AGUARDANDO ANÁLISE" : "⏸ PENDENTE";
@@ -548,8 +547,9 @@ const AdminProjectManagement = () => {
                                                 </p>
                                                 <div className="flex items-center space-x-2">
                                                   <Select
-                                                    value={subItem.evaluation === "sim" ? "aprovado" : 
-                                                           subItem.evaluation === "nc" ? "rejeitado" : "pendente"}
+                                                    value={subItem.evaluation === "nc" ? "rejeitado" : 
+                                                           subItem.evaluation === "r" ? "pendente" : 
+                                                           subItem.evaluation === "na" ? "aprovado" : "pendente"}
                                                     onValueChange={(value: "aprovado" | "rejeitado" | "pendente") => 
                                                       handleUpdateItemStatus(
                                                         selectedProject.id, 
@@ -633,8 +633,9 @@ const AdminProjectManagement = () => {
                                                       accordion.id, 
                                                       item.id, 
                                                       subItem.id, 
-                                                      subItem.evaluation === "sim" ? "aprovado" : 
-                                                      subItem.evaluation === "nc" ? "rejeitado" : "pendente",
+                                                      subItem.evaluation === "nc" ? "rejeitado" : 
+                                                      subItem.evaluation === "r" ? "pendente" : 
+                                                      subItem.evaluation === "na" ? "aprovado" : "pendente",
                                                       subItem.adminFeedback
                                                     );
                                                   }}
