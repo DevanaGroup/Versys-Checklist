@@ -20,7 +20,12 @@ import {
   XCircle,
   AlertTriangle,
   CheckCircle2,
-  FileCheck
+  FileCheck,
+  MessageSquare,
+  Send,
+  Eye,
+  FileText,
+  AlertCircleIcon
 } from "lucide-react";
 import { toast } from "sonner";
 import { useAuthContext } from "@/contexts/AuthContext";
@@ -35,6 +40,12 @@ interface SubItem {
   completed: boolean;
   clientResponse?: string;
   adminFeedback?: string;
+  adequacyReported?: boolean;
+  adequacyDetails?: string;
+  adequacyDate?: string;
+  adequacyStatus?: "pending" | "approved" | "rejected";
+  currentSituation?: string;
+  description?: string;
 }
 
 interface ProjectItem {
@@ -101,6 +112,8 @@ const ClientDashboard = () => {
   const { userData, logout: authLogout } = useAuthContext();
   const [projectDetails, setProjectDetails] = useState<ProjectDetail[]>([]);
   const [loading, setLoading] = useState(true);
+  const [showAnalysisDetail, setShowAnalysisDetail] = useState<{[key: string]: boolean}>({});
+  const [adequacyReports, setAdequacyReports] = useState<{[key: string]: string}>({});
 
   const [updatingItem, setUpdatingItem] = useState<{ [itemId: string]: boolean }>({});
 
@@ -208,6 +221,8 @@ const ClientDashboard = () => {
       
       setProjectDetails(projetosData);
       console.log('✅ Projetos do cliente carregados:', projetosData.length);
+      
+
       
     } catch (error) {
       console.error('❌ Erro ao carregar projetos do cliente:', error);
@@ -333,7 +348,175 @@ const ClientDashboard = () => {
     }
   };
 
+  const handleAdequacyReport = async (projectId: string, accordionId: string, itemId: string, subItemId: string, adequacyDetails: string) => {
+    const itemKey = `${projectId}_${itemId}_${subItemId}`;
+    
+    try {
+      setUpdatingItem(prev => ({ ...prev, [itemKey]: true }));
+      
+      // Atualizar no estado local primeiro
+      setProjectDetails(prev => prev.map(project => {
+        if (project.id === projectId) {
+          const updatedAccordions = project.customAccordions?.map(accordion => {
+            if (accordion.id === accordionId) {
+              return {
+                ...accordion,
+                items: accordion.items.map(item => {
+                  if (item.id === itemId) {
+                    return {
+                      ...item,
+                      subItems: item.subItems.map(subItem => {
+                        if (subItem.id === subItemId) {
+                          return {
+                            ...subItem,
+                            adequacyReported: true,
+                            adequacyDetails,
+                            adequacyDate: new Date().toISOString(),
+                            adequacyStatus: "pending" as "pending"
+                          };
+                        }
+                        return subItem;
+                      })
+                    };
+                  }
+                  return item;
+                })
+              };
+            }
+            return accordion;
+          });
+          
+          return {
+            ...project,
+            customAccordions: updatedAccordions
+          };
+        }
+        return project;
+      }));
+      
+      // Atualizar no Firebase
+      const projectRef = doc(db, 'projetos', projectId);
+      const project = projectDetails.find(p => p.id === projectId);
+      
+      if (project) {
+        const updatedAccordions = project.customAccordions?.map(accordion => {
+          if (accordion.id === accordionId) {
+            return {
+              ...accordion,
+              items: accordion.items.map(item => {
+                if (item.id === itemId) {
+                  return {
+                    ...item,
+                    subItems: item.subItems.map(subItem => {
+                      if (subItem.id === subItemId) {
+                        return {
+                          ...subItem,
+                          adequacyReported: true,
+                          adequacyDetails,
+                          adequacyDate: new Date().toISOString(),
+                          adequacyStatus: "pending" as "pending"
+                        };
+                      }
+                      return subItem;
+                    })
+                  };
+                }
+                return item;
+              })
+            };
+          }
+          return accordion;
+        });
+        
+        await updateDoc(projectRef, {
+          customAccordions: updatedAccordions
+        });
+        
+        // Limpar o campo de adequação
+        setAdequacyReports(prev => ({ ...prev, [itemKey]: '' }));
+        
+        toast.success('Adequação reportada com sucesso! Aguarde a análise.');
+      }
+      
+    } catch (error) {
+      console.error('Erro ao reportar adequação:', error);
+      toast.error('Erro ao reportar adequação');
+    } finally {
+      setUpdatingItem(prev => ({ ...prev, [itemKey]: false }));
+    }
+  };
 
+  const getAnalysisStatusInfo = (subItem: SubItem) => {
+    if (subItem.evaluation === "nc") {
+      return {
+        status: "Não Conforme",
+        color: "text-red-700",
+        bgColor: "bg-red-50",
+        borderColor: "border-red-200",
+        icon: <XCircle className="h-4 w-4 text-red-600" />
+      };
+    } else if (subItem.evaluation === "r") {
+      return {
+        status: "Requer Atenção",
+        color: "text-yellow-700",
+        bgColor: "bg-yellow-50",
+        borderColor: "border-yellow-200",
+        icon: <AlertTriangle className="h-4 w-4 text-yellow-600" />
+      };
+    } else if (subItem.evaluation === "na") {
+      return {
+        status: "Não Aplicável",
+        color: "text-gray-700",
+        bgColor: "bg-gray-50",
+        borderColor: "border-gray-200",
+        icon: <CheckCircle2 className="h-4 w-4 text-gray-600" />
+      };
+    } else {
+      return {
+        status: "Pendente de Análise",
+        color: "text-blue-700",
+        bgColor: "bg-blue-50",
+        borderColor: "border-blue-200",
+        icon: <Clock className="h-4 w-4 text-blue-600" />
+      };
+    }
+  };
+
+  const getAdequacyStatusInfo = (subItem: SubItem) => {
+    if (subItem.adequacyStatus === "approved") {
+      return {
+        status: "Adequação Aprovada",
+        color: "text-green-700",
+        bgColor: "bg-green-50",
+        borderColor: "border-green-200",
+        icon: <CheckCircle2 className="h-4 w-4 text-green-600" />
+      };
+    } else if (subItem.adequacyStatus === "rejected") {
+      return {
+        status: "Adequação Rejeitada",
+        color: "text-red-700",
+        bgColor: "bg-red-50",
+        borderColor: "border-red-200",
+        icon: <XCircle className="h-4 w-4 text-red-600" />
+      };
+    } else if (subItem.adequacyStatus === "pending") {
+      return {
+        status: "Aguardando Análise",
+        color: "text-orange-700",
+        bgColor: "bg-orange-50",
+        borderColor: "border-orange-200",
+        icon: <Clock className="h-4 w-4 text-orange-600" />
+      };
+    }
+    return null;
+  };
+
+  const toggleAnalysisDetail = (itemKey: string) => {
+    setShowAnalysisDetail(prev => ({
+      ...prev,
+      [itemKey]: !prev[itemKey]
+    }));
+  };
 
   const handleLogout = async () => {
     try {
@@ -383,6 +566,8 @@ const ClientDashboard = () => {
 
   return (
     <div className="space-y-6">
+
+
         {projectDetails.length === 0 ? (
           <Card>
             <CardContent className="text-center py-12">
@@ -442,12 +627,13 @@ const ClientDashboard = () => {
                   {/* Lista de Verificação */}
                   <div>
                       <div className="mb-4">
-                        <h3 className="text-lg font-semibold text-versys-primary mb-2">
-                          Itens para Verificação
-                        </h3>
-                        <p className="text-sm text-gray-600">
-                          Marque os itens conforme você os completa. Cada item marcado contribui para o progresso geral do projeto.
-                        </p>
+                                                            <h3 className="text-lg font-semibold text-versys-primary mb-2">
+                                      Itens para Verificação
+                                    </h3>
+                                    <p className="text-sm text-gray-600">
+                                      Marque os itens conforme você os completa. Cada item marcado contribui para o progresso geral do projeto.
+                                    </p>
+
                       </div>
 
                       {project.customAccordions && project.customAccordions.length > 0 ? (
@@ -479,97 +665,219 @@ const ClientDashboard = () => {
                                         Categoria: {item.category}
                                       </p>
                                       
-                                      <div className="space-y-3">
-                                        {item.subItems.map((subItem) => (
-                                          <div key={subItem.id} className="flex items-start space-x-3 p-3 bg-white rounded-lg border">
-                                            <div className="flex items-center space-x-2 mt-1">
-                                              {getSubItemStatusIcon(subItem)}
-                                              <Checkbox
-                                                checked={subItem.completed}
-                                                onCheckedChange={(checked) => 
-                                                  handleItemCompletion(
-                                                    project.id, 
-                                                    accordion.id, 
-                                                    item.id, 
-                                                    subItem.id, 
-                                                    !!checked
-                                                  )
-                                                }
-                                                disabled={updatingItem[`${project.id}_${item.id}_${subItem.id}`]}
-                                              />
-                                            </div>
-                                            
-                                            <div className="flex-1">
-                                              <p className="text-sm font-medium text-gray-900">
-                                                {subItem.title}
-                                              </p>
-                                              
-                                              {subItem.adminFeedback && (
-                                                <div className="mt-2 p-2 bg-blue-50 border-l-4 border-blue-400 rounded">
-                                                  <p className="text-xs text-blue-700">
-                                                    <strong>Orientação:</strong> {subItem.adminFeedback}
-                                                  </p>
+                                      <div className="space-y-4">
+                                        {item.subItems.map((subItem) => {
+                                          const itemKey = `${project.id}_${item.id}_${subItem.id}`;
+                                          const analysisStatus = getAnalysisStatusInfo(subItem);
+                                          const adequacyStatus = getAdequacyStatusInfo(subItem);
+                                          
+
+                                          
+                                          return (
+                                            <div key={subItem.id} className="bg-white rounded-lg border shadow-sm overflow-hidden">
+                                              {/* Cabeçalho com informações principais */}
+                                              <div className="bg-gray-50 px-4 py-3 border-b">
+                                                <div className="flex items-start justify-between">
+                                                  <div className="flex-1">
+                                                    <h4 className="font-semibold text-gray-900 mb-1">
+                                                      📄 {subItem.title}
+                                                    </h4>
+                                                    <div className="flex items-center space-x-4">
+                                                      <div className="flex items-center space-x-2">
+                                                        {analysisStatus.icon}
+                                                        <span className={`text-xs font-medium ${analysisStatus.color}`}>
+                                                          Avaliação: {analysisStatus.status}
+                                                        </span>
+                                                      </div>
+                                                      {adequacyStatus && (
+                                                        <div className="flex items-center space-x-2">
+                                                          {adequacyStatus.icon}
+                                                          <span className={`text-xs font-medium ${adequacyStatus.color}`}>
+                                                            {adequacyStatus.status}
+                                                          </span>
+                                                        </div>
+                                                      )}
+                                                    </div>
+                                                  </div>
+                                                  <div className="flex items-center space-x-2">
+                                                    <Checkbox
+                                                      checked={subItem.completed}
+                                                      onCheckedChange={(checked) => 
+                                                        handleItemCompletion(
+                                                          project.id, 
+                                                          accordion.id, 
+                                                          item.id, 
+                                                          subItem.id, 
+                                                          !!checked
+                                                        )
+                                                      }
+                                                      disabled={updatingItem[itemKey]}
+                                                    />
+                                                    <Button
+                                                      variant="ghost"
+                                                      size="sm"
+                                                      onClick={() => toggleAnalysisDetail(itemKey)}
+                                                      className="text-versys-primary hover:text-versys-primary/80"
+                                                    >
+                                                      <Eye className="h-4 w-4 mr-1" />
+                                                      {showAnalysisDetail[itemKey] ? 'Ocultar' : 'Ver'} Detalhes
+                                                    </Button>
+                                                  </div>
                                                 </div>
-                                              )}
+                                              </div>
                                               
-                                              {subItem.completed && (
-                                                <div className="mt-2">
-                                                  <Textarea
-                                                    placeholder="Adicione observações sobre este item (opcional)"
-                                                    value={subItem.clientResponse || ''}
-                                                    onChange={(e) => {
-                                                      // Atualizar localmente primeiro
-                                                      setProjectDetails(prev => prev.map(p => {
-                                                        if (p.id === project.id) {
-                                                          const updatedAccordions = p.customAccordions?.map(acc => {
-                                                            if (acc.id === accordion.id) {
-                                                              return {
-                                                                ...acc,
-                                                                items: acc.items.map(itm => {
-                                                                  if (itm.id === item.id) {
+                                              
+                                              {/* Detalhes expandidos */}
+                                              {showAnalysisDetail[itemKey] && (
+                                                <div className="border-t bg-gray-50 p-4">
+                                                  <div className="space-y-4">
+                                                    {/* Resumo da avaliação */}
+                                                    <div className="bg-white p-4 rounded-lg border">
+                                                      <h5 className="text-sm font-semibold text-gray-800 mb-3">
+                                                        📊 Resumo Completo do Item:
+                                                      </h5>
+                                                      <div className="space-y-4">
+                                                        <div>
+                                                          <span className="font-medium text-gray-600">📄 Nome do Item:</span>
+                                                          <p className="text-gray-900 mt-1">{subItem.title}</p>
+                                                        </div>
+                                                        
+                                                        <div>
+                                                          <span className="font-medium text-gray-600">🔍 Avaliação:</span>
+                                                          <p className={`font-medium mt-1 ${analysisStatus.color}`}>
+                                                            {analysisStatus.status}
+                                                          </p>
+                                                        </div>
+                                                        
+                                                        {subItem.currentSituation && (
+                                                          <div>
+                                                            <span className="font-medium text-gray-600">📋 Situação Atual:</span>
+                                                            <p className="text-gray-900 mt-1">{subItem.currentSituation}</p>
+                                                          </div>
+                                                        )}
+                                                        
+                                                        {subItem.description && (
+                                                          <div>
+                                                            <span className="font-medium text-gray-600">📝 Descrição/Orientação para o Cliente:</span>
+                                                            <p className="text-gray-900 mt-1">{subItem.description}</p>
+                                                          </div>
+                                                        )}
+                                                        
+                                                        {subItem.adminFeedback && (
+                                                          <div>
+                                                            <span className="font-medium text-gray-600">💬 Observações do Consultor:</span>
+                                                            <p className="text-gray-900 mt-1">{subItem.adminFeedback}</p>
+                                                          </div>
+                                                        )}
+                                                      </div>
+                                                    </div>
+                                                    
+                                                    {/* Formulário de adequação */}
+                                                    {(subItem.evaluation === "nc" || subItem.evaluation === "r") && !subItem.adequacyReported && (
+                                                      <div className="bg-white p-3 rounded-lg border">
+                                                        <h5 className="text-sm font-semibold text-gray-800 mb-2">
+                                                          <MessageSquare className="h-4 w-4 inline mr-1" />
+                                                          Reportar Adequação Realizada:
+                                                        </h5>
+                                                        <Textarea
+                                                          placeholder="Descreva detalhadamente as adequações realizadas para este item..."
+                                                          value={adequacyReports[itemKey] || ''}
+                                                          onChange={(e) => {
+                                                            setAdequacyReports(prev => ({
+                                                              ...prev,
+                                                              [itemKey]: e.target.value
+                                                            }));
+                                                          }}
+                                                          className="text-sm mb-3"
+                                                          rows={4}
+                                                        />
+                                                        <Button
+                                                          onClick={() => {
+                                                            if (adequacyReports[itemKey]?.trim()) {
+                                                              handleAdequacyReport(
+                                                                project.id,
+                                                                accordion.id,
+                                                                item.id,
+                                                                subItem.id,
+                                                                adequacyReports[itemKey]
+                                                              );
+                                                            }
+                                                          }}
+                                                          disabled={!adequacyReports[itemKey]?.trim() || updatingItem[itemKey]}
+                                                          size="sm"
+                                                          className="bg-versys-primary hover:bg-versys-primary/90"
+                                                        >
+                                                          <Send className="h-4 w-4 mr-1" />
+                                                          Enviar Adequação
+                                                        </Button>
+                                                      </div>
+                                                    )}
+                                                    
+                                                    {/* Observações do cliente */}
+                                                    {subItem.completed && (
+                                                      <div className="bg-white p-3 rounded-lg border">
+                                                        <Label className="text-sm font-semibold text-gray-700 mb-2 block">
+                                                          💬 Suas observações sobre este item:
+                                                        </Label>
+                                                        <Textarea
+                                                          placeholder="Adicione observações sobre este item (opcional)"
+                                                          value={subItem.clientResponse || ''}
+                                                          onChange={(e) => {
+                                                            // Atualizar localmente primeiro
+                                                            setProjectDetails(prev => prev.map(p => {
+                                                              if (p.id === project.id) {
+                                                                const updatedAccordions = p.customAccordions?.map(acc => {
+                                                                  if (acc.id === accordion.id) {
                                                                     return {
-                                                                      ...itm,
-                                                                      subItems: itm.subItems.map(subItm => {
-                                                                        if (subItm.id === subItem.id) {
+                                                                      ...acc,
+                                                                      items: acc.items.map(itm => {
+                                                                        if (itm.id === item.id) {
                                                                           return {
-                                                                            ...subItm,
-                                                                            clientResponse: e.target.value
+                                                                            ...itm,
+                                                                            subItems: itm.subItems.map(subItm => {
+                                                                              if (subItm.id === subItem.id) {
+                                                                                return {
+                                                                                  ...subItm,
+                                                                                  clientResponse: e.target.value
+                                                                                };
+                                                                              }
+                                                                              return subItm;
+                                                                            })
                                                                           };
                                                                         }
-                                                                        return subItm;
+                                                                        return itm;
                                                                       })
                                                                     };
                                                                   }
-                                                                  return itm;
-                                                                })
-                                                              };
-                                                            }
-                                                            return acc;
-                                                          });
-                                                          return { ...p, customAccordions: updatedAccordions };
-                                                        }
-                                                        return p;
-                                                      }));
-                                                    }}
-                                                    onBlur={() => {
-                                                      // Salvar no Firebase quando perder o foco
-                                                      handleItemCompletion(
-                                                        project.id, 
-                                                        accordion.id, 
-                                                        item.id, 
-                                                        subItem.id, 
-                                                        true,
-                                                        subItem.clientResponse
-                                                      );
-                                                    }}
-                                                    className="text-xs"
-                                                    rows={2}
-                                                  />
+                                                                  return acc;
+                                                                });
+                                                                return { ...p, customAccordions: updatedAccordions };
+                                                              }
+                                                              return p;
+                                                            }));
+                                                          }}
+                                                          onBlur={() => {
+                                                            // Salvar no Firebase quando perder o foco
+                                                            handleItemCompletion(
+                                                              project.id, 
+                                                              accordion.id, 
+                                                              item.id, 
+                                                              subItem.id, 
+                                                              true,
+                                                              subItem.clientResponse
+                                                            );
+                                                          }}
+                                                          className="text-sm"
+                                                          rows={3}
+                                                        />
+                                                      </div>
+                                                    )}
+                                                  </div>
                                                 </div>
                                               )}
                                             </div>
-                                          </div>
-                                        ))}
+                                          );
+                                        })}
                                       </div>
                                     </div>
                                   ))}
@@ -579,12 +887,13 @@ const ClientDashboard = () => {
                           ))}
                         </Accordion>
                       ) : (
-                        <div className="text-center py-8">
-                          <FileCheck className="h-12 w-12 text-gray-400 mx-auto mb-4" />
-                          <p className="text-gray-600">
-                            Nenhum item de verificação definido para este projeto ainda.
-                          </p>
-                        </div>
+                                                            <div className="text-center py-8">
+                                      <FileCheck className="h-12 w-12 text-gray-400 mx-auto mb-4" />
+                                      <p className="text-gray-600">
+                                        Nenhum item de verificação definido para este projeto ainda.
+                                      </p>
+
+                                    </div>
                       )}
                   </div>
                 </CardContent>

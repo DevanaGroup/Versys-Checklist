@@ -29,6 +29,11 @@ interface SubItem {
   adminFeedback?: string;
   required: boolean;
   description?: string;
+  currentSituation?: string;
+  adequacyReported?: boolean;
+  adequacyDetails?: string;
+  adequacyDate?: string;
+  adequacyStatus?: "pending" | "approved" | "rejected";
 }
 
 interface ProjectItem {
@@ -536,17 +541,49 @@ const Projetos = () => {
                                         </div>
                                         <div className="flex-grow">
                                           <p className="text-sm font-medium text-gray-900">{subItem.title}</p>
-                                          {subItem.description && (
-                                            <p className="text-xs text-gray-600 mt-1">{subItem.description}</p>
-                                          )}
-                                          {subItem.clientResponse && (
-                                            <div className="mt-2 p-2 bg-blue-50 rounded text-xs">
-                                              <strong>Resposta do Cliente:</strong> {subItem.clientResponse}
+                                          
+                                          {/* Situação atual */}
+                                          {subItem.currentSituation && (
+                                            <div className="mt-2 p-2 bg-amber-50 border-l-4 border-amber-400 rounded text-xs">
+                                              <strong className="text-amber-800">📋 Situação Atual:</strong> 
+                                              <span className="text-amber-700 ml-1">{subItem.currentSituation}</span>
                                             </div>
                                           )}
+                                          
+                                          {/* Descrição/Orientação para o cliente */}
+                                          {subItem.description && (
+                                            <div className="mt-2 p-2 bg-indigo-50 border-l-4 border-indigo-400 rounded text-xs">
+                                              <strong className="text-indigo-800">📝 Descrição/Orientação:</strong> 
+                                              <span className="text-indigo-700 ml-1">{subItem.description}</span>
+                                            </div>
+                                          )}
+                                          
+                                          {/* Resposta do cliente */}
+                                          {subItem.clientResponse && (
+                                            <div className="mt-2 p-2 bg-blue-50 border-l-4 border-blue-400 rounded text-xs">
+                                              <strong className="text-blue-800">💬 Resposta do Cliente:</strong> 
+                                              <span className="text-blue-700 ml-1">{subItem.clientResponse}</span>
+                                            </div>
+                                          )}
+                                          
+                                          {/* Feedback do admin */}
                                           {subItem.adminFeedback && (
-                                            <div className="mt-2 p-2 bg-green-50 rounded text-xs">
-                                              <strong>Feedback do Admin:</strong> {subItem.adminFeedback}
+                                            <div className="mt-2 p-2 bg-green-50 border-l-4 border-green-400 rounded text-xs">
+                                              <strong className="text-green-800">🔍 Feedback do Admin:</strong> 
+                                              <span className="text-green-700 ml-1">{subItem.adminFeedback}</span>
+                                            </div>
+                                          )}
+                                          
+                                          {/* Adequação reportada */}
+                                          {subItem.adequacyReported && subItem.adequacyDetails && (
+                                            <div className="mt-2 p-2 bg-violet-50 border-l-4 border-violet-400 rounded text-xs">
+                                              <strong className="text-violet-800">✅ Adequação Reportada:</strong> 
+                                              <span className="text-violet-700 ml-1">{subItem.adequacyDetails}</span>
+                                              {subItem.adequacyDate && (
+                                                <p className="text-violet-600 mt-1 text-xs">
+                                                  Data: {new Date(subItem.adequacyDate).toLocaleString('pt-BR')}
+                                                </p>
+                                              )}
                                             </div>
                                           )}
                                         </div>
