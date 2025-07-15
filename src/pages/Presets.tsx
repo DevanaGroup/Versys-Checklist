@@ -40,6 +40,7 @@ const Presets = () => {
   const [showEditDialog, setShowEditDialog] = useState(false);
   const [showViewDialog, setShowViewDialog] = useState(false);
   const [selectedPreset, setSelectedPreset] = useState<Preset | null>(null);
+  const [viewMode, setViewMode] = useState<'list' | 'view'>('list');
   
   // Estados para criação/edição
   const [formData, setFormData] = useState({
@@ -181,8 +182,13 @@ const Presets = () => {
 
   const openViewDialog = (preset: Preset) => {
     setSelectedPreset(preset);
-    setShowViewDialog(true);
+    setViewMode('view');
     toast.success("Visualização completa do preset carregada! Role para ver todos os itens.");
+  };
+
+  const backToList = () => {
+    setViewMode('list');
+    setSelectedPreset(null);
   };
 
   const addNewAccordion = () => {
@@ -251,21 +257,148 @@ const Presets = () => {
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between">
-        <div>
-          <h2 className="text-3xl font-bold text-versys-primary">Presets de Checklist</h2>
-          <p className="text-gray-600 mt-1">
-            Gerencie seus presets de checklist para criação rápida de projetos
-          </p>
+      {viewMode === 'view' && selectedPreset ? (
+        // Visualização do preset selecionado
+        <div className="space-y-4">
+          <div className="bg-white rounded-lg shadow-sm border overflow-hidden">
+            <div className="bg-gray-50 px-4 py-3 border-b">
+              <div className="flex items-center justify-between">
+                <Button
+                  variant="outline"
+                  onClick={backToList}
+                  className="h-8 px-3 text-sm bg-white"
+                >
+                  Voltar
+                </Button>
+                <div className="flex gap-2">
+                  <Button
+                    variant="outline"
+                    onClick={() => openEditDialog(selectedPreset)}
+                    className="h-8 px-3 text-sm bg-white"
+                  >
+                    <Edit2 className="h-3 w-3 mr-1" />
+                    Editar
+                  </Button>
+                  <AlertDialog>
+                    <AlertDialogTrigger asChild>
+                      <Button variant="outline" className="h-8 px-3 text-sm bg-white text-red-500 hover:text-red-700 hover:bg-red-50">
+                        <Trash2 className="h-3 w-3 mr-1" />
+                        Excluir
+                      </Button>
+                    </AlertDialogTrigger>
+                    <AlertDialogContent>
+                      <AlertDialogHeader>
+                        <AlertDialogTitle>Confirmar Exclusão</AlertDialogTitle>
+                        <AlertDialogDescription>
+                          Tem certeza que deseja excluir o preset "{selectedPreset.nome}"?
+                          Esta ação não pode ser desfeita.
+                        </AlertDialogDescription>
+                      </AlertDialogHeader>
+                      <AlertDialogFooter>
+                        <AlertDialogCancel>Cancelar</AlertDialogCancel>
+                        <AlertDialogAction
+                          onClick={() => {
+                            handleDeletePreset(selectedPreset);
+                            backToList();
+                          }}
+                          className="bg-red-600 hover:bg-red-700"
+                        >
+                          Excluir
+                        </AlertDialogAction>
+                      </AlertDialogFooter>
+                    </AlertDialogContent>
+                  </AlertDialog>
+                </div>
+              </div>
+            </div>
+            
+            <div className="p-4">
+              <div className="flex items-start justify-between mb-3">
+                <div className="flex-1">
+                  <div className="flex items-center gap-2 mb-1">
+                    <h1 className="text-xl font-bold text-gray-900">{selectedPreset.nome}</h1>
+                    <Badge variant="secondary" className="text-xs">Personalizado</Badge>
+                  </div>
+                  <p className="text-sm text-gray-600">{selectedPreset.descricao}</p>
+                </div>
+              </div>
+              
+              <div className="bg-gray-50 rounded-lg p-3">
+                <div className="flex items-center gap-4 text-sm">
+                  <div className="flex items-center gap-1">
+                    <span className="font-medium text-gray-700">{selectedPreset.accordions.length}</span>
+                    <span className="text-gray-500">acordeões</span>
+                  </div>
+                  <div className="w-1 h-1 bg-gray-300 rounded-full"></div>
+                  <div className="flex items-center gap-1">
+                    <span className="font-medium text-gray-700">{getTotalItems(selectedPreset)}</span>
+                    <span className="text-gray-500">itens</span>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div className="grid gap-3">
+            {selectedPreset.accordions.map((accordion, accordionIndex) => (
+              <Card key={accordionIndex} className="overflow-hidden">
+                <CardHeader className="pb-2 pt-4 px-4">
+                  <div className="flex items-center gap-2">
+                    <div className="w-6 h-6 rounded bg-versys-primary flex items-center justify-center">
+                      <span className="text-xs font-semibold text-white">{accordionIndex + 1}</span>
+                    </div>
+                    <div>
+                      <CardTitle className="text-base text-gray-900">{accordion.title}</CardTitle>
+                      <p className="text-xs text-gray-500">{accordion.items.length} itens</p>
+                    </div>
+                  </div>
+                </CardHeader>
+                <CardContent className="pt-0 px-4 pb-4">
+                  <div className="space-y-1">
+                    {accordion.items.map((item, itemIndex) => (
+                      <div key={itemIndex} className="flex gap-2 p-2 bg-gray-50 rounded">
+                        <div className="w-5 h-5 rounded-full bg-gray-200 flex items-center justify-center flex-shrink-0 mt-0.5">
+                          <span className="text-xs font-medium text-gray-600">{itemIndex + 1}</span>
+                        </div>
+                        <p className="text-xs text-gray-700 leading-relaxed">{item}</p>
+                      </div>
+                    ))}
+                    
+                    {accordion.items.length === 0 && (
+                      <div className="text-center py-4 text-gray-400">
+                        <p className="text-xs">Nenhum item configurado</p>
+                      </div>
+                    )}
+                  </div>
+                </CardContent>
+              </Card>
+            ))}
+            
+            {(!selectedPreset.accordions || selectedPreset.accordions.length === 0) && (
+              <Card className="p-8 text-center">
+                <p className="text-gray-400 text-sm">Nenhum acordeão configurado neste preset.</p>
+              </Card>
+            )}
+          </div>
         </div>
-        <Button 
-          onClick={openCreateDialog}
-          className="bg-versys-primary hover:bg-versys-secondary"
-        >
-          <Plus className="h-4 w-4 mr-2" />
-          Novo Preset
-        </Button>
-      </div>
+      ) : (
+        // Lista de presets
+        <div className="space-y-6">
+          <div className="flex items-center justify-between">
+            <div>
+              <h2 className="text-3xl font-bold text-versys-primary">Presets de Checklist</h2>
+              <p className="text-gray-600 mt-1">
+                Gerencie seus presets de checklist para criação rápida de projetos
+              </p>
+            </div>
+            <Button 
+              onClick={openCreateDialog}
+              className="bg-versys-primary hover:bg-versys-secondary"
+            >
+              <Plus className="h-4 w-4 mr-2" />
+              Novo Preset
+            </Button>
+          </div>
 
       {loading ? (
         <div className="flex items-center justify-center h-64">
@@ -279,19 +412,19 @@ const Presets = () => {
           {presets.map((preset) => (
             <Card key={preset.id} className="hover:shadow-lg transition-shadow">
               <CardHeader>
-                <div className="flex items-start justify-between">
-                  <div className="flex-1">
-                    <CardTitle className="text-lg">{preset.nome}</CardTitle>
-                    <div className="flex items-center gap-2 mt-1">
-                      <Badge variant="secondary">
+                <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-3">
+                  <div className="flex-1 min-w-0">
+                    <CardTitle className="text-lg truncate">{preset.nome}</CardTitle>
+                    <div className="flex flex-col sm:flex-row sm:items-center gap-2 mt-1">
+                      <Badge variant="secondary" className="w-fit">
                         Personalizado
                       </Badge>
-                      <span className="text-sm text-gray-500">
+                      <span className="text-sm text-gray-500 truncate">
                         {preset.accordions.length} acordeões • {getTotalItems(preset)} itens
                       </span>
                     </div>
                   </div>
-                  <div className="flex gap-1">
+                  <div className="flex gap-1 shrink-0">
                     <Button
                       variant="ghost"
                       size="sm"
@@ -335,16 +468,16 @@ const Presets = () => {
                 </div>
               </CardHeader>
               <CardContent>
-                <p className="text-sm text-gray-600 mb-3">{preset.descricao}</p>
+                <p className="text-sm text-gray-600 mb-3 break-words">{preset.descricao}</p>
                 <div className="space-y-2">
                   {preset.accordions.slice(0, 2).map((accordion, index) => (
                     <div key={index} className="text-sm">
-                      <span className="font-medium">{accordion.title}</span>
-                      <span className="text-gray-500 ml-2">({accordion.items.length} itens)</span>
+                      <span className="font-medium break-words">{accordion.title}</span>
+                      <span className="text-gray-500 ml-2 whitespace-nowrap">({accordion.items.length} itens)</span>
                     </div>
                   ))}
                   {preset.accordions.length > 2 && (
-                    <div className="text-sm text-gray-500">
+                    <div className="text-sm text-gray-500 break-words">
                       +{preset.accordions.length - 2} mais acordeões
                     </div>
                   )}
@@ -352,6 +485,8 @@ const Presets = () => {
               </CardContent>
             </Card>
           ))}
+        </div>
+      )}
         </div>
       )}
 
@@ -364,7 +499,7 @@ const Presets = () => {
           
           {/* Seção 1: Informações Básicas */}
           <div className="space-y-4">
-            <div className="grid grid-cols-2 gap-4">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div>
                 <Label htmlFor="preset-name">Nome do Preset</Label>
                 <Input
@@ -442,7 +577,7 @@ const Presets = () => {
             )}
 
             {/* Seção 4: Duas Colunas Principais */}
-            <div className="grid grid-cols-2 gap-6">
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
               {/* Coluna Esquerda - Itens Disponíveis */}
               <div className="space-y-3">
                 <div className="flex items-center gap-2">
@@ -644,7 +779,7 @@ const Presets = () => {
           
           {/* Seção 1: Informações Básicas */}
           <div className="space-y-4">
-            <div className="grid grid-cols-2 gap-4">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div>
                 <Label htmlFor="edit-nome">Nome do Preset</Label>
                 <Input
@@ -716,7 +851,7 @@ const Presets = () => {
             )}
 
             {/* Seção 4: Duas Colunas Principais */}
-            <div className="grid grid-cols-2 gap-6">
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
               {/* Coluna Esquerda - Itens Disponíveis */}
               <div className="space-y-3">
                 <div className="flex items-center gap-2">

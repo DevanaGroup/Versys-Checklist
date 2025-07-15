@@ -186,9 +186,9 @@ export function AppSidebar() {
                       <SidebarMenuButton 
                         asChild 
                         className={`
-                          h-10 px-3 py-2 rounded-lg transition-all duration-200
+                          h-10 px-3 py-2 rounded-lg transition-all duration-200 hover:scale-105 active:scale-95
                           ${isActive(item.url) 
-                            ? "bg-white/20 text-white font-medium shadow-sm" 
+                            ? "bg-white/20 text-white font-medium shadow-sm hover:bg-white/25" 
                             : "text-white/80 hover:bg-white/10 hover:text-white"
                           }
                         `}
@@ -196,6 +196,9 @@ export function AppSidebar() {
                         <NavLink to={item.url} className="flex items-center gap-3">
                           <item.icon className="h-4 w-4 flex-shrink-0" />
                           {!isCollapsed && <span className="truncate">{item.title}</span>}
+                          {isActive(item.url) && !isCollapsed && (
+                            <div className="ml-auto w-2 h-2 bg-white rounded-full animate-pulse" />
+                          )}
                         </NavLink>
                       </SidebarMenuButton>
                     </SidebarMenuItem>
