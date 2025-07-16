@@ -29,10 +29,6 @@ const adminMenuItems = [{
   url: "/colaboradores",
   icon: UserCheck
 }, {
-  title: "Relatórios",
-  url: "/relatorios",
-  icon: FileText
-}, {
   title: "Configurações",
   url: "/configuracoes",
   icon: Settings
