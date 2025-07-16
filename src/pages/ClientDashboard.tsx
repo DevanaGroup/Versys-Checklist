@@ -7,7 +7,7 @@ import { Progress } from "@/components/ui/progress";
 
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Textarea } from "@/components/ui/textarea";
-import { Checkbox } from "@/components/ui/checkbox";
+
 import { Label } from "@/components/ui/label";
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion";
 import { 
@@ -25,7 +25,11 @@ import {
   Send,
   Eye,
   FileText,
-  AlertCircleIcon
+  AlertCircleIcon,
+  Paperclip,
+  Image,
+  X,
+  Upload
 } from "lucide-react";
 import { toast } from "sonner";
 import { useAuthContext } from "@/contexts/AuthContext";
@@ -42,6 +46,7 @@ interface SubItem {
   adminFeedback?: string;
   adequacyReported?: boolean;
   adequacyDetails?: string;
+  adequacyImages?: string[];
   adequacyDate?: string;
   adequacyStatus?: "pending" | "approved" | "rejected";
   currentSituation?: string;
@@ -114,6 +119,7 @@ const ClientDashboard = () => {
   const [loading, setLoading] = useState(true);
   const [showAnalysisDetail, setShowAnalysisDetail] = useState<{[key: string]: boolean}>({});
   const [adequacyReports, setAdequacyReports] = useState<{[key: string]: string}>({});
+  const [adequacyImages, setAdequacyImages] = useState<{[key: string]: File[]}>({});
 
   const [updatingItem, setUpdatingItem] = useState<{ [itemId: string]: boolean }>({});
 
@@ -221,6 +227,19 @@ const ClientDashboard = () => {
       
       setProjectDetails(projetosData);
       console.log('✅ Projetos do cliente carregados:', projetosData.length);
+      
+      // Verificar se há imagens salvas
+      projetosData.forEach(project => {
+        project.customAccordions?.forEach(accordion => {
+          accordion.items.forEach(item => {
+            item.subItems.forEach(subItem => {
+              if (subItem.adequacyImages && subItem.adequacyImages.length > 0) {
+                console.log(`🖼️ Projeto ${project.nome} - Item ${subItem.title} tem ${subItem.adequacyImages.length} imagens salvas`);
+              }
+            });
+          });
+        });
+      });
       
 
       
@@ -354,6 +373,20 @@ const ClientDashboard = () => {
     try {
       setUpdatingItem(prev => ({ ...prev, [itemKey]: true }));
       
+      // Converter imagens para Base64
+      let imageBase64: string[] = [];
+      try {
+        imageBase64 = await convertImagesToBase64(itemKey);
+        console.log('📸 Imagens convertidas para Base64:', imageBase64.length, 'imagens');
+        imageBase64.forEach((img, index) => {
+          console.log(`📸 Imagem ${index + 1} - Tamanho:`, img.length, 'caracteres');
+        });
+      } catch (convertError) {
+        console.error('Erro ao converter imagens:', convertError);
+        toast.error('Erro ao processar as imagens. Tente novamente.');
+        return;
+      }
+      
       // Atualizar no estado local primeiro
       setProjectDetails(prev => prev.map(project => {
         if (project.id === projectId) {
@@ -371,6 +404,7 @@ const ClientDashboard = () => {
                             ...subItem,
                             adequacyReported: true,
                             adequacyDetails,
+                            adequacyImages: imageBase64,
                             adequacyDate: new Date().toISOString(),
                             adequacyStatus: "pending" as "pending"
                           };
@@ -413,6 +447,7 @@ const ClientDashboard = () => {
                           ...subItem,
                           adequacyReported: true,
                           adequacyDetails,
+                          adequacyImages: imageBase64,
                           adequacyDate: new Date().toISOString(),
                           adequacyStatus: "pending" as "pending"
                         };
@@ -428,12 +463,27 @@ const ClientDashboard = () => {
           return accordion;
         });
         
+        console.log('💾 Salvando no Firestore - Imagens:', imageBase64.length);
+        
+        // Verificar tamanho do documento
+        const documentSize = JSON.stringify(updatedAccordions).length;
+        console.log('📊 Tamanho do documento:', documentSize, 'bytes');
+        
+        if (documentSize > 1000000) { // 1MB
+          console.warn('⚠️ Documento muito grande:', documentSize, 'bytes');
+          toast.error('Documento muito grande. Reduza o número de imagens.');
+          return;
+        }
+        
         await updateDoc(projectRef, {
           customAccordions: updatedAccordions
         });
         
+        console.log('✅ Adequação salva no Firestore com sucesso!');
+        
         // Limpar o campo de adequação
         setAdequacyReports(prev => ({ ...prev, [itemKey]: '' }));
+        setAdequacyImages(prev => ({ ...prev, [itemKey]: [] }));
         
         toast.success('Adequação reportada com sucesso! Aguarde a análise.');
       }
@@ -444,6 +494,69 @@ const ClientDashboard = () => {
     } finally {
       setUpdatingItem(prev => ({ ...prev, [itemKey]: false }));
     }
+  };
+
+  const handleImageUpload = (itemKey: string, files: FileList) => {
+    const validFiles = Array.from(files).filter(file => {
+      const isImage = file.type.startsWith('image/');
+      const maxSize = 750 * 1024; // 750KB (otimizado para Base64)
+      
+      if (!isImage) {
+        toast.error('Apenas arquivos de imagem são permitidos');
+        return false;
+      }
+      
+      if (file.size > maxSize) {
+        toast.error('Arquivo muito grande. Máximo 750KB por imagem para garantir performance');
+        return false;
+      }
+      
+      return true;
+    });
+
+    // Verificar limite de quantidade (máximo 5 imagens)
+    const currentImages = adequacyImages[itemKey] || [];
+    const maxImages = 5;
+    
+    if (currentImages.length + validFiles.length > maxImages) {
+      toast.error(`Máximo ${maxImages} imagens por adequação`);
+      return;
+    }
+
+    if (validFiles.length > 0) {
+      setAdequacyImages(prev => ({
+        ...prev,
+        [itemKey]: [...(prev[itemKey] || []), ...validFiles]
+      }));
+    }
+  };
+
+  const removeImage = (itemKey: string, index: number) => {
+    setAdequacyImages(prev => ({
+      ...prev,
+      [itemKey]: prev[itemKey]?.filter((_, i) => i !== index) || []
+    }));
+  };
+
+
+
+  const convertImagesToBase64 = async (itemKey: string): Promise<string[]> => {
+    const images = adequacyImages[itemKey] || [];
+    const base64Promises = images.map(async (file) => {
+      return new Promise<string>((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = () => {
+          const base64 = reader.result as string;
+          resolve(base64);
+        };
+        reader.onerror = () => {
+          reject(new Error(`Erro ao converter ${file.name} para Base64`));
+        };
+        reader.readAsDataURL(file);
+      });
+    });
+
+    return await Promise.all(base64Promises);
   };
 
   const getAnalysisStatusInfo = (subItem: SubItem) => {
@@ -700,19 +813,6 @@ const ClientDashboard = () => {
                                                     </div>
                                                   </div>
                                                   <div className="flex items-center space-x-2">
-                                                    <Checkbox
-                                                      checked={subItem.completed}
-                                                      onCheckedChange={(checked) => 
-                                                        handleItemCompletion(
-                                                          project.id, 
-                                                          accordion.id, 
-                                                          item.id, 
-                                                          subItem.id, 
-                                                          !!checked
-                                                        )
-                                                      }
-                                                      disabled={updatingItem[itemKey]}
-                                                    />
                                                     <Button
                                                       variant="ghost"
                                                       size="sm"
@@ -791,6 +891,56 @@ const ClientDashboard = () => {
                                                           className="text-sm mb-3"
                                                           rows={4}
                                                         />
+                                                        
+                                                        {/* Seção de anexar imagens */}
+                                                        <div className="mb-3">
+                                                          <label className="text-sm font-medium text-gray-700 mb-2 block">
+                                                            <Image className="h-4 w-4 inline mr-1" />
+                                                            Anexar Fotos Comprobatórias:
+                                                          </label>
+                                                          <div className="flex flex-wrap gap-2 mb-2">
+                                                            {adequacyImages[itemKey]?.map((file, index) => (
+                                                              <div key={index} className="relative">
+                                                                <img
+                                                                  src={URL.createObjectURL(file)}
+                                                                  alt={`Anexo ${index + 1}`}
+                                                                  className="w-20 h-20 object-cover rounded-lg border"
+                                                                />
+                                                                <button
+                                                                  onClick={() => removeImage(itemKey, index)}
+                                                                  className="absolute -top-2 -right-2 bg-red-500 text-white rounded-full p-1 hover:bg-red-600"
+                                                                >
+                                                                  <X className="h-3 w-3" />
+                                                                </button>
+                                                              </div>
+                                                            ))}
+                                                          </div>
+                                                          <div className="flex items-center gap-2">
+                                                            <input
+                                                              type="file"
+                                                              accept="image/*"
+                                                              multiple
+                                                              onChange={(e) => {
+                                                                if (e.target.files) {
+                                                                  handleImageUpload(itemKey, e.target.files);
+                                                                }
+                                                              }}
+                                                              className="hidden"
+                                                              id={`image-upload-${itemKey}`}
+                                                            />
+                                                            <label
+                                                              htmlFor={`image-upload-${itemKey}`}
+                                                              className="cursor-pointer inline-flex items-center px-3 py-2 border border-gray-300 rounded-md text-sm font-medium text-gray-700 bg-white hover:bg-gray-50"
+                                                            >
+                                                              <Upload className="h-4 w-4 mr-1" />
+                                                              Anexar Imagens
+                                                            </label>
+                                                            <span className="text-xs text-gray-500">
+                                                              Máximo 750KB por imagem (máximo 5 imagens)
+                                                            </span>
+                                                          </div>
+                                                        </div>
+                                                        
                                                         <Button
                                                           onClick={() => {
                                                             if (adequacyReports[itemKey]?.trim()) {
@@ -810,6 +960,69 @@ const ClientDashboard = () => {
                                                           <Send className="h-4 w-4 mr-1" />
                                                           Enviar Adequação
                                                         </Button>
+                                                      </div>
+                                                    )}
+                                                    
+                                                    {/* Adequação já reportada */}
+                                                    {subItem.adequacyReported && (
+                                                      <div className="bg-white p-3 rounded-lg border">
+                                                        <h5 className="text-sm font-semibold text-gray-800 mb-2">
+                                                          <CheckCircle className="h-4 w-4 inline mr-1" />
+                                                          Adequação Reportada:
+                                                        </h5>
+                                                        
+                                                        {adequacyStatus && (
+                                                          <div className={`inline-flex items-center px-2 py-1 rounded-full text-xs font-medium mb-3 ${adequacyStatus.bgColor} ${adequacyStatus.color}`}>
+                                                            {adequacyStatus.icon}
+                                                            <span className="ml-1">{adequacyStatus.status}</span>
+                                                          </div>
+                                                        )}
+                                                        
+                                                        {subItem.adequacyDetails && (
+                                                          <div className="mb-3">
+                                                            <span className="font-medium text-gray-600">📝 Descrição da Adequação:</span>
+                                                            <p className="text-gray-900 mt-1 text-sm">{subItem.adequacyDetails}</p>
+                                                          </div>
+                                                        )}
+                                                        
+                                                        {subItem.adequacyImages && subItem.adequacyImages.length > 0 && (
+                                                          <div className="mb-3">
+                                                            <span className="font-medium text-gray-600">📷 Fotos Comprobatórias ({subItem.adequacyImages.length}):</span>
+                                                            <div className="flex flex-wrap gap-2 mt-2">
+                                                              {subItem.adequacyImages.map((imageBase64, index) => {
+                                                                console.log(`🖼️ Carregando imagem ${index + 1} - Tamanho:`, imageBase64.length, 'caracteres');
+                                                                return (
+                                                                  <div key={index} className="relative">
+                                                                    <img
+                                                                      src={imageBase64}
+                                                                      alt={`Adequação ${index + 1}`}
+                                                                      className="w-20 h-20 object-cover rounded-lg border cursor-pointer hover:opacity-80"
+                                                                      onLoad={() => console.log(`✅ Imagem ${index + 1} carregada com sucesso`)}
+                                                                      onError={() => console.error(`❌ Erro ao carregar imagem ${index + 1}`)}
+                                                                      onClick={() => {
+                                                                        // Criar modal para visualizar imagem em tamanho maior
+                                                                        const modal = document.createElement('div');
+                                                                        modal.innerHTML = `
+                                                                          <div style="position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.8); display: flex; justify-content: center; align-items: center; z-index: 1000;" onclick="this.remove()">
+                                                                            <img src="${imageBase64}" style="max-width: 90%; max-height: 90%; object-fit: contain;" alt="Imagem ampliada" />
+                                                                          </div>
+                                                                        `;
+                                                                        document.body.appendChild(modal);
+                                                                      }}
+                                                                    />
+                                                                  </div>
+                                                                );
+                                                              })}
+                                                            </div>
+                                                          </div>
+                                                        )}
+                                                        
+                                                        {subItem.adequacyDate && (
+                                                          <div className="text-xs text-gray-500">
+                                                            <Clock className="h-3 w-3 inline mr-1" />
+                                                            Reportada em: {new Date(subItem.adequacyDate).toLocaleDateString('pt-BR')} às {new Date(subItem.adequacyDate).toLocaleTimeString('pt-BR')}
+                                                          </div>
+                                                        )}
                                                       </div>
                                                     )}
                                                     

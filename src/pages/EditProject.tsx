@@ -7,7 +7,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
-import { Plus, X, ArrowLeft, ChevronDown, ChevronRight } from "lucide-react";
+import { Plus, X, ArrowLeft, ChevronDown, ChevronRight, Save, ArrowRight, CheckCircle } from "lucide-react";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog";
 import { useNavigate, useParams } from "react-router-dom";
 import { toast } from "sonner";
@@ -143,7 +143,7 @@ const categoriesData = {
     "4.63 - A instalação portuária possui sistema informatizado de registro de dados de segurança (registros dos controles de acessos e controle de chaves)? Os dados são mantidos por um período mínimo de 90 dias?",
     "4.64 - Os sistemas de alarme e de comunicação previstos no PSP funcionam adequadamente?"
   ],
-  "COMUNICAÇÕES E TI": [
+  "COMUNICAÇÕES E TECNOLOGIA DA INFORMAÇÃO": [
     "5.1 - Existe login único por colaborador, para acesso às estações de trabalho?",
     "5.2 - As estações de trabalho estão configuradas para 'usuários', sem direitos de administradores?",
     "5.3 - O uso de dispositivos de entrada e saída (CD-Rom, pen-drive, HD externo etc.) é autorizado pelo administrador da rede local, mediante solicitação justificada?",
@@ -191,11 +191,8 @@ const categoriesData = {
     "5.45 - Há o uso de estações de trabalho alugadas? Caso sim, há uma política de devolução desses equipamentos, de modo a impedir o acesso indevido a informações sensíveis da instalação portuária?",
     "5.46 - As rotinas de atualizações automáticas de sistemas operacionais e ferramentas de proteção (antivírus, anti-spyware, firewall etc.) estão habilitadas?"
   ],
-  "RECURSOS HUMANOS": [
+  "OUTROS ITENS JULGADOS NECESSÁRIOS": [
     "6.1 - Descrever detalhadamente."
-  ],
-  "PROCEDIMENTOS OPERACIONAIS": [
-    "7.1 - Descrever detalhadamente."
   ]
 };
 
@@ -203,6 +200,7 @@ const EditProject = () => {
   const navigate = useNavigate();
   const { projectId } = useParams<{ projectId: string }>();
   
+  const [currentStep, setCurrentStep] = useState(1);
   const [projectName, setProjectName] = useState("");
   const [selectedClient, setSelectedClient] = useState<string>("none");
   const [customAccordions, setCustomAccordions] = useState<CustomAccordion[]>([]);
@@ -212,6 +210,12 @@ const EditProject = () => {
   const [loadingProject, setLoadingProject] = useState(true);
   const [savingProject, setSavingProject] = useState(false);
   const [draggedItem, setDraggedItem] = useState<Omit<SelectedItem, 'subItems' | 'isExpanded'> | null>(null);
+
+  const steps = [
+    { id: 1, title: "Informações Básicas", description: "Nome e Cliente" },
+    { id: 2, title: "Configurar Itens", description: "Adicionar itens, observações e avaliações" },
+    { id: 3, title: "Finalizar", description: "Revisar e salvar as alterações" }
+  ];
 
   useEffect(() => {
     loadClients();
@@ -406,8 +410,6 @@ const EditProject = () => {
     ));
   };
 
-
-
   const updateSubItemDescription = (accordionId: string, itemId: string, subItemId: string, description: string) => {
     setCustomAccordions(customAccordions.map(accordion =>
       accordion.id === accordionId
@@ -535,10 +537,10 @@ const EditProject = () => {
 
   const getPriorityColor = (priority: string) => {
     switch (priority) {
-      case "alta": return "bg-red-100 text-red-800";
-      case "media": return "bg-yellow-100 text-yellow-800";
-      case "baixa": return "bg-green-100 text-green-800";
-      default: return "bg-gray-100 text-gray-800";
+      case "alta": return "bg-red-500 text-white";
+      case "media": return "bg-yellow-500 text-white";
+      case "baixa": return "bg-green-500 text-white";
+      default: return "bg-gray-500 text-white";
     }
   };
 
@@ -620,138 +622,131 @@ const EditProject = () => {
     }
   };
 
-  if (loadingProject) {
-    return (
-      <div className="flex items-center justify-center h-64">
-        <p className="text-gray-500">Carregando projeto...</p>
-      </div>
-    );
-  }
+  const canProceedToNext = () => {
+    if (currentStep === 1) {
+      return projectName.trim() !== "";
+    }
+    if (currentStep === 2) {
+      return customAccordions.length > 0;
+    }
+    return true;
+  };
 
-  return (
-    <div className="space-y-6 h-full flex flex-col">
-      <div className="flex items-center justify-between">
-        <div className="flex items-center space-x-4">
-          <Button 
-            variant="outline" 
-            onClick={() => navigate("/projetos")}
-            className="border-versys-secondary text-versys-primary hover:bg-versys-secondary hover:text-white"
-          >
-            <ArrowLeft className="h-4 w-4 mr-2" />
-            Voltar
-          </Button>
+  const nextStep = () => {
+    if (canProceedToNext()) {
+      setCurrentStep(prev => Math.min(prev + 1, steps.length));
+    }
+  };
+
+  const prevStep = () => {
+    setCurrentStep(prev => Math.max(prev - 1, 1));
+  };
+
+  const renderStep1 = () => (
+    <div className="h-full flex items-center justify-center">
+      <Card className="w-full max-w-2xl">
+        <CardHeader>
+          <CardTitle className="text-center text-2xl text-versys-primary">
+            Informações Básicas do Projeto
+          </CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-6">
           <div>
-            <h2 className="text-3xl font-bold text-versys-primary">Editar Projeto</h2>
+            <Label htmlFor="projectName" className="text-lg">Nome do Projeto *</Label>
+            <Input
+              id="projectName"
+              value={projectName}
+              onChange={(e) => setProjectName(e.target.value)}
+              placeholder="Digite o nome do projeto"
+              className="mt-2 text-lg h-12"
+            />
           </div>
-        </div>
-        
-        <div className="flex items-center space-x-4">
-          <Button 
-            variant="outline" 
-            onClick={() => navigate("/projetos")}
-          >
-            Cancelar
-          </Button>
-          <Button 
-            onClick={handleUpdateProject}
-            disabled={savingProject}
-            className="bg-versys-primary hover:bg-versys-secondary"
-          >
-            {savingProject ? "Salvando..." : "Salvar Alterações"}
-          </Button>
-        </div>
-      </div>
+          
+          <div>
+            <Label htmlFor="clientSelect" className="text-lg">Cliente (Opcional)</Label>
+            {selectedClient && selectedClient !== "none" ? (
+              // Cliente já definido - mostrar apenas como informação
+              <div className="mt-2 flex h-12 w-full items-center justify-between rounded-md border border-input bg-gray-50 px-3 py-2 text-lg">
+                <span className="text-gray-700">
+                  {(() => {
+                    const client = clients.find(c => c.id === selectedClient);
+                    return client ? `${client.nome} - ${client.empresa}` : "Cliente não encontrado";
+                  })()}
+                </span>
+                <span className="text-sm text-gray-500">Cliente definido</span>
+              </div>
+            ) : (
+              // Nenhum cliente definido - permitir seleção
+              <Select 
+                value={selectedClient} 
+                onValueChange={setSelectedClient}
+                disabled={loadingClients}
+              >
+                <SelectTrigger className="mt-2 h-12">
+                  <SelectValue 
+                    placeholder={loadingClients ? "Carregando clientes..." : "Selecione um cliente"}
+                  />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="none">Nenhum cliente</SelectItem>
+                  {clients.length === 0 && !loadingClients && (
+                    <SelectItem value="empty" disabled>
+                      Nenhum cliente encontrado
+                    </SelectItem>
+                  )}
+                  {clients.map((client) => (
+                    <SelectItem key={client.id} value={client.id}>
+                      {client.nome} - {client.empresa}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            )}
+            {clients.length === 0 && !loadingClients && selectedClient === "none" && (
+              <p className="text-sm text-red-500 mt-2">
+                ⚠️ Nenhum cliente encontrado. Verifique o console para mais detalhes.
+              </p>
+            )}
+            {selectedClient && selectedClient !== "none" && (
+              <p className="text-sm text-gray-500 mt-2">
+                ℹ️ O cliente não pode ser alterado após ser definido no projeto.
+              </p>
+            )}
+          </div>
+        </CardContent>
+      </Card>
+    </div>
+  );
 
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-        <div>
-          <Label htmlFor="projectName">Nome do Projeto</Label>
+  const renderStep2 = () => (
+    <div className="h-full flex flex-col max-h-screen">
+      <div className="flex items-center justify-between mb-3">
+        <h3 className="text-xl font-semibold text-versys-primary">Configurar Itens do Projeto</h3>
+        <div className="flex items-center space-x-2">
           <Input
-            id="projectName"
-            value={projectName}
-            onChange={(e) => setProjectName(e.target.value)}
-            placeholder="Digite o nome do projeto"
-            className="mt-1"
+            value={newAccordionTitle}
+            onChange={(e) => setNewAccordionTitle(e.target.value)}
+            placeholder="Título da nova categoria"
+            className="w-64 h-9"
           />
-        </div>
-        
-        <div>
-          <Label htmlFor="clientSelect">Cliente (Opcional)</Label>
-          {selectedClient && selectedClient !== "none" ? (
-            // Cliente já definido - mostrar apenas como informação
-            <div className="mt-1 flex h-10 w-full items-center justify-between rounded-md border border-input bg-gray-50 px-3 py-2 text-sm">
-              <span className="text-gray-700">
-                {(() => {
-                  const client = clients.find(c => c.id === selectedClient);
-                  return client ? `${client.nome} - ${client.empresa}` : "Cliente não encontrado";
-                })()}
-              </span>
-              <span className="text-xs text-gray-500">Cliente definido</span>
-            </div>
-          ) : (
-            // Nenhum cliente definido - permitir seleção
-            <Select 
-              value={selectedClient} 
-              onValueChange={setSelectedClient}
-              disabled={loadingClients}
-            >
-              <SelectTrigger className="mt-1">
-                <SelectValue 
-                  placeholder={loadingClients ? "Carregando clientes..." : "Selecione um cliente"}
-                />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="none">Nenhum cliente</SelectItem>
-                {clients.length === 0 && !loadingClients && (
-                  <SelectItem value="empty" disabled>
-                    Nenhum cliente encontrado
-                  </SelectItem>
-                )}
-                {clients.map((client) => (
-                  <SelectItem key={client.id} value={client.id}>
-                    {client.nome} - {client.empresa}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          )}
-          {clients.length === 0 && !loadingClients && selectedClient === "none" && (
-            <p className="text-xs text-red-500 mt-1">
-              ⚠️ Nenhum cliente encontrado. Verifique o console para mais detalhes.
-            </p>
-          )}
-          {selectedClient && selectedClient !== "none" && (
-            <p className="text-xs text-gray-500 mt-1">
-              ℹ️ O cliente não pode ser alterado após ser definido no projeto.
-            </p>
-          )}
+          <Button onClick={addCustomAccordion} size="sm" className="bg-versys-primary hover:bg-versys-secondary h-9">
+            <Plus className="h-4 w-4" />
+          </Button>
         </div>
       </div>
 
-      <div className="flex-1 grid grid-cols-1 lg:grid-cols-2 gap-6 min-h-0">
+      <div className="flex-1 grid grid-cols-2 gap-4 min-h-0 overflow-hidden">
         {/* Coluna 1 - Itens Selecionados */}
         <div className="flex flex-col h-full">
           <Card className="flex-1 flex flex-col">
-            <CardHeader>
+            <CardHeader className="pb-3">
               <CardTitle className="text-versys-primary">Itens Selecionados</CardTitle>
             </CardHeader>
-            <CardContent className="flex-1 flex flex-col">
-              <div className="space-y-4 mb-4">
-                <div className="flex space-x-2">
-                  <Input
-                    value={newAccordionTitle}
-                    onChange={(e) => setNewAccordionTitle(e.target.value)}
-                    placeholder="Título do novo acordeão"
-                  />
-                  <Button onClick={addCustomAccordion} size="sm" className="bg-versys-primary hover:bg-versys-secondary">
-                    <Plus className="h-4 w-4" />
-                  </Button>
-                </div>
-              </div>
-
-              <div className="flex-1 overflow-hidden">
+            <CardContent className="flex-1 flex flex-col min-h-0 p-4">
+              <div className="flex-1 min-h-0 overflow-y-auto">
                 {customAccordions.length > 0 ? (
-                  <ScrollArea className="h-full">
-                    <Accordion type="multiple" className="w-full">
+                  <div className="space-y-1">
+                    <Accordion type="multiple" className="w-full space-y-1">
                       {customAccordions.map((accordion) => (
                         <AccordionItem key={accordion.id} value={accordion.id}>
                           <div className="flex items-center justify-between">
@@ -772,8 +767,7 @@ const EditProject = () => {
                                 <AlertDialogHeader>
                                   <AlertDialogTitle>Confirmar Exclusão</AlertDialogTitle>
                                   <AlertDialogDescription>
-                                    Tem certeza que deseja excluir o acordeão "{accordion.title}" e todos os seus itens?
-                                    Esta ação não pode ser desfeita.
+                                    Tem certeza que deseja excluir a categoria "{accordion.title}" e todos os seus itens?
                                   </AlertDialogDescription>
                                 </AlertDialogHeader>
                                 <AlertDialogFooter>
@@ -782,20 +776,20 @@ const EditProject = () => {
                                     onClick={() => removeCustomAccordion(accordion.id)}
                                     className="bg-red-600 hover:bg-red-700"
                                   >
-                                    Excluir Acordeão
+                                    Excluir
                                   </AlertDialogAction>
                                 </AlertDialogFooter>
                               </AlertDialogContent>
                             </AlertDialog>
                           </div>
-                          <AccordionContent>
+                          <AccordionContent className="pb-2">
                             <div 
-                              className="space-y-2 min-h-[100px] p-4 border-2 border-dashed border-gray-300 rounded-lg"
+                              className="space-y-2 min-h-[80px] max-h-80 overflow-y-auto p-3 border-2 border-dashed border-gray-300 rounded-lg"
                               onDragOver={handleDragOver}
                               onDrop={(e) => handleDrop(e, accordion.id)}
                             >
                               {accordion.items.map((item) => (
-                                <div key={item.id} className="border border-gray-200 rounded-lg p-3 bg-white">
+                                <div key={item.id} className="border border-gray-200 rounded-lg p-2 bg-white">
                                   <div className="flex items-center justify-between">
                                     <div className="flex-1">
                                       <Collapsible 
@@ -803,8 +797,8 @@ const EditProject = () => {
                                         onOpenChange={() => toggleItemExpansion(accordion.id, item.id)}
                                       >
                                         <div className="flex items-center justify-between">
-                                          <div className="flex-1">
-                                            <p className="text-sm font-medium">{item.title}</p>
+                                          <div className="flex-1 min-w-0">
+                                            <p className="text-sm font-medium truncate">{item.title}</p>
                                             <p className="text-xs text-gray-500">{item.category}</p>
                                             <div className="flex items-center space-x-2 mt-1">
                                               <Badge className={getPriorityColor(item.priority || "media")}>
@@ -816,7 +810,7 @@ const EditProject = () => {
                                                   updateItemPriority(accordion.id, item.id, value)
                                                 }
                                               >
-                                                <SelectTrigger className="w-20 h-6 text-xs">
+                                                <SelectTrigger className="w-16 h-6 text-xs">
                                                   <SelectValue />
                                                 </SelectTrigger>
                                                 <SelectContent>
@@ -827,17 +821,17 @@ const EditProject = () => {
                                               </Select>
                                             </div>
                                           </div>
-                                          <div className="flex items-center space-x-1">
+                                          <div className="flex items-center space-x-1 ml-2">
                                             <Button
                                               variant="ghost"
                                               size="sm"
                                               onClick={() => addSubItem(accordion.id, item.id)}
-                                              className="text-versys-primary hover:text-versys-secondary"
+                                              className="h-8 w-8 p-0 text-versys-primary hover:text-versys-secondary"
                                             >
                                               <Plus className="h-3 w-3" />
                                             </Button>
                                             <CollapsibleTrigger asChild>
-                                              <Button variant="ghost" size="sm">
+                                              <Button variant="ghost" size="sm" className="h-8 w-8 p-0">
                                                 {item.isExpanded ? (
                                                   <ChevronDown className="h-4 w-4" />
                                                 ) : (
@@ -850,7 +844,7 @@ const EditProject = () => {
                                                 <Button
                                                   variant="ghost"
                                                   size="sm"
-                                                  className="text-red-500 hover:text-red-700"
+                                                  className="h-8 w-8 p-0 text-red-500 hover:text-red-700"
                                                 >
                                                   <X className="h-3 w-3" />
                                                 </Button>
@@ -860,7 +854,6 @@ const EditProject = () => {
                                                   <AlertDialogTitle>Confirmar Exclusão</AlertDialogTitle>
                                                   <AlertDialogDescription>
                                                     Tem certeza que deseja excluir o item "{item.title}" e todos os seus sub-itens?
-                                                    Esta ação não pode ser desfeita.
                                                   </AlertDialogDescription>
                                                 </AlertDialogHeader>
                                                 <AlertDialogFooter>
@@ -869,7 +862,7 @@ const EditProject = () => {
                                                     onClick={() => removeItemFromAccordion(accordion.id, item.id)}
                                                     className="bg-red-600 hover:bg-red-700"
                                                   >
-                                                    Excluir Item
+                                                    Excluir
                                                   </AlertDialogAction>
                                                 </AlertDialogFooter>
                                               </AlertDialogContent>
@@ -878,12 +871,12 @@ const EditProject = () => {
                                         </div>
                                         
                                         <CollapsibleContent>
-                                          <div className="space-y-3 mt-3">
+                                          <div className="space-y-2 mt-2">
                                             {item.subItems.map((subItem) => (
-                                              <div key={subItem.id} className="border border-gray-200 rounded-lg p-3 bg-gray-50">
+                                              <div key={subItem.id} className="border border-gray-200 rounded-lg p-2 bg-gray-50">
                                                 <div className="space-y-2">
                                                   <div className="flex items-center justify-between">
-                                                    <div className="flex-1 text-sm p-2 bg-gray-100 rounded-md border border-gray-200">
+                                                    <div className="flex-1 text-sm p-1 bg-gray-100 rounded-md border border-gray-200">
                                                       {subItem.title || "Título do sub-item"}
                                                     </div>
                                                     <div className="flex items-center space-x-2 ml-2">
@@ -901,7 +894,7 @@ const EditProject = () => {
                                                           <Button
                                                             variant="ghost"
                                                             size="sm"
-                                                            className="text-red-500 hover:text-red-700"
+                                                            className="h-6 w-6 p-0 text-red-500 hover:text-red-700"
                                                           >
                                                             <X className="h-3 w-3" />
                                                           </Button>
@@ -911,7 +904,6 @@ const EditProject = () => {
                                                             <AlertDialogTitle>Confirmar Exclusão</AlertDialogTitle>
                                                             <AlertDialogDescription>
                                                               Tem certeza que deseja excluir o sub-item "{subItem.title}"?
-                                                              Esta ação não pode ser desfeita.
                                                             </AlertDialogDescription>
                                                           </AlertDialogHeader>
                                                           <AlertDialogFooter>
@@ -920,12 +912,11 @@ const EditProject = () => {
                                                               onClick={() => removeSubItem(accordion.id, item.id, subItem.id)}
                                                               className="bg-red-600 hover:bg-red-700"
                                                             >
-                                                              Excluir Sub-item
+                                                              Excluir
                                                             </AlertDialogAction>
                                                           </AlertDialogFooter>
                                                         </AlertDialogContent>
                                                       </AlertDialog>
-
                                                     </div>
                                                   </div>
                                                   
@@ -951,15 +942,13 @@ const EditProject = () => {
                                                     />
                                                   </div>
                                                   
-
-                                                  
                                                   <div className="flex items-center space-x-4">
                                                     <div>
                                                       <Label className="text-xs text-gray-600">Avaliação padrão:</Label>
                                                       <RadioGroup
                                                         value={subItem.evaluation}
                                                         onValueChange={(value) => updateSubItemEvaluation(accordion.id, item.id, subItem.id, value as SubItem['evaluation'])}
-                                                        className="flex items-center space-x-3 mt-1"
+                                                        className="flex items-center space-x-2 mt-1"
                                                       >
                                                         <div className="flex items-center space-x-1">
                                                           <RadioGroupItem value="nc" id={`${subItem.id}-nc`} className="h-3 w-3" />
@@ -996,7 +985,7 @@ const EditProject = () => {
                         </AccordionItem>
                       ))}
                     </Accordion>
-                  </ScrollArea>
+                  </div>
                 ) : (
                   <div className="flex items-center justify-center h-full text-center">
                     <p className="text-gray-500">
@@ -1012,15 +1001,15 @@ const EditProject = () => {
         {/* Coluna 2 - Itens Disponíveis */}
         <div className="flex flex-col h-full">
           <Card className="flex-1 flex flex-col">
-            <CardHeader>
+            <CardHeader className="pb-3">
               <CardTitle className="text-versys-primary">Itens Disponíveis</CardTitle>
             </CardHeader>
-            <CardContent className="flex-1 overflow-hidden">
+            <CardContent className="flex-1 overflow-hidden p-4">
               <ScrollArea className="h-full">
                 <Accordion type="multiple" className="w-full">
                   {Object.entries(categoriesData).map(([category, items]) => (
                     <AccordionItem key={category} value={category}>
-                      <AccordionTrigger className="text-left">
+                      <AccordionTrigger className="text-left text-sm">
                         {category}
                       </AccordionTrigger>
                       <AccordionContent>
@@ -1063,6 +1052,195 @@ const EditProject = () => {
               </ScrollArea>
             </CardContent>
           </Card>
+        </div>
+      </div>
+    </div>
+  );
+
+  const renderStep3 = () => (
+    <div className="h-full flex items-center justify-center">
+      <Card className="w-full max-w-4xl">
+        <CardHeader>
+          <CardTitle className="text-center text-2xl text-versys-primary">
+            Resumo das Alterações
+          </CardTitle>
+        </CardHeader>
+        <CardContent>
+          <div className="space-y-6">
+            <div className="grid grid-cols-2 gap-6">
+              <div>
+                <Label className="text-lg font-semibold text-versys-primary">Nome do Projeto</Label>
+                <p className="text-lg mt-1">{projectName}</p>
+              </div>
+              <div>
+                <Label className="text-lg font-semibold text-versys-primary">Cliente</Label>
+                <p className="text-lg mt-1">
+                  {selectedClient && selectedClient !== "none" 
+                    ? clients.find(c => c.id === selectedClient)?.nome || "Cliente não encontrado"
+                    : "Nenhum cliente selecionado"
+                  }
+                </p>
+              </div>
+            </div>
+
+            <div>
+              <Label className="text-lg font-semibold text-versys-primary">Resumo dos Itens</Label>
+              <div className="mt-3 space-y-3">
+                {customAccordions.map((accordion) => (
+                  <div key={accordion.id} className="border rounded-lg p-4 bg-gray-50">
+                    <h4 className="font-medium text-versys-primary mb-2">{accordion.title}</h4>
+                    <div className="space-y-2">
+                      {accordion.items.map((item) => (
+                        <div key={item.id} className="flex items-center justify-between">
+                          <span className="text-sm">{item.title}</span>
+                          <div className="flex items-center space-x-2">
+                            <Badge className={getPriorityColor(item.priority || "media")}>
+                              {item.priority || "media"}
+                            </Badge>
+                            <Badge variant="outline">
+                              {item.subItems.length} {item.subItems.length === 1 ? 'item' : 'itens'}
+                            </Badge>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            <div className="border-t pt-4">
+              <div className="flex items-center justify-between text-sm text-gray-600">
+                <span>Total de categorias: {customAccordions.length}</span>
+                <span>
+                  Total de itens: {customAccordions.reduce((total, acc) => total + acc.items.length, 0)}
+                </span>
+                <span>
+                  Total de sub-itens: {customAccordions.reduce((total, acc) => 
+                    total + acc.items.reduce((subTotal, item) => subTotal + item.subItems.length, 0), 0
+                  )}
+                </span>
+              </div>
+            </div>
+
+            <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
+              <p className="text-sm text-blue-800">
+                <strong>Pronto para salvar!</strong> Verifique se todas as informações estão corretas. 
+                As alterações serão aplicadas ao projeto existente.
+              </p>
+            </div>
+          </div>
+        </CardContent>
+      </Card>
+    </div>
+  );
+
+  if (loadingProject) {
+    return (
+      <div className="flex items-center justify-center h-64">
+        <p className="text-gray-500">Carregando projeto...</p>
+      </div>
+    );
+  }
+
+  return (
+    <div className="h-screen flex flex-col bg-gray-50">
+      {/* Header */}
+      <div className="bg-white shadow-sm border-b p-4">
+        <div className="flex items-center justify-between">
+          <div className="flex items-center space-x-4">
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => navigate("/projetos")}
+              className="p-2"
+            >
+              <ArrowLeft className="h-4 w-4" />
+            </Button>
+            <h1 className="text-2xl font-bold text-versys-primary">Editar Projeto</h1>
+          </div>
+          <div className="flex items-center space-x-2">
+            <Button 
+              variant="outline" 
+              onClick={() => navigate("/projetos")}
+            >
+              Cancelar
+            </Button>
+            {currentStep === steps.length && (
+              <Button 
+                onClick={handleUpdateProject}
+                disabled={savingProject}
+                className="bg-versys-primary hover:bg-versys-secondary"
+              >
+                {savingProject ? "Salvando..." : "Salvar Alterações"}
+              </Button>
+            )}
+          </div>
+        </div>
+      </div>
+
+      {/* Progress Steps */}
+      <div className="bg-white border-b p-4">
+        <div className="flex items-center justify-center space-x-8">
+          {steps.map((step, index) => (
+            <div key={step.id} className="flex items-center">
+              <div className={`flex items-center justify-center w-8 h-8 rounded-full ${
+                currentStep > step.id ? 'bg-green-500 text-white' : 
+                currentStep === step.id ? 'bg-versys-primary text-white' : 
+                'bg-gray-200 text-gray-500'
+              }`}>
+                {currentStep > step.id ? <CheckCircle className="h-4 w-4" /> : step.id}
+              </div>
+              <div className="ml-3">
+                <div className={`text-sm font-medium ${
+                  currentStep === step.id ? 'text-versys-primary' : 'text-gray-500'
+                }`}>
+                  {step.title}
+                </div>
+                <div className="text-xs text-gray-400">{step.description}</div>
+              </div>
+              {index < steps.length - 1 && (
+                <div className="w-12 h-0.5 bg-gray-200 mx-4" />
+              )}
+            </div>
+          ))}
+        </div>
+      </div>
+
+      {/* Content */}
+      <div className="flex-1 p-6 min-h-0">
+        {currentStep === 1 && renderStep1()}
+        {currentStep === 2 && renderStep2()}
+        {currentStep === 3 && renderStep3()}
+      </div>
+
+      {/* Footer Navigation */}
+      <div className="bg-white border-t p-4">
+        <div className="flex justify-between items-center">
+          <Button
+            variant="outline"
+            onClick={prevStep}
+            disabled={currentStep === 1}
+          >
+            <ArrowLeft className="h-4 w-4 mr-1" />
+            Anterior
+          </Button>
+          
+          <div className="text-sm text-gray-500">
+            Passo {currentStep} de {steps.length}
+          </div>
+          
+          {currentStep < steps.length ? (
+            <Button 
+              onClick={nextStep}
+              disabled={!canProceedToNext()}
+              className="bg-versys-primary hover:bg-versys-secondary"
+            >
+              Próximo <ArrowRight className="h-4 w-4 ml-1" />
+            </Button>
+          ) : (
+            <div className="w-24" />
+          )}
         </div>
       </div>
     </div>

@@ -27,6 +27,11 @@ self.addEventListener('install', (event) => {
 
 // Fetch event
 self.addEventListener('fetch', (event) => {
+  // Não interceptar requisições do Firebase Storage
+  if (event.request.url.includes('firebasestorage.googleapis.com')) {
+    return;
+  }
+  
   event.respondWith(
     caches.match(event.request)
       .then((response) => {

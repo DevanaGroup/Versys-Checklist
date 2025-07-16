@@ -36,6 +36,30 @@ npm i
 npm run dev
 ```
 
+## Image Upload Functionality
+
+This project includes image upload functionality for adequacy reports using **Base64 encoding** to avoid CORS issues.
+
+### Key Features
+
+✅ **No CORS Issues**: Images stored as Base64 in Firestore  
+✅ **Simple Setup**: No Firebase Storage configuration needed  
+✅ **Universal Compatibility**: Works in any environment  
+✅ **Secure**: Only authenticated users can upload  
+✅ **Optimized**: 750KB max per image, 5 images max per report  
+
+### How It Works
+
+1. **Upload**: Users select images (max 750KB each)
+2. **Convert**: Images are converted to Base64 format
+3. **Store**: Base64 data is saved directly in Firestore
+4. **Display**: Images are shown from Base64 data with modal viewer
+
+### Documentation
+
+- [BASE64_IMAGES_SOLUTION.md](./BASE64_IMAGES_SOLUTION.md) - Detailed implementation guide
+- [FIREBASE_STORAGE_SETUP.md](./FIREBASE_STORAGE_SETUP.md) - Alternative Storage setup (if needed)
+
 **Edit a file directly in GitHub**
 
 - Navigate to the desired file(s).
