@@ -6,7 +6,7 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog";
 import { Badge } from "@/components/ui/badge";
-import { Plus, Edit2, Trash2, Eye, Save, X, Settings, ChevronRight, ChevronDown, ArrowLeft, ArrowRight, CheckCircle } from "lucide-react";
+import { Plus, Edit2, Trash2, Eye, Save, X, Settings, ChevronRight, ChevronDown, ArrowLeft, ArrowRight, CheckCircle, Grid, List } from "lucide-react";
 import { toast } from "sonner";
 import { collection, addDoc, getDocs, deleteDoc, doc, updateDoc } from "firebase/firestore";
 import { db } from "@/lib/firebase";
@@ -31,6 +31,7 @@ interface NewAccordion {
 }
 
 const Presets = () => {
+  const [displayMode, setDisplayMode] = useState<'card' | 'list'>('list');
   const [presets, setPresets] = useState<Preset[]>([]);
   const [loading, setLoading] = useState(false);
   const [selectedPreset, setSelectedPreset] = useState<Preset | null>(null);
@@ -591,29 +592,19 @@ const Presets = () => {
   );
 
   const renderCreateEditScreen = () => (
-    <div className="h-screen flex flex-col bg-gray-50">
+    <div className="bg-white rounded-lg shadow-sm border max-w-6xl mx-auto h-[calc(100vh-8rem)] flex flex-col">
       {/* Header */}
-      <div className="bg-white shadow-sm border-b p-3 flex-shrink-0">
+      <div className="bg-gray-50 px-4 py-3 border-b flex-shrink-0">
         <div className="flex items-center justify-between">
-          <div className="flex items-center space-x-3">
-            <Button
-              variant="ghost"
-              onClick={backToList}
-              className="p-1.5"
-              size="sm"
-            >
-              <ArrowLeft className="h-4 w-4" />
-            </Button>
-            <div className="flex items-center gap-2">
-              <h1 className="text-xl font-bold text-versys-primary">
-                {viewMode === 'create' ? 'Criar Preset' : 'Editar Preset'}
-              </h1>
-              {viewMode === 'edit' && (
-                <Badge variant="secondary" className="text-xs">Personalizado</Badge>
-              )}
-            </div>
+          <div>
+            <h2 className="text-xl font-semibold text-versys-primary">
+              {viewMode === 'create' ? 'Criar Novo Preset' : 'Editar Preset'}
+            </h2>
+            <p className="text-sm text-gray-600 mt-1">
+              {viewMode === 'create' ? 'Configure um novo preset personalizado' : 'Modifique as configurações do preset'}
+            </p>
           </div>
-          <div className="flex items-center space-x-2">
+          <div className="flex gap-2">
             <Button
               variant="outline"
               onClick={backToList}
@@ -704,136 +695,6 @@ const Presets = () => {
     </div>
   );
 
-  const renderViewScreen = () => (
-    <div className="space-y-6">
-      {selectedPreset && (
-        <div className="space-y-4">
-          <div className="bg-white rounded-lg shadow-sm border overflow-hidden">
-            <div className="bg-gray-50 px-4 py-3 border-b">
-              <div className="flex items-center justify-between">
-                <Button
-                  variant="outline"
-                  onClick={backToList}
-                  className="h-8 px-3 text-sm bg-white"
-                >
-                  <ArrowLeft className="h-4 w-4 mr-2" />
-                  Voltar
-                </Button>
-                <div className="flex gap-2">
-                  <Button
-                    variant="outline"
-                    onClick={() => openEditMode(selectedPreset)}
-                    className="h-8 px-3 text-sm bg-white"
-                  >
-                    <Edit2 className="h-3 w-3 mr-1" />
-                    Editar
-                  </Button>
-                  <AlertDialog>
-                    <AlertDialogTrigger asChild>
-                      <Button variant="outline" className="h-8 px-3 text-sm bg-white text-red-500 hover:text-red-700 hover:bg-red-50">
-                        <Trash2 className="h-3 w-3 mr-1" />
-                        Excluir
-                      </Button>
-                    </AlertDialogTrigger>
-                    <AlertDialogContent>
-                      <AlertDialogHeader>
-                        <AlertDialogTitle>Confirmar Exclusão</AlertDialogTitle>
-                        <AlertDialogDescription>
-                          Tem certeza que deseja excluir o preset "{selectedPreset.nome}"?
-                          Esta ação não pode ser desfeita.
-                        </AlertDialogDescription>
-                      </AlertDialogHeader>
-                      <AlertDialogFooter>
-                        <AlertDialogCancel>Cancelar</AlertDialogCancel>
-                        <AlertDialogAction
-                          onClick={() => {
-                            handleDeletePreset(selectedPreset);
-                            backToList();
-                          }}
-                          className="bg-red-600 hover:bg-red-700"
-                        >
-                          Excluir
-                        </AlertDialogAction>
-                      </AlertDialogFooter>
-                    </AlertDialogContent>
-                  </AlertDialog>
-                </div>
-              </div>
-            </div>
-            
-            <div className="p-4">
-              <div className="flex items-start justify-between mb-3">
-                <div className="flex-1">
-                  <div className="flex items-center gap-2 mb-1">
-                    <h1 className="text-xl font-bold text-gray-900">{selectedPreset.nome}</h1>
-                    <Badge variant="secondary" className="text-xs">Personalizado</Badge>
-                  </div>
-                  <p className="text-sm text-gray-600">{selectedPreset.descricao}</p>
-                </div>
-              </div>
-              
-              <div className="bg-gray-50 rounded-lg p-3">
-                <div className="flex items-center gap-4 text-sm">
-                  <div className="flex items-center gap-1">
-                    <span className="font-medium text-gray-700">{selectedPreset.accordions.length}</span>
-                    <span className="text-gray-500">acordeões</span>
-                  </div>
-                  <div className="w-1 h-1 bg-gray-300 rounded-full"></div>
-                  <div className="flex items-center gap-1">
-                    <span className="font-medium text-gray-700">{getTotalItems(selectedPreset)}</span>
-                    <span className="text-gray-500">itens</span>
-                  </div>
-                </div>
-              </div>
-            </div>
-          </div>
-          
-          <div className="grid gap-3">
-            {selectedPreset.accordions.map((accordion, accordionIndex) => (
-              <Card key={accordionIndex} className="overflow-hidden">
-                <CardHeader className="pb-2 pt-4 px-4">
-                  <div className="flex items-center gap-2">
-                    <div className="w-6 h-6 rounded bg-versys-primary flex items-center justify-center">
-                      <span className="text-xs font-semibold text-white">{accordionIndex + 1}</span>
-                    </div>
-                    <div>
-                      <CardTitle className="text-base text-gray-900">{accordion.title}</CardTitle>
-                      <p className="text-xs text-gray-500">{accordion.items.length} itens</p>
-                    </div>
-                  </div>
-                </CardHeader>
-                <CardContent className="pt-0 px-4 pb-4">
-                  <div className="space-y-1">
-                    {accordion.items.map((item, itemIndex) => (
-                      <div key={itemIndex} className="flex gap-2 p-2 bg-gray-50 rounded max-h-16 group">
-                        <div className="w-5 h-5 rounded-full bg-gray-200 flex items-center justify-center flex-shrink-0 mt-0.5">
-                          <span className="text-xs font-medium text-gray-600">{itemIndex + 1}</span>
-                        </div>
-                        <div className="flex-1 overflow-y-auto max-h-12 scrollbar-thin scrollbar-thumb-gray-300 scrollbar-track-gray-100 hover:scrollbar-thumb-gray-400">
-                          <p className="text-xs text-gray-700 leading-relaxed">{item}</p>
-                        </div>
-                      </div>
-                    ))}
-                    {accordion.items.length === 0 && (
-                      <div className="text-center py-4 text-gray-400">
-                        <p className="text-xs">Nenhum item configurado</p>
-                      </div>
-                    )}
-                  </div>
-                </CardContent>
-              </Card>
-            ))}
-            {selectedPreset.accordions.length === 0 && (
-              <Card className="p-8 text-center">
-                <p className="text-gray-400 text-sm">Nenhum acordeão configurado neste preset.</p>
-              </Card>
-            )}
-          </div>
-        </div>
-      )}
-    </div>
-  );
-
   const renderListScreen = () => (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
@@ -843,57 +704,129 @@ const Presets = () => {
             Crie e gerencie presets personalizados para suas checklists
           </p>
         </div>
-        <Button
-          onClick={openCreateMode}
-          className="bg-versys-primary hover:bg-versys-secondary"
-        >
+      </div>
+      
+      <div className="flex items-center justify-between">
+        <Button onClick={openCreateMode} className="bg-versys-primary hover:bg-versys-secondary">
           <Plus className="h-4 w-4 mr-2" />
           Novo Preset
         </Button>
+        
+        <div className="flex gap-2">
+          <Button
+            variant={displayMode === 'list' ? 'default' : 'outline'}
+            size="sm"
+            onClick={() => setDisplayMode('list')}
+          >
+            <List className="h-4 w-4" />
+          </Button>
+          <Button
+            variant={displayMode === 'card' ? 'default' : 'outline'}
+            size="sm"
+            onClick={() => setDisplayMode('card')}
+          >
+            <Grid className="h-4 w-4" />
+          </Button>
+        </div>
       </div>
 
       {loading ? (
-        <div className="flex items-center justify-center h-64">
-          <div className="text-center">
-            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-versys-primary mx-auto"></div>
-            <p className="mt-2 text-gray-600">Carregando presets...</p>
-          </div>
+        <div className="flex items-center justify-center py-8">
+          <div className="text-gray-500">Carregando presets...</div>
         </div>
       ) : (
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-          {presets.map((preset) => (
-            <Card key={preset.id} className="hover:shadow-lg transition-shadow">
-              <CardHeader>
-                <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-3">
-                  <div className="flex-1 min-w-0">
-                    <CardTitle className="text-lg truncate">{preset.nome}</CardTitle>
-                    <div className="flex flex-col sm:flex-row sm:items-center gap-2 mt-1">
-                      <Badge variant="secondary" className="w-fit">
-                        Personalizado
-                      </Badge>
-                      <span className="text-sm text-gray-500 truncate">
-                        {preset.accordions.length} acordeões • {getTotalItems(preset)} itens
-                      </span>
+        displayMode === 'card' ? (
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+            {presets.map((preset) => (
+              <Card key={preset.id} className="hover:shadow-lg transition-all duration-200 border-gray-200">
+                <CardHeader className="pb-3">
+                  <div className="flex items-start justify-between">
+                    <div className="flex-1">
+                      <CardTitle className="text-lg font-semibold text-gray-900 mb-1">
+                        {preset.nome}
+                      </CardTitle>
+                      <p className="text-sm text-gray-600 line-clamp-2">
+                        {preset.descricao}
+                      </p>
+                    </div>
+                    <Badge variant="secondary" className="ml-2 shrink-0">
+                      Personalizado
+                    </Badge>
+                  </div>
+                </CardHeader>
+                <CardContent className="pt-0">
+                  {/* Estatísticas */}
+                  <div className="flex items-center gap-4 mb-4 p-3 bg-gray-50 rounded-lg">
+                    <div className="flex items-center gap-2">
+                      <div className="w-8 h-8 bg-blue-100 rounded-full flex items-center justify-center">
+                        <span className="text-sm font-semibold text-blue-600">
+                          {preset.accordions.length}
+                        </span>
+                      </div>
+                      <span className="text-sm text-gray-600">Acordeões</span>
+                    </div>
+                    <div className="w-px h-6 bg-gray-300"></div>
+                    <div className="flex items-center gap-2">
+                      <div className="w-8 h-8 bg-green-100 rounded-full flex items-center justify-center">
+                        <span className="text-sm font-semibold text-green-600">
+                          {getTotalItems(preset)}
+                        </span>
+                      </div>
+                      <span className="text-sm text-gray-600">Itens</span>
                     </div>
                   </div>
-                  <div className="flex gap-1 shrink-0">
+
+                  {/* Preview dos acordeões */}
+                  <div className="mb-4">
+                    <h4 className="text-sm font-medium text-gray-700 mb-2">Acordeões:</h4>
+                    <div className="space-y-2">
+                      {preset.accordions.slice(0, 3).map((accordion, index) => (
+                        <div key={index} className="flex items-center gap-2 p-2 bg-white border border-gray-100 rounded">
+                          <div className="w-6 h-6 bg-gray-100 rounded-full flex items-center justify-center shrink-0">
+                            <span className="text-xs font-medium text-gray-600">
+                              {accordion.items.length}
+                            </span>
+                          </div>
+                          <span className="text-sm text-gray-700 truncate flex-1">
+                            {accordion.title}
+                          </span>
+                        </div>
+                      ))}
+                      {preset.accordions.length > 3 && (
+                        <div className="text-xs text-gray-500 text-center py-1 bg-gray-50 rounded">
+                          +{preset.accordions.length - 3} acordeões adicionais
+                        </div>
+                      )}
+                    </div>
+                  </div>
+
+                  {/* Botões de ação */}
+                  <div className="flex gap-2 pt-2 border-t border-gray-100">
                     <Button
-                      variant="ghost"
+                      variant="outline"
                       size="sm"
                       onClick={() => openViewMode(preset)}
+                      className="flex-1"
                     >
-                      <Eye className="h-4 w-4" />
+                      <Eye className="h-4 w-4 mr-1" />
+                      Visualizar
                     </Button>
                     <Button
-                      variant="ghost"
+                      variant="outline"
                       size="sm"
                       onClick={() => openEditMode(preset)}
+                      className="flex-1"
                     >
-                      <Edit2 className="h-4 w-4" />
+                      <Edit2 className="h-4 w-4 mr-1" />
+                      Editar
                     </Button>
                     <AlertDialog>
                       <AlertDialogTrigger asChild>
-                        <Button variant="ghost" size="sm" className="text-red-500 hover:text-red-700">
+                        <Button 
+                          variant="outline" 
+                          size="sm" 
+                          className="text-red-600 border-red-200 hover:bg-red-50 hover:border-red-300"
+                        >
                           <Trash2 className="h-4 w-4" />
                         </Button>
                       </AlertDialogTrigger>
@@ -916,30 +849,258 @@ const Presets = () => {
                       </AlertDialogContent>
                     </AlertDialog>
                   </div>
-                </div>
-              </CardHeader>
-              <CardContent>
-                <p className="text-sm text-gray-600 mb-3 break-words">{preset.descricao}</p>
-                <div className="space-y-2">
-                  {preset.accordions.slice(0, 3).map((accordion, index) => (
-                    <div key={index} className="text-sm">
-                      <span className="font-medium break-words">{accordion.title}</span>
-                      <span className="text-gray-500 ml-2 whitespace-nowrap">({accordion.items.length} itens)</span>
-                    </div>
-                  ))}
-                  {preset.accordions.length > 3 && (
-                    <div className="text-sm text-gray-500 break-words">
-                      +{preset.accordions.length - 3} mais...
-                    </div>
-                  )}
-                </div>
-              </CardContent>
-            </Card>
-          ))}
-        </div>
+                </CardContent>
+              </Card>
+            ))}
+          </div>
+        ) : (
+          <div className="overflow-x-auto">
+            <table className="min-w-full divide-y divide-gray-200 bg-white rounded-lg shadow-sm">
+              <thead>
+                <tr>
+                  <th className="px-4 py-2 text-left text-sm font-semibold text-gray-700">Nome</th>
+                  <th className="px-4 py-2 text-left text-sm font-semibold text-gray-700">Descrição</th>
+                  <th className="px-4 py-2 text-left text-sm font-semibold text-gray-700">Acordeões</th>
+                  <th className="px-4 py-2 text-left text-sm font-semibold text-gray-700">Itens</th>
+                  <th className="px-4 py-2 text-center text-sm font-semibold text-gray-700">Ação</th>
+                </tr>
+              </thead>
+              <tbody>
+                {presets.map((preset) => (
+                  <tr key={preset.id} className="hover:bg-gray-50">
+                    <td className="px-4 py-2 font-medium text-gray-900 truncate max-w-xs">{preset.nome}</td>
+                    <td className="px-4 py-2 text-gray-600 truncate max-w-xs">{preset.descricao}</td>
+                    <td className="px-4 py-2 text-gray-600">{preset.accordions.length}</td>
+                    <td className="px-4 py-2 text-gray-600">{getTotalItems(preset)}</td>
+                    <td className="px-4 py-2 flex gap-1 justify-center">
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => openViewMode(preset)}
+                        aria-label="Visualizar"
+                      >
+                        <Eye className="h-4 w-4" />
+                      </Button>
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => openEditMode(preset)}
+                        aria-label="Editar"
+                      >
+                        <Edit2 className="h-4 w-4" />
+                      </Button>
+                      <AlertDialog>
+                        <AlertDialogTrigger asChild>
+                          <Button variant="ghost" size="sm" className="text-red-500 hover:text-red-700" aria-label="Excluir">
+                            <Trash2 className="h-4 w-4" />
+                          </Button>
+                        </AlertDialogTrigger>
+                        <AlertDialogContent>
+                          <AlertDialogHeader>
+                            <AlertDialogTitle>Confirmar Exclusão</AlertDialogTitle>
+                            <AlertDialogDescription>
+                              Tem certeza que deseja excluir o preset "{preset.nome}"? Esta ação não pode ser desfeita.
+                            </AlertDialogDescription>
+                          </AlertDialogHeader>
+                          <AlertDialogFooter>
+                            <AlertDialogCancel>Cancelar</AlertDialogCancel>
+                            <AlertDialogAction
+                              onClick={() => handleDeletePreset(preset)}
+                              className="bg-red-600 hover:bg-red-700"
+                            >
+                              Excluir
+                            </AlertDialogAction>
+                          </AlertDialogFooter>
+                        </AlertDialogContent>
+                      </AlertDialog>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )
       )}
     </div>
   );
+
+  const [currentViewStep, setCurrentViewStep] = useState(0);
+
+  const renderViewScreen = () => {
+    if (!selectedPreset) return null;
+
+    const totalSteps = selectedPreset.accordions.length;
+    const currentAccordion = selectedPreset.accordions[currentViewStep];
+
+    return (
+      <div className="max-w-4xl mx-auto">
+        <div className="bg-white rounded-lg shadow-sm border min-h-[600px]">
+          {/* Cabeçalho */}
+          <div className="px-6 py-4 border-b border-gray-200">
+            <div className="flex items-center justify-between">
+              <h1 className="text-xl font-semibold text-gray-900">{selectedPreset.nome}</h1>
+              <div className="flex gap-2">
+                <Button
+                  variant="outline"
+                  onClick={() => openEditMode(selectedPreset)}
+                  className="text-blue-600 border-blue-200 hover:bg-blue-50"
+                >
+                  <Edit2 className="h-4 w-4 mr-2" />
+                  Editar
+                </Button>
+                <Button
+                  variant="outline"
+                  onClick={backToList}
+                  className="text-gray-600 border-gray-200 hover:bg-gray-50"
+                >
+                  Cancelar
+                </Button>
+              </div>
+            </div>
+          </div>
+
+          {totalSteps > 0 ? (
+            <>
+              {/* Indicadores de Etapas */}
+              <div className="px-6 py-6 border-b border-gray-100">
+                <div className="flex items-center justify-center space-x-8">
+                  {selectedPreset.accordions.map((accordion, index) => (
+                    <div key={index} className="flex flex-col items-center">
+                      <div className="flex items-center">
+                        <div
+                          className={`w-8 h-8 rounded-full flex items-center justify-center text-sm font-medium transition-all duration-200 ${
+                            index === currentViewStep
+                              ? 'bg-blue-600 text-white shadow-lg'
+                              : index < currentViewStep
+                              ? 'bg-green-500 text-white'
+                              : 'bg-gray-200 text-gray-500'
+                          }`}
+                        >
+                          {index < currentViewStep ? (
+                            <span className="text-xs">✓</span>
+                          ) : (
+                            <span>{index + 1}</span>
+                          )}
+                        </div>
+                        {index < totalSteps - 1 && (
+                          <div
+                            className={`w-16 h-0.5 ml-2 transition-all duration-200 ${
+                              index < currentViewStep ? 'bg-green-500' : 'bg-gray-200'
+                            }`}
+                          />
+                        )}
+                      </div>
+                      <div className="mt-2 text-center">
+                        <p
+                          className={`text-xs font-medium transition-all duration-200 ${
+                            index === currentViewStep
+                              ? 'text-blue-600'
+                              : index < currentViewStep
+                              ? 'text-green-600'
+                              : 'text-gray-500'
+                          }`}
+                        >
+                          {accordion.title}
+                        </p>
+                        <p className="text-xs text-gray-400 mt-1">
+                          {accordion.items.length} {accordion.items.length === 1 ? 'item' : 'itens'}
+                        </p>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              {/* Conteúdo da Etapa Atual */}
+              <div className="px-6 py-8">
+                <div className="max-w-2xl mx-auto">
+                  <div className="text-center mb-8">
+                    <h2 className="text-2xl font-bold text-gray-900 mb-2">
+                      {currentAccordion.title}
+                    </h2>
+                    <p className="text-gray-600">
+                      Etapa {currentViewStep + 1} de {totalSteps}
+                    </p>
+                  </div>
+
+                  {currentAccordion.items.length > 0 ? (
+                    <div className="space-y-4">
+                      {currentAccordion.items.map((item, itemIndex) => (
+                        <div
+                          key={itemIndex}
+                          className="flex gap-4 p-4 bg-gray-50 rounded-lg border border-gray-200 hover:bg-gray-100 transition-colors"
+                        >
+                          <div className="w-8 h-8 rounded-full bg-blue-100 flex items-center justify-center shrink-0">
+                            <span className="text-sm font-medium text-blue-600">{itemIndex + 1}</span>
+                          </div>
+                          <div className="flex-1">
+                            <p className="text-gray-800 leading-relaxed">{item}</p>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  ) : (
+                    <div className="text-center py-12">
+                      <div className="w-16 h-16 bg-gray-100 rounded-full flex items-center justify-center mx-auto mb-4">
+                        <span className="text-2xl text-gray-400">•</span>
+                      </div>
+                      <p className="text-gray-500 mb-1">Nenhum item configurado</p>
+                      <p className="text-sm text-gray-400">Esta etapa ainda não possui itens definidos</p>
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              {/* Navegação */}
+              <div className="px-6 py-4 border-t border-gray-100 bg-gray-50">
+                <div className="flex items-center justify-between">
+                  <Button
+                    variant="outline"
+                    onClick={() => setCurrentViewStep(Math.max(0, currentViewStep - 1))}
+                    disabled={currentViewStep === 0}
+                    className="flex items-center gap-2"
+                  >
+                    <ArrowLeft className="h-4 w-4" />
+                    Anterior
+                  </Button>
+                  
+                  <span className="text-sm text-gray-500">
+                    Passo {currentViewStep + 1} de {totalSteps}
+                  </span>
+                  
+                  <Button
+                    variant="outline"
+                    onClick={() => setCurrentViewStep(Math.min(totalSteps - 1, currentViewStep + 1))}
+                    disabled={currentViewStep === totalSteps - 1}
+                    className="flex items-center gap-2"
+                  >
+                    Próximo
+                    <ArrowRight className="h-4 w-4" />
+                  </Button>
+                </div>
+              </div>
+            </>
+          ) : (
+            <div className="px-6 py-16 text-center">
+              <div className="w-16 h-16 bg-gray-100 rounded-full flex items-center justify-center mx-auto mb-4">
+                <span className="text-2xl text-gray-400">•••</span>
+              </div>
+              <h3 className="text-lg font-medium text-gray-900 mb-2">Nenhuma etapa configurada</h3>
+              <p className="text-gray-500 mb-4">Este preset ainda não possui estrutura definida</p>
+              <Button
+                variant="outline"
+                onClick={() => openEditMode(selectedPreset)}
+                className="text-blue-600 border-blue-200 hover:bg-blue-50"
+              >
+                <Edit2 className="h-4 w-4 mr-2" />
+                Configurar Etapas
+              </Button>
+            </div>
+          )}
+        </div>
+      </div>
+    );
+  };
 
   return (
     <div className="min-h-screen bg-gray-50">
