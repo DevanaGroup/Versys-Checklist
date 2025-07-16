@@ -13,7 +13,7 @@ const Index = () => {
       if (user.type === "admin") {
         navigate("/dashboard");
       } else if (user.type === "client") {
-        navigate("/client-dashboard");
+        navigate("/client-projects");
       } else {
         navigate("/dashboard"); // fallback para admin
       }

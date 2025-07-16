@@ -24,7 +24,7 @@ const Login = () => {
       if (userData.type === 'admin') {
         navigate("/dashboard", { replace: true });
       } else if (userData.type === 'client') {
-        navigate("/client-dashboard", { replace: true });
+        navigate("/client-projects", { replace: true });
       }
     }
   }, [isAuthenticated, userData, navigate]);

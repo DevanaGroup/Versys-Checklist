@@ -9,8 +9,11 @@ import Dashboard from "./pages/Dashboard";
 import Projetos from "./pages/Projetos";
 import NewProject from "./pages/NewProject";
 import EditProject from "./pages/EditProject";
+import AdminProjectView from "./pages/AdminProjectView";
 import NotFound from "./pages/NotFound";
 import ClientDashboard from "./pages/ClientDashboard";
+import ClientProjects from "./pages/ClientProjects";
+import ClientProject from "./pages/ClientProject";
 import Clientes from "./pages/Clientes";
 import Colaboradores from "./pages/Colaboradores";
 import ColaboradorFirstLogin from "./pages/ColaboradorFirstLogin";
@@ -50,7 +53,7 @@ const ProtectedRoute = ({ children, requiredType }: { children: React.ReactNode,
     if (userData.type === "admin") {
       return <Navigate to="/dashboard" replace />;
     } else if (userData.type === "client") {
-      return <Navigate to="/client-dashboard" replace />;
+      return <Navigate to="/client-projects" replace />;
     }
   }
   
@@ -85,6 +88,7 @@ const App = () => (
               <Route index element={<Projetos />} />
               <Route path="new" element={<NewProject />} />
               <Route path="edit/:projectId" element={<EditProject />} />
+              <Route path="view/:projectId" element={<AdminProjectView />} />
             </Route>
             <Route path="/presets" element={
               <ProtectedRoute requiredType="admin">
@@ -129,13 +133,29 @@ const App = () => (
               <Route index element={<div className="text-center text-gray-500 mt-20">Página de Suporte em desenvolvimento</div>} />
             </Route>
             
-            {/* Rota para Clientes */}
+            {/* Rotas para Clientes */}
             <Route path="/client-dashboard" element={
               <ProtectedRoute requiredType="client">
                 <DashboardLayout />
               </ProtectedRoute>
             }>
               <Route index element={<ClientDashboard />} />
+            </Route>
+            
+            <Route path="/client-projects" element={
+              <ProtectedRoute requiredType="client">
+                <DashboardLayout />
+              </ProtectedRoute>
+            }>
+              <Route index element={<ClientProjects />} />
+            </Route>
+            
+            <Route path="/client-projects/:projectId" element={
+              <ProtectedRoute requiredType="client">
+                <DashboardLayout />
+              </ProtectedRoute>
+            }>
+              <Route index element={<ClientProject />} />
             </Route>
             
             <Route path="*" element={<NotFound />} />

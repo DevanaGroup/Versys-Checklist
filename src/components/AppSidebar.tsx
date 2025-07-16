@@ -39,12 +39,8 @@ const adminMenuItems = [{
 }];
 
 const clientMenuItems = [{
-  title: "Dashboard",
-  url: "/client-dashboard",
-  icon: Home
-}, {
   title: "Meus Projetos",
-  url: "/client-dashboard",
+  url: "/client-projects",
   icon: FolderOpen
 }];
 
@@ -87,6 +83,9 @@ export function AppSidebar() {
     }
     if (path === "/client-dashboard") {
       return currentPath === "/client-dashboard";
+    }
+    if (path === "/client-projects") {
+      return currentPath.startsWith("/client-projects");
     }
     return currentPath.startsWith(path);
   };
