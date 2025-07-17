@@ -7,6 +7,7 @@ import { Button } from "@/components/ui/button";
 import { useEffect, useState } from "react";
 import { useAuthContext } from "@/contexts/AuthContext";
 import { toast } from "sonner";
+import { LocationInfo } from "@/components/LocationInfo";
 
 const adminMenuItems = [{
   title: "Dashboard",
@@ -233,6 +234,9 @@ export function AppSidebar() {
                 </SidebarMenu>
               </SidebarGroupContent>
             </SidebarGroup>
+
+            {/* Informações de Localização */}
+            {!isCollapsed && <LocationInfo />}
           </SidebarContent>
 
           {/* Footer com botão de sair */}
