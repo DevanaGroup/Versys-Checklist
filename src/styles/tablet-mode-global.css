@@ -1,0 +1,12 @@
+/* Tablet mode: bloqueia scroll global e permite scroll apenas no conteúdo central do wizard */
+
+html.tablet-mode, body.tablet-mode {
+  height: 100vh;
+  overflow: hidden !important;
+}
+
+/* Opcional: garantir que o root do app também não role */
+#root.tablet-mode {
+  height: 100vh;
+  overflow: hidden;
+}

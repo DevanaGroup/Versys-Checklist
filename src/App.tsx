@@ -1,4 +1,6 @@
 import { Toaster } from "@/components/ui/toaster";
+import { TabletModeProvider } from "./contexts/TabletModeContext";
+import "./styles/tablet-mode.css";
 import { Toaster as Sonner } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
@@ -61,12 +63,13 @@ const ProtectedRoute = ({ children, requiredType }: { children: React.ReactNode,
 };
 
 const App = () => (
-  <QueryClientProvider client={queryClient}>
-    <AuthProvider>
-      <TooltipProvider>
-        <Toaster />
-        <Sonner />
-        <BrowserRouter>
+  <TabletModeProvider>
+    <QueryClientProvider client={queryClient}>
+      <AuthProvider>
+        <TooltipProvider>
+          <Toaster />
+          <Sonner />
+          <BrowserRouter>
           <Routes>
             <Route path="/" element={<Login />} />
             <Route path="/colaborador/primeiro-acesso" element={<ColaboradorFirstLogin />} />
@@ -164,6 +167,7 @@ const App = () => (
       </TooltipProvider>
     </AuthProvider>
   </QueryClientProvider>
+  </TabletModeProvider>
 );
 
 export default App;

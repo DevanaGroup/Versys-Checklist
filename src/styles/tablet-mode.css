@@ -1,0 +1,92 @@
+/* tablet-mode.css: estilos exclusivos para modo tablet/ipad */
+.tablet-mode {
+  font-size: 1.18rem;
+  --tablet-radius: 18px;
+  --tablet-padding: 2.2rem;
+  --tablet-gap: 2rem;
+  --tablet-header-height: 90px;
+}
+
+.tablet-mode .sidebar,
+.tablet-mode .app-sidebar {
+  min-width: 110px !important;
+  max-width: 320px !important;
+  border-radius: var(--tablet-radius);
+  font-size: 1.1em;
+}
+
+.tablet-mode .card,
+.tablet-mode .rounded-lg,
+.tablet-mode .rounded-xl {
+  border-radius: var(--tablet-radius) !important;
+  box-shadow: 0 8px 32px 0 rgba(60,60,90,0.09);
+}
+
+.tablet-mode .p-4,
+.tablet-mode .p-6,
+.tablet-mode .p-8,
+.tablet-mode .px-4,
+.tablet-mode .px-6,
+.tablet-mode .px-8 {
+  padding: var(--tablet-padding) !important;
+}
+
+.tablet-mode .gap-4,
+.tablet-mode .gap-6,
+.tablet-mode .gap-8 {
+  gap: var(--tablet-gap) !important;
+}
+
+.tablet-mode input,
+.tablet-mode select,
+.tablet-mode textarea {
+  min-height: 60px !important;
+  font-size: 1.15em !important;
+  border-radius: var(--tablet-radius) !important;
+}
+
+.tablet-mode button,
+.tablet-mode .btn,
+.tablet-mode .Button {
+  min-height: 54px !important;
+  font-size: 1.1em !important;
+  border-radius: var(--tablet-radius) !important;
+  padding-left: 2rem !important;
+  padding-right: 2rem !important;
+}
+
+.tablet-mode .header,
+.tablet-mode .main-header {
+  min-height: var(--tablet-header-height) !important;
+  font-size: 1.35em !important;
+}
+
+.tablet-mode .accordion,
+.tablet-mode .Accordion,
+.tablet-mode .accordion-item,
+.tablet-mode .AccordionItem {
+  border-radius: var(--tablet-radius) !important;
+}
+
+.tablet-mode .badge,
+.tablet-mode .Badge {
+  font-size: 1em !important;
+  padding: 0.7em 1.4em !important;
+}
+
+.tablet-mode .sidebar .user-info,
+.tablet-mode .app-sidebar .user-info {
+  font-size: 1.1em !important;
+}
+
+.tablet-mode .text-xs { font-size: 1em !important; }
+.tablet-mode .text-sm { font-size: 1.07em !important; }
+.tablet-mode .text-base { font-size: 1.18em !important; }
+.tablet-mode .text-lg { font-size: 1.28em !important; }
+.tablet-mode .text-xl { font-size: 1.42em !important; }
+
+@media (max-width: 900px) {
+  .tablet-mode {
+    font-size: 1.08rem;
+  }
+}
