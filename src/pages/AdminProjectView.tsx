@@ -202,4 +202,172 @@ const AdminProjectView = () => {
     return steps;
   };
 
-// ... (continua na próxima parte) 
+  const totalSteps = steps.length;
+  const currentItem: any = steps[currentStep] || null;
+
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center h-full p-10">
+        <span className="text-sm text-gray-500">Carregando projeto...</span>
+      </div>
+    );
+  }
+
+  if (!projectDetails) {
+    return (
+      <div className="flex items-center justify-center h-full p-10">
+        <span className="text-sm text-gray-500">Projeto não encontrado.</span>
+      </div>
+    );
+  }
+
+  return (
+    <div className="p-6 space-y-6">
+      {/* Header */}
+      <div className="flex items-center justify-between">
+        <h1 className="text-2xl font-semibold flex-1 truncate pr-4">
+          {projectDetails.nome}
+        </h1>
+        <span className={`px-3 py-1 rounded-full text-xs font-medium ${getStatusColor(projectDetails.status)}`}>
+          {projectDetails.status}
+        </span>
+      </div>
+
+      {/* Progress */}
+      <div>
+        <p className="text-sm mb-1 text-gray-600">Progresso geral</p>
+        <Progress value={projectDetails.progresso} />
+        <p className="text-xs text-right mt-1 text-gray-500">
+          {projectDetails.progresso}% concluído
+        </p>
+      </div>
+
+      {/* Step Indicators */}
+      {totalSteps > 0 && (
+        <div className="flex items-center justify-center space-x-8 py-4 border-b border-gray-100">
+          {steps.map((step, index) => (
+            <div key={index} className="flex flex-col items-center">
+              <div className="flex items-center">
+                <div
+                  className={`w-8 h-8 rounded-full flex items-center justify-center text-sm font-medium transition-all duration-200 ${
+                    index === currentStep
+                      ? 'bg-blue-600 text-white shadow-lg'
+                      : index < currentStep
+                      ? 'bg-green-500 text-white'
+                      : 'bg-gray-200 text-gray-500'
+                  }`}
+                >
+                  {index < currentStep ? (
+                    <span className="text-xs">✓</span>
+                  ) : (
+                    <span>{index + 1}</span>
+                  )}
+                </div>
+                {index < totalSteps - 1 && (
+                  <div
+                    className={`w-16 h-0.5 ml-2 transition-all duration-200 ${
+                      index < currentStep ? 'bg-green-500' : 'bg-gray-200'
+                    }`}
+                  />
+                )}
+              </div>
+              <div className="mt-2 text-center w-24 truncate">
+                <p
+                  className={`text-xs font-medium transition-all duration-200 ${
+                    index === currentStep
+                      ? 'text-blue-600'
+                      : index < currentStep
+                      ? 'text-green-600'
+                      : 'text-gray-500'
+                  }`}
+                >
+                  {step.title}
+                </p>
+                <p className="text-[10px] text-gray-400 mt-0.5 truncate">
+                  {step.category}
+                </p>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {/* Current Step Content */}
+      {currentItem && (
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center space-x-2">
+              <span>{currentItem.title}</span>
+              <Badge variant="secondary" className="uppercase">
+                {currentItem.category}
+              </Badge>
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            {currentItem.subItems && currentItem.subItems.length > 0 ? (
+              <Accordion type="single" collapsible className="w-full">
+                {currentItem.subItems.map((sub: SubItem, idx: number) => (
+                  <AccordionItem key={sub.id} value={sub.id}>
+                    <AccordionTrigger>
+                      <div className="flex items-center space-x-3">
+                        <span className="font-medium">{sub.title}</span>
+                        {sub.completed && <CheckCircle size={16} className="text-green-500" />}
+                      </div>
+                    </AccordionTrigger>
+                    <AccordionContent className="space-y-3 text-sm text-gray-600">
+                      {sub.description && <p>{sub.description}</p>}
+                      {sub.currentSituation && (
+                        <p>
+                          <span className="font-medium">Situação atual: </span>
+                          {sub.currentSituation}
+                        </p>
+                      )}
+                      {sub.evaluation && (
+                        <p>
+                          <span className="font-medium">Avaliação: </span>
+                          {sub.evaluation.toUpperCase()}
+                        </p>
+                      )}
+                    </AccordionContent>
+                  </AccordionItem>
+                ))}
+              </Accordion>
+            ) : (
+              <p className="text-sm text-gray-500">Nenhum subitem encontrado.</p>
+            )}
+          </CardContent>
+        </Card>
+      )}
+
+      {/* Navigation Buttons */}
+      {totalSteps > 0 && (
+        <div className="flex items-center justify-between pt-4 border-t border-gray-100">
+          <Button
+            variant="outline"
+            onClick={() => setCurrentStep(Math.max(0, currentStep - 1))}
+            disabled={currentStep === 0}
+            className="flex items-center space-x-2"
+          >
+            <ArrowLeft size={16} />
+            <span>Anterior</span>
+          </Button>
+
+          <p className="text-sm text-gray-500">
+            Passo {currentStep + 1} de {totalSteps}
+          </p>
+
+          <Button
+            onClick={() => setCurrentStep(Math.min(totalSteps - 1, currentStep + 1))}
+            disabled={currentStep === totalSteps - 1}
+            className="flex items-center space-x-2"
+          >
+            <span>Próximo</span>
+            <ArrowRight size={16} />
+          </Button>
+        </div>
+      )}
+    </div>
+  );
+};
+
+export default AdminProjectView;
