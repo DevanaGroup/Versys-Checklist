@@ -273,7 +273,12 @@ const Projetos = () => {
   };
 
   const getProjetosDoCliente = (): ProjectDetails[] => {
-    if (!selectedClient) return [];
+    if (!selectedClient) {
+      // Se nenhum cliente estiver selecionado, retorna projetos sem clientes
+      return projetos.filter(projeto => 
+        !projeto.clienteId && !projeto.cliente?.id
+      );
+    }
     
     return projetos.filter(projeto => 
       projeto.clienteId === selectedClient.id || 
@@ -920,7 +925,7 @@ const Projetos = () => {
             <>
               <h2 className="text-3xl font-bold text-versys-primary">Projetos</h2>
               <p className="text-gray-600 mt-2">
-                Selecione um cliente para ver seus projetos
+                Selecione um cliente para ver seus projetos ou visualize projetos sem clientes
               </p>
             </>
           )}
@@ -932,6 +937,17 @@ const Projetos = () => {
               </h2>
               <p className="text-gray-600 mt-2">
                 {selectedClient.empresa} - {getProjetosDoCliente().length} projeto(s)
+              </p>
+            </div>
+          )}
+          
+          {viewMode === 'project-list' && !selectedClient && (
+            <div>
+              <h2 className="text-3xl font-bold text-versys-primary">
+                Projetos Sem Cliente
+              </h2>
+              <p className="text-gray-600 mt-2">
+                {getProjetosDoCliente().length} projeto(s) sem cliente associado
               </p>
             </div>
           )}
@@ -979,6 +995,24 @@ const Projetos = () => {
                   </h3>
                   <p className="text-sm text-gray-600 mt-2">
                     Clique para criar um novo projeto
+                  </p>
+                </CardContent>
+              </Card>
+
+              {/* Card Projetos Sem Cliente */}
+              <Card 
+                className="border-2 border-dashed border-gray-300 hover:border-versys-primary transition-colors cursor-pointer group"
+                onClick={() => setViewMode('project-list')}
+              >
+                <CardContent className="flex flex-col items-center justify-center h-48 text-center">
+                  <div className="w-16 h-16 bg-gray-100 rounded-full flex items-center justify-center mb-4 group-hover:bg-versys-primary/20 transition-colors">
+                    <FileText className="h-8 w-8 text-gray-400 group-hover:text-versys-primary" />
+                  </div>
+                  <h3 className="text-lg font-semibold text-gray-700 group-hover:text-versys-primary">
+                    Projetos Sem Cliente
+                  </h3>
+                  <p className="text-sm text-gray-600 mt-2">
+                    {projetos.filter(p => !p.clienteId && !p.cliente?.id).length} projeto(s) sem cliente associado
                   </p>
                 </CardContent>
               </Card>
@@ -1074,6 +1108,29 @@ const Projetos = () => {
                         </TableRow>
                       </TableHeader>
                       <TableBody>
+                        {/* Linha para Projetos Sem Cliente */}
+                        <TableRow 
+                          className="cursor-pointer hover:bg-versys-secondary/5 border-t-2 border-gray-200"
+                          onClick={() => setViewMode('project-list')}
+                        >
+                          <TableCell className="font-medium">
+                            <div className="flex items-center space-x-2">
+                              <FileText className="h-4 w-4 text-gray-500" />
+                              <span className="text-gray-700">Projetos Sem Cliente</span>
+                            </div>
+                          </TableCell>
+                          <TableCell className="text-gray-500">-</TableCell>
+                          <TableCell className="text-gray-500">-</TableCell>
+                          <TableCell>
+                            <Badge className="bg-gray-100 text-gray-800">
+                              Sem Cliente
+                            </Badge>
+                          </TableCell>
+                          <TableCell className="font-medium text-versys-primary">
+                            {projetos.filter(p => !p.clienteId && !p.cliente?.id).length}
+                          </TableCell>
+                          <TableCell className="text-gray-500">-</TableCell>
+                        </TableRow>
                         {clientes.filter(cliente => cliente.status === 'ativo').map((cliente) => (
                           <TableRow 
                             key={cliente.id} 
@@ -1282,7 +1339,7 @@ const Projetos = () => {
               {/* Botão Novo Projeto */}
               <div className="flex justify-start">
                 <Button
-                  onClick={() => navigate(`/projetos/new?clienteId=${selectedClient?.id}`)}
+                  onClick={() => navigate(`/projetos/new${selectedClient ? `?clienteId=${selectedClient.id}` : ''}`)}
                   className="flex items-center space-x-2 bg-versys-primary hover:bg-versys-secondary"
                 >
                   <Plus className="h-4 w-4" />
