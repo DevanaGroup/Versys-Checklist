@@ -2,6 +2,7 @@ import { useState, useEffect } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
+import WizardNavigation, { Step as WizardStep } from "@/components/WizardNavigation";
 import { Badge } from "@/components/ui/badge";
 import { Progress } from "@/components/ui/progress";
 import { Textarea } from "@/components/ui/textarea";
@@ -90,6 +91,12 @@ const ClientProject = () => {
   const [loading, setLoading] = useState(true);
   const [currentStep, setCurrentStep] = useState(0);
   const [steps, setSteps] = useState<any[]>([]);
+  // passos formatados para o componente de wizard
+  const wizardSteps: WizardStep[] = steps.map((s: any) => ({
+    label: s.title,
+    subtitle: s.category,
+    completed: currentStep > (s.stepNumber - 1),
+  }));
   const [clientResponse, setClientResponse] = useState('');
   const [clientImages, setClientImages] = useState<File[]>([]);
 
@@ -530,6 +537,16 @@ const ClientProject = () => {
         <Progress value={progressPercentage} className="h-2" />
       </div>
 
+      {/* Indicadores de Passos */}
+      <WizardNavigation
+        steps={wizardSteps}
+        currentStep={currentStep}
+        onPrev={handlePreviousStep}
+        onNext={handleNextStep}
+        showNav={false}
+        className="bg-white rounded-xl border shadow-sm"
+      />
+
       {/* Conteúdo do passo atual */}
       <div className="bg-white rounded-xl border shadow-sm overflow-hidden">
         {/* Cabeçalho do item */}
@@ -815,36 +832,15 @@ const ClientProject = () => {
         </div>
       </div>
 
-      {/* Navegação do passo a passo */}
-      <div className="bg-white rounded-xl border shadow-sm p-4">
-        <div className="flex justify-between items-center">
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={handlePreviousStep}
-            disabled={currentStep === 0}
-            className="flex items-center space-x-2"
-          >
-            <ArrowLeft className="h-4 w-4 mr-1" />
-            <span>Anterior</span>
-          </Button>
-          
-          <div className="text-sm text-gray-500">
-            Passo {currentStep + 1} de {steps.length}
-          </div>
-          
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={handleNextStep}
-            disabled={currentStep === steps.length - 1}
-            className="flex items-center space-x-2 bg-versys-primary hover:bg-versys-secondary text-white"
-          >
-            <span>Próximo</span>
-            <ArrowRight className="h-4 w-4 ml-1" />
-          </Button>
-        </div>
-      </div>
+      {/* Navegação Inferior */}
+      <WizardNavigation
+        showIndicators={false}
+        steps={wizardSteps}
+        currentStep={currentStep}
+        onPrev={handlePreviousStep}
+        onNext={handleNextStep}
+        className="bg-white rounded-xl border shadow-sm"
+      />
     </div>
   );
 };

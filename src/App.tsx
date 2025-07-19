@@ -15,7 +15,7 @@ import AdminProjectView from "./pages/AdminProjectView";
 import NotFound from "./pages/NotFound";
 import ClientDashboard from "./pages/ClientDashboard";
 import ClientProjects from "./pages/ClientProjects";
-import ClientProject from "./pages/ClientProject";
+import ClientProjectView from "./pages/ClientProjectView";
 import Clientes from "./pages/Clientes";
 import Colaboradores from "./pages/Colaboradores";
 import ColaboradorFirstLogin from "./pages/ColaboradorFirstLogin";
@@ -158,7 +158,7 @@ const App = () => (
                 <DashboardLayout />
               </ProtectedRoute>
             }>
-              <Route index element={<ClientProject />} />
+              <Route index element={<ClientProjectView />} />
             </Route>
             
             <Route path="*" element={<NotFound />} />
