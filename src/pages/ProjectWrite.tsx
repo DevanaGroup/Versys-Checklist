@@ -11,7 +11,8 @@ import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/
 import { toast } from "sonner";
 import { db } from "@/lib/firebase";
 import { doc, getDoc, updateDoc } from "firebase/firestore";
-import { ArrowLeft, ArrowRight, CheckCircle } from "lucide-react";
+import { ArrowLeft, ArrowRight, CheckCircle, Camera } from "lucide-react";
+import { getStorage, ref, uploadBytes, getDownloadURL } from "firebase/storage";
 
 interface SubItem {
   id: string;
@@ -20,6 +21,12 @@ interface SubItem {
   currentSituation?: string;
   clientGuidance?: string;
   completed?: boolean;
+  photoData?: {
+    url: string;
+    createdAt: string;
+    latitude: number;
+    longitude: number;
+  };
 }
 
 interface ProjectItem {
@@ -63,6 +70,8 @@ const ProjectWrite = () => {
   const [projectSteps, setProjectSteps] = useState<ProjectItem[]>([]);
   const [formState, setFormState] = useState<Record<string, any>>({});
   const [saving, setSaving] = useState(false);
+  const [photoUploading, setPhotoUploading] = useState<Record<string, boolean>>({});
+  const [photoPreview, setPhotoPreview] = useState<Record<string, string>>({});
 
   useEffect(() => {
     if (!id) {
@@ -114,7 +123,8 @@ const ProjectWrite = () => {
           initialForm[sub.id] = {
             evaluation: sub.evaluation || '',
             currentSituation: sub.currentSituation || '',
-            clientGuidance: sub.clientGuidance || ''
+            clientGuidance: sub.clientGuidance || '',
+            photoData: sub.photoData || null
           };
         });
       });
@@ -137,6 +147,42 @@ const ProjectWrite = () => {
     }));
   };
 
+  const handlePhoto = async (subId: string, file: File) => {
+    if (!projectDetails) return;
+    setPhotoUploading(prev => ({ ...prev, [subId]: true }));
+    try {
+      // Captura localização
+      const getLocation = () => new Promise<{ latitude: number, longitude: number }>((resolve, reject) => {
+        if (!navigator.geolocation) return resolve({ latitude: 0, longitude: 0 });
+        navigator.geolocation.getCurrentPosition(
+          (pos) => resolve({ latitude: pos.coords.latitude, longitude: pos.coords.longitude }),
+          () => resolve({ latitude: 0, longitude: 0 })
+        );
+      });
+      const { latitude, longitude } = await getLocation();
+      // Upload para o Storage
+      const storage = getStorage();
+      const storageRef = ref(storage, `projetos/${projectDetails.id}/subitens/${subId}/${Date.now()}_${file.name}`);
+      await uploadBytes(storageRef, file);
+      const url = await getDownloadURL(storageRef);
+      const createdAt = new Date().toISOString();
+      // Atualiza o estado local
+      setFormState(prev => ({
+        ...prev,
+        [subId]: {
+          ...prev[subId],
+          photoData: { url, createdAt, latitude, longitude }
+        }
+      }));
+      setPhotoPreview(prev => ({ ...prev, [subId]: url }));
+      toast.success('Foto enviada com sucesso!');
+    } catch (err) {
+      toast.error('Erro ao enviar foto');
+    } finally {
+      setPhotoUploading(prev => ({ ...prev, [subId]: false }));
+    }
+  };
+
   const handleSave = async () => {
     if (!projectDetails) return;
     setSaving(true);
@@ -150,7 +196,8 @@ const ProjectWrite = () => {
             ...sub,
             evaluation: formState[sub.id]?.evaluation || '',
             currentSituation: formState[sub.id]?.currentSituation || '',
-            clientGuidance: formState[sub.id]?.clientGuidance || ''
+            clientGuidance: formState[sub.id]?.clientGuidance || '',
+            photoData: formState[sub.id]?.photoData || sub.photoData || null
           }))
         }))
       }));
@@ -285,6 +332,55 @@ const ProjectWrite = () => {
                           onChange={e => handleChange(sub.id, 'clientGuidance', e.target.value)}
                           placeholder="Orientação para o cliente..."
                         />
+                      </div>
+                      <div className="space-y-2">
+                        <Label>Foto (opcional)</Label>
+                        <div
+                          className={`border-2 border-dashed rounded-lg p-4 flex flex-col items-center justify-center cursor-pointer transition hover:border-purple-400 bg-gray-50 relative ${photoUploading[sub.id] ? 'opacity-60 pointer-events-none' : ''}`}
+                          style={{ minHeight: 120 }}
+                          onClick={() => {
+                            if (!photoUploading[sub.id]) {
+                              document.getElementById(`file-input-${sub.id}`)?.click();
+                            }
+                          }}
+                          onDragOver={e => e.preventDefault()}
+                          onDrop={e => {
+                            e.preventDefault();
+                            if (photoUploading[sub.id]) return;
+                            const file = e.dataTransfer.files[0];
+                            if (file) handlePhoto(sub.id, file);
+                          }}
+                        >
+                          {formState[sub.id]?.photoData?.url ? (
+                            <img src={formState[sub.id].photoData.url} alt="Foto do subitem" className="max-h-40 rounded border mb-2" />
+                          ) : (
+                            <>
+                              <Camera className="w-8 h-8 text-purple-400 mb-2" />
+                              <span className="text-sm text-gray-600 text-center">Clique ou arraste uma imagem aqui<br/>para tirar/enviar foto</span>
+                            </>
+                          )}
+                          <input
+                            id={`file-input-${sub.id}`}
+                            type="file"
+                            accept="image/*"
+                            capture="environment"
+                            className="hidden"
+                            disabled={photoUploading[sub.id]}
+                            onChange={e => {
+                              if (e.target.files && e.target.files[0]) {
+                                handlePhoto(sub.id, e.target.files[0]);
+                              }
+                            }}
+                          />
+                          {photoUploading[sub.id] && <span className="absolute bottom-2 left-0 right-0 text-xs text-center text-gray-500">Enviando foto...</span>}
+                        </div>
+                        {formState[sub.id]?.photoData?.url && (
+                          <div className="text-xs text-gray-500 mt-1">
+                            <div>Latitude: {formState[sub.id].photoData.latitude}</div>
+                            <div>Longitude: {formState[sub.id].photoData.longitude}</div>
+                            <div>Data: {new Date(formState[sub.id].photoData.createdAt).toLocaleString('pt-BR')}</div>
+                          </div>
+                        )}
                       </div>
                     </AccordionContent>
                   </AccordionItem>
