@@ -1421,73 +1421,90 @@ const Projetos = () => {
                               </div>
                             </TableCell>
                             <TableCell>
-                              <DropdownMenu>
-                                <DropdownMenuTrigger asChild>
-                                  <Button 
-                                    variant="ghost" 
+                              <div className="flex items-center space-x-2">
+                                {/* Ícone de play, só aparece se o status for 'Iniciado' */}
+                                {projeto.status === 'Iniciado' && (
+                                  <Button
+                                    variant="ghost"
                                     className="h-8 w-8 p-0"
-                                    onClick={(e) => e.stopPropagation()}
+                                    title="Preencher formulário do projeto"
+                                    onClick={e => {
+                                      e.stopPropagation();
+                                      navigate(`/projetos/write/${projeto.id}`);
+                                    }}
                                   >
-                                    <MoreVertical className="h-4 w-4" />
+                                    <PlayCircle className="h-5 w-5 text-green-600" />
                                   </Button>
-                                </DropdownMenuTrigger>
-                                <DropdownMenuContent align="end">
-                                  <DropdownMenuItem onClick={(e) => {
-                                    e.stopPropagation();
-                                    handleViewDetails(projeto);
-                                  }}>
-                                    <Eye className="h-4 w-4 mr-2" />
-                                    Ver Detalhes
-                                  </DropdownMenuItem>
-
-                                  {isAdmin && (
+                                )}
+                                {/* Dropdown de ações existente */}
+                                <DropdownMenu>
+                                  <DropdownMenuTrigger asChild>
+                                    <Button 
+                                      variant="ghost" 
+                                      className="h-8 w-8 p-0"
+                                      onClick={(e) => e.stopPropagation()}
+                                    >
+                                      <MoreVertical className="h-4 w-4" />
+                                    </Button>
+                                  </DropdownMenuTrigger>
+                                  <DropdownMenuContent align="end">
                                     <DropdownMenuItem onClick={(e) => {
                                       e.stopPropagation();
-                                      navigate(`/projetos/edit/${projeto.id}`);
+                                      handleViewDetails(projeto);
                                     }}>
-                                      <Edit className="h-4 w-4 mr-2" />
-                                      Editar Projeto
+                                      <Eye className="h-4 w-4 mr-2" />
+                                      Ver Detalhes
                                     </DropdownMenuItem>
-                                  )}
-                                  {isAdmin && (
-                                    <AlertDialog>
-                                      <AlertDialogTrigger asChild>
-                                        <DropdownMenuItem 
-                                          className="text-red-600 focus:text-red-600 focus:bg-red-50"
-                                          onSelect={(e) => e.preventDefault()}
-                                          onClick={(e) => e.stopPropagation()}
-                                        >
-                                          <Trash2 className="h-4 w-4 mr-2" />
-                                          {deletingProject === projeto.id ? 'Deletando...' : 'Excluir Projeto'}
-                                        </DropdownMenuItem>
-                                      </AlertDialogTrigger>
-                                      <AlertDialogContent>
-                                        <AlertDialogHeader>
-                                          <AlertDialogTitle>Confirmar Exclusão</AlertDialogTitle>
-                                          <AlertDialogDescription>
-                                            Tem certeza que deseja excluir o projeto "{projeto.nome}"? 
-                                            Esta ação não pode ser desfeita e todos os dados relacionados ao projeto serão perdidos permanentemente.
-                                          </AlertDialogDescription>
-                                        </AlertDialogHeader>
-                                        <AlertDialogFooter>
-                                          <AlertDialogCancel onClick={(e) => e.stopPropagation()}>
-                                            Cancelar
-                                          </AlertDialogCancel>
-                                          <AlertDialogAction
-                                            onClick={(e) => {
-                                              e.stopPropagation();
-                                              handleDeleteProject(projeto.id);
-                                            }}
-                                            className="bg-red-600 hover:bg-red-700"
+
+                                    {isAdmin && (
+                                      <DropdownMenuItem onClick={(e) => {
+                                        e.stopPropagation();
+                                        navigate(`/projetos/edit/${projeto.id}`);
+                                      }}>
+                                        <Edit className="h-4 w-4 mr-2" />
+                                        Editar Projeto
+                                      </DropdownMenuItem>
+                                    )}
+                                    {isAdmin && (
+                                      <AlertDialog>
+                                        <AlertDialogTrigger asChild>
+                                          <DropdownMenuItem 
+                                            className="text-red-600 focus:text-red-600 focus:bg-red-50"
+                                            onSelect={(e) => e.preventDefault()}
+                                            onClick={(e) => e.stopPropagation()}
                                           >
-                                            Confirmar Exclusão
-                                          </AlertDialogAction>
-                                        </AlertDialogFooter>
-                                      </AlertDialogContent>
-                                    </AlertDialog>
-                                  )}
-                                </DropdownMenuContent>
-                              </DropdownMenu>
+                                            <Trash2 className="h-4 w-4 mr-2" />
+                                            {deletingProject === projeto.id ? 'Deletando...' : 'Excluir Projeto'}
+                                          </DropdownMenuItem>
+                                        </AlertDialogTrigger>
+                                        <AlertDialogContent>
+                                          <AlertDialogHeader>
+                                            <AlertDialogTitle>Confirmar Exclusão</AlertDialogTitle>
+                                            <AlertDialogDescription>
+                                              Tem certeza que deseja excluir o projeto "{projeto.nome}"? 
+                                              Esta ação não pode ser desfeita e todos os dados relacionados ao projeto serão perdidos permanentemente.
+                                            </AlertDialogDescription>
+                                          </AlertDialogHeader>
+                                          <AlertDialogFooter>
+                                            <AlertDialogCancel onClick={(e) => e.stopPropagation()}>
+                                              Cancelar
+                                            </AlertDialogCancel>
+                                            <AlertDialogAction
+                                              onClick={(e) => {
+                                                e.stopPropagation();
+                                                handleDeleteProject(projeto.id);
+                                              }}
+                                              className="bg-red-600 hover:bg-red-700"
+                                            >
+                                              Confirmar Exclusão
+                                            </AlertDialogAction>
+                                          </AlertDialogFooter>
+                                        </AlertDialogContent>
+                                      </AlertDialog>
+                                    )}
+                                  </DropdownMenuContent>
+                                </DropdownMenu>
+                              </div>
                             </TableCell>
                           </TableRow>
                         ))}
