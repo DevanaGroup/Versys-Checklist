@@ -14,7 +14,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { Plus, Building, Calendar, User, FileText, CheckCircle, Clock, AlertCircle, ArrowLeft, Send, Download, CheckCircle2, XCircle, AlertTriangle, Eye, ClipboardCheck, Trash2, MoreVertical, Edit, Grid, List, ChevronRight, ChevronLeft, PlayCircle, PauseCircle, RotateCcw, FileTextIcon, MessageSquare, CheckSquare, X } from "lucide-react";
+import { Plus, Building, Calendar, User, FileText, CheckCircle, Clock, AlertCircle, ArrowLeft, Send, Download, CheckCircle2, XCircle, AlertTriangle, Eye, ClipboardCheck, Trash2, MoreVertical, Edit, Grid, List, ChevronRight, ChevronLeft, PlayCircle, PauseCircle, RotateCcw, FileTextIcon, MessageSquare, CheckSquare, X, Globe } from "lucide-react";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { collection, getDocs, query, orderBy, doc, updateDoc, deleteDoc, where } from "firebase/firestore";
 import { db } from "@/lib/firebase";
@@ -1436,6 +1436,17 @@ const Projetos = () => {
                                     <PlayCircle className="h-5 w-5 text-green-600" />
                                   </Button>
                                 )}
+                                <Button
+                                  variant="ghost"
+                                  className="h-8 w-8 p-0"
+                                  title="Visualizar locais no mapa"
+                                  onClick={e => {
+                                    e.stopPropagation();
+                                    navigate(`/projetos/map/${projeto.id}`);
+                                  }}
+                                >
+                                  <Globe className="h-5 w-5 text-blue-600" />
+                                </Button>
                                 {/* Dropdown de ações existente */}
                                 <DropdownMenu>
                                   <DropdownMenuTrigger asChild>

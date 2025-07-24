@@ -22,6 +22,7 @@ import ColaboradorFirstLogin from "./pages/ColaboradorFirstLogin";
 import ClienteFirstLogin from "./pages/ClienteFirstLogin";
 import Presets from "./pages/Presets";
 import ProjectWrite from "./pages/ProjectWrite";
+import ProjectMap from "./pages/ProjectMap";
 
 import { AuthProvider, useAuthContext } from "./contexts/AuthContext";
 
@@ -94,6 +95,7 @@ const App = () => (
               <Route path="edit/:projectId" element={<EditProject />} />
               <Route path="view/:projectId" element={<AdminProjectView />} />
               <Route path="write/:id" element={<ProjectWrite />} />
+              <Route path="map/:id" element={<ProjectMap />} />
             </Route>
             <Route path="/presets" element={
               <ProtectedRoute requiredType="admin">

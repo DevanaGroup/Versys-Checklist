@@ -1,5 +1,7 @@
 {
   "projects": {
     "default": "versys-4529f"
-  }
-} 
+  },
+  "targets": {},
+  "etags": {}
+}
