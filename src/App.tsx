@@ -16,6 +16,7 @@ import NotFound from "./pages/NotFound";
 import ClientDashboard from "./pages/ClientDashboard";
 import ClientProjects from "./pages/ClientProjects";
 import ClientProjectView from "./pages/ClientProjectView";
+
 import Clientes from "./pages/Clientes";
 import Colaboradores from "./pages/Colaboradores";
 import ColaboradorFirstLogin from "./pages/ColaboradorFirstLogin";
@@ -164,6 +165,8 @@ const App = () => (
             }>
               <Route index element={<ClientProjectView />} />
             </Route>
+            
+
             
             {/* Rotas para funcionalidades de projetos para clientes */}
             <Route path="/client-projects/write/:id" element={

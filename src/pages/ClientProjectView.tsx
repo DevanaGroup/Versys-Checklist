@@ -12,7 +12,7 @@ import { toast } from "sonner";
 import { useAuthContext } from "@/contexts/AuthContext";
 import { doc, getDoc, updateDoc } from "firebase/firestore";
 import { db } from "@/lib/firebase";
-import { ArrowLeft, ArrowRight, PlayCircle, Globe, CheckCircle, Camera } from "lucide-react";
+import { ArrowLeft, ArrowRight, PlayCircle, Globe, CheckCircle, Camera, ClipboardCheck } from "lucide-react";
 import { getStorage, ref, uploadBytes, getDownloadURL } from "firebase/storage";
 
 interface SubItem {
@@ -373,86 +373,77 @@ const ClientProjectView = () => {
                       </div>
                     </AccordionTrigger>
                     <AccordionContent className="space-y-4">
-                      <div className="space-y-2">
-                        <Label>Avaliação</Label>
-                        <RadioGroup
-                          value={formState[sub.id]?.evaluation || ''}
-                          onValueChange={val => handleChange(sub.id, 'evaluation', val)}
-                          className="flex flex-row space-x-4"
-                        >
-                          <RadioGroupItem value="nc" id={`nc-${sub.id}`} />
-                          <Label htmlFor={`nc-${sub.id}`}>NC</Label>
-                          <RadioGroupItem value="r" id={`r-${sub.id}`} />
-                          <Label htmlFor={`r-${sub.id}`}>R</Label>
-                          <RadioGroupItem value="na" id={`na-${sub.id}`} />
-                          <Label htmlFor={`na-${sub.id}`}>NA</Label>
-                        </RadioGroup>
-                      </div>
-                      <div className="space-y-2">
-                        <Label>Situação atual</Label>
-                        <Textarea
-                          value={formState[sub.id]?.currentSituation || ''}
-                          onChange={e => handleChange(sub.id, 'currentSituation', e.target.value)}
-                          placeholder="Situação atual..."
-                        />
-                      </div>
-                      <div className="space-y-2">
-                        <Label>Orientação para o cliente</Label>
-                        <Textarea
-                          value={formState[sub.id]?.clientGuidance || ''}
-                          onChange={e => handleChange(sub.id, 'clientGuidance', e.target.value)}
-                          placeholder="Orientação para o cliente..."
-                        />
-                      </div>
-                      <div className="space-y-2">
-                        <Label>Foto (opcional)</Label>
-                        <div
-                          className={`border-2 border-dashed rounded-lg p-4 flex flex-col items-center justify-center cursor-pointer transition hover:border-purple-400 bg-gray-50 relative ${photoUploading[sub.id] ? 'opacity-60 pointer-events-none' : ''}`}
-                          style={{ minHeight: 120 }}
-                          onClick={() => {
-                            if (!photoUploading[sub.id]) {
-                              document.getElementById(`file-input-${sub.id}`)?.click();
-                            }
-                          }}
-                          onDragOver={e => e.preventDefault()}
-                          onDrop={e => {
-                            e.preventDefault();
-                            if (photoUploading[sub.id]) return;
-                            const file = e.dataTransfer.files[0];
-                            if (file) handlePhoto(sub.id, file);
-                          }}
-                        >
-                          {formState[sub.id]?.photoData?.url ? (
-                            <img src={formState[sub.id].photoData.url} alt="Foto do subitem" className="max-h-40 rounded border mb-2" />
-                          ) : (
-                            <>
-                              <Camera className="w-8 h-8 text-purple-400 mb-2" />
-                              <span className="text-sm text-gray-600 text-center">Clique ou arraste uma imagem aqui<br/>para tirar/enviar foto</span>
-                            </>
-                          )}
-                          <input
-                            id={`file-input-${sub.id}`}
-                            type="file"
-                            accept="image/*"
-                            capture="environment"
-                            className="hidden"
-                            disabled={photoUploading[sub.id]}
-                            onChange={e => {
-                              if (e.target.files && e.target.files[0]) {
-                                handlePhoto(sub.id, e.target.files[0]);
-                              }
-                            }}
-                          />
-                          {photoUploading[sub.id] && <span className="absolute bottom-2 left-0 right-0 text-xs text-center text-gray-500">Enviando foto...</span>}
+                      {/* Informações da avaliação - SOMENTE LEITURA */}
+                      <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
+                        <div className="flex items-center justify-between mb-3">
+                          <h4 className="font-semibold text-blue-900">📊 Avaliação do Consultor</h4>
+                          <Badge className={`px-2 py-1 text-xs ${
+                            formState[sub.id]?.evaluation === 'nc' ? 'bg-red-100 text-red-800' : 
+                            formState[sub.id]?.evaluation === 'r' ? 'bg-yellow-100 text-yellow-800' : 
+                            'bg-green-100 text-green-800'
+                          }`}>
+                            {formState[sub.id]?.evaluation === 'nc' ? 'Não Conforme' : 
+                             formState[sub.id]?.evaluation === 'r' ? 'Requer Adequação' : 'Não Aplicável'}
+                          </Badge>
                         </div>
-                        {formState[sub.id]?.photoData?.url && (
-                          <div className="text-xs text-gray-500 mt-1">
-                            <div>Latitude: {formState[sub.id].photoData.latitude}</div>
-                            <div>Longitude: {formState[sub.id].photoData.longitude}</div>
-                            <div>Data: {new Date(formState[sub.id].photoData.createdAt).toLocaleString('pt-BR')}</div>
-                          </div>
-                        )}
+                        
+                        <div className="space-y-3">
+                          {formState[sub.id]?.currentSituation && (
+                            <div className="bg-white rounded-lg p-3 border">
+                              <div className="flex items-center space-x-2 mb-2">
+                                <CheckCircle className="h-4 w-4 text-orange-600" />
+                                <span className="font-medium text-gray-700">Situação Atual Identificada</span>
+                              </div>
+                              <p className="text-gray-900 text-sm leading-relaxed">{formState[sub.id].currentSituation}</p>
+                            </div>
+                          )}
+                          
+                          {formState[sub.id]?.clientGuidance && (
+                            <div className="bg-white rounded-lg p-3 border">
+                              <div className="flex items-center space-x-2 mb-2">
+                                <ClipboardCheck className="h-4 w-4 text-blue-600" />
+                                <span className="font-medium text-gray-700">Orientações para Adequação</span>
+                              </div>
+                              <p className="text-gray-900 text-sm leading-relaxed">{formState[sub.id].clientGuidance}</p>
+                            </div>
+                          )}
+                          
+                          {formState[sub.id]?.photoData?.url && (
+                            <div className="bg-white rounded-lg p-3 border">
+                              <div className="flex items-center space-x-2 mb-3">
+                                <Camera className="h-4 w-4 text-blue-600" />
+                                <span className="font-medium text-gray-700">Evidências do Consultor</span>
+                              </div>
+                              <div className="space-y-2">
+                                <img 
+                                  src={formState[sub.id].photoData.url} 
+                                  alt="Evidência do consultor" 
+                                  className="max-h-40 rounded border cursor-pointer hover:opacity-80"
+                                  onClick={() => {
+                                    const modal = document.createElement('div');
+                                    modal.innerHTML = `
+                                      <div style="position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.8); display: flex; justify-content: center; align-items: center; z-index: 1000;" onclick="this.remove()">
+                                        <div style="position: relative; max-width: 90%; max-height: 90%;">
+                                          <img src="${formState[sub.id].photoData.url}" style="max-width: 100%; max-height: 100%; object-fit: contain;" alt="Imagem ampliada" />
+                                          <button style="position: absolute; top: 10px; right: 10px; background: rgba(0,0,0,0.5); color: white; border: none; border-radius: 50%; width: 30px; height: 30px; display: flex; align-items: center; justify-content: center; cursor: pointer;" onclick="this.parentElement.parentElement.remove()">✕</button>
+                                        </div>
+                                      </div>
+                                    `;
+                                    document.body.appendChild(modal);
+                                  }}
+                                />
+                                <div className="text-xs text-gray-500">
+                                  <div>Latitude: {formState[sub.id].photoData.latitude}</div>
+                                  <div>Longitude: {formState[sub.id].photoData.longitude}</div>
+                                  <div>Data: {new Date(formState[sub.id].photoData.createdAt).toLocaleString('pt-BR')}</div>
+                                </div>
+                              </div>
+                            </div>
+                          )}
+                        </div>
                       </div>
+
+
                     </AccordionContent>
                   </AccordionItem>
                 ))}
@@ -464,7 +455,7 @@ const ClientProjectView = () => {
         </Card>
       )}
 
-      {/* Botões de navegação e salvar */}
+      {/* Botões de navegação - Somente visualização */}
       {totalSteps > 0 && (
         <div className="flex items-center justify-between pt-4 border-t border-gray-100">
           <Button
@@ -477,13 +468,9 @@ const ClientProjectView = () => {
             <span>Anterior</span>
           </Button>
 
-          <Button
-            onClick={handleSave}
-            disabled={saving}
-            className="bg-purple-600 hover:bg-purple-700 text-white"
-          >
-            {saving ? 'Salvando...' : 'Salvar'}
-          </Button>
+          <div className="text-sm text-gray-500">
+            Passo {currentStep + 1} de {totalSteps} - Modo Visualização
+          </div>
 
           <Button
             onClick={() => setCurrentStep(prev => Math.min(totalSteps - 1, prev + 1))}

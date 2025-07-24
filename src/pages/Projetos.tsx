@@ -390,7 +390,7 @@ const Projetos = () => {
   };
 
   const handleViewDetails = (projeto: ProjectDetails) => {
-    navigate(`/projetos/view/${projeto.id}`);
+    navigate(`/projetos/write/${projeto.id}`);
   };
 
   // Removed handleBackToList - no longer needed

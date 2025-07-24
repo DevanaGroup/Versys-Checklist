@@ -8,6 +8,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion";
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog";
 import { toast } from "sonner";
 import { db } from "@/lib/firebase";
 import { doc, getDoc, updateDoc } from "firebase/firestore";
@@ -72,6 +73,7 @@ const ProjectWrite = () => {
   const [saving, setSaving] = useState(false);
   const [photoUploading, setPhotoUploading] = useState<Record<string, boolean>>({});
   const [photoPreview, setPhotoPreview] = useState<Record<string, string>>({});
+  const [showSaveConfirmation, setShowSaveConfirmation] = useState(false);
 
   useEffect(() => {
     if (!id) {
@@ -209,11 +211,17 @@ const ProjectWrite = () => {
         customAccordions: updatedAccordions
       });
       toast.success('Formulário salvo com sucesso!');
+      // Fechar o diálogo de confirmação
+      setShowSaveConfirmation(false);
     } catch (error) {
       toast.error('Erro ao salvar formulário');
     } finally {
       setSaving(false);
     }
+  };
+
+  const handleSaveClick = () => {
+    setShowSaveConfirmation(true);
   };
 
   if (loading) {
@@ -418,22 +426,43 @@ const ProjectWrite = () => {
             <span>Anterior</span>
           </Button>
 
-          <Button
-            onClick={handleSave}
-            disabled={saving}
-            className="bg-purple-600 hover:bg-purple-700 text-white"
-          >
-            {saving ? 'Salvando...' : 'Salvar'}
-          </Button>
-
-          <Button
-            onClick={() => setCurrentStep(prev => Math.min(totalSteps - 1, prev + 1))}
-            disabled={currentStep === totalSteps - 1}
-            className="flex items-center space-x-2"
-          >
-            <span>Próximo</span>
-            <ArrowRight size={16} />
-          </Button>
+          {/* Botão Salvar - aparece apenas na última etapa */}
+          {currentStep === totalSteps - 1 ? (
+            <AlertDialog open={showSaveConfirmation} onOpenChange={setShowSaveConfirmation}>
+              <AlertDialogTrigger asChild>
+                <Button
+                  onClick={handleSaveClick}
+                  disabled={saving}
+                  className="bg-purple-600 hover:bg-purple-700 text-white"
+                >
+                  {saving ? 'Salvando...' : 'Salvar'}
+                </Button>
+              </AlertDialogTrigger>
+              <AlertDialogContent>
+                <AlertDialogHeader>
+                  <AlertDialogTitle>Confirmar Salvamento</AlertDialogTitle>
+                  <AlertDialogDescription>
+                    Tem certeza que deseja salvar todas as alterações do formulário? 
+                    Esta ação salvará todos os dados preenchidos e não poderá ser desfeita.
+                  </AlertDialogDescription>
+                </AlertDialogHeader>
+                <AlertDialogFooter>
+                  <AlertDialogCancel>Cancelar</AlertDialogCancel>
+                  <AlertDialogAction onClick={handleSave} disabled={saving}>
+                    {saving ? 'Salvando...' : 'Confirmar Salvamento'}
+                  </AlertDialogAction>
+                </AlertDialogFooter>
+              </AlertDialogContent>
+            </AlertDialog>
+          ) : (
+            <Button
+              onClick={() => setCurrentStep(prev => Math.min(totalSteps - 1, prev + 1))}
+              className="flex items-center space-x-2"
+            >
+              <span>Próximo</span>
+              <ArrowRight size={16} />
+            </Button>
+          )}
         </div>
       )}
     </div>

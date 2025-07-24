@@ -63,6 +63,8 @@ interface SubItem {
   adequacyStatus?: "pending" | "approved" | "rejected";
   currentSituation?: string;
   description?: string;
+  adminRejectionReason?: string; // Motivo da rejeição pelo admin
+  adequacyRevisionCount?: number; // Contador de revisões
 }
 
 interface ProjectItem {
@@ -105,6 +107,10 @@ const AdminProjectView = () => {
   const [loading, setLoading] = useState(true);
   const [currentStep, setCurrentStep] = useState(0);
   const [projectSteps, setProjectSteps] = useState<any[]>([]);
+  
+  // Estados para avaliação de adequações
+  const [evaluatingAdequacy, setEvaluatingAdequacy] = useState<string | null>(null);
+  const [rejectionReason, setRejectionReason] = useState('');
   const [adminFeedback, setAdminFeedback] = useState('');
   const [adminImages, setAdminImages] = useState<File[]>([]);
   const [activeTab, setActiveTab] = useState('adequacoes');
@@ -269,6 +275,88 @@ const AdminProjectView = () => {
     return step >= 0 && step < totalSteps;
   };
 
+  // Função para aprovar adequação
+  const approveAdequacy = async (subItemId: string) => {
+    if (!projectDetails) return;
+    
+    try {
+      const updatedAccordions = projectDetails.customAccordions?.map(accordion => ({
+        ...accordion,
+        items: accordion.items.map(item => ({
+          ...item,
+          subItems: item.subItems.map(subItem => {
+            if (subItem.id === subItemId) {
+              return {
+                ...subItem,
+                adequacyStatus: 'approved' as const,
+                completed: true
+              };
+            }
+            return subItem;
+          })
+        }))
+      }));
+
+      await updateDoc(doc(db, 'projetos', projectDetails.id), {
+        customAccordions: updatedAccordions
+      });
+
+      setProjectDetails(prev => prev ? { ...prev, customAccordions: updatedAccordions } : null);
+      setEvaluatingAdequacy(null);
+      toast.success('Adequação aprovada com sucesso!');
+    } catch (error) {
+      console.error('Erro ao aprovar adequação:', error);
+      toast.error('Erro ao aprovar adequação');
+    }
+  };
+
+  // Função para rejeitar adequação
+  const rejectAdequacy = async (subItemId: string) => {
+    if (!projectDetails || !rejectionReason.trim()) {
+      toast.error('Por favor, informe o motivo da rejeição.');
+      return;
+    }
+    
+    try {
+      const updatedAccordions = projectDetails.customAccordions?.map(accordion => ({
+        ...accordion,
+        items: accordion.items.map(item => ({
+          ...item,
+          subItems: item.subItems.map(subItem => {
+            if (subItem.id === subItemId) {
+              return {
+                ...subItem,
+                adequacyStatus: 'rejected' as const,
+                adminRejectionReason: rejectionReason,
+                completed: false
+              };
+            }
+            return subItem;
+          })
+        }))
+      }));
+
+      await updateDoc(doc(db, 'projetos', projectDetails.id), {
+        customAccordions: updatedAccordions
+      });
+
+      setProjectDetails(prev => prev ? { ...prev, customAccordions: updatedAccordions } : null);
+      setEvaluatingAdequacy(null);
+      setRejectionReason('');
+      toast.success('Adequação rejeitada. Cliente será notificado.');
+    } catch (error) {
+      console.error('Erro ao rejeitar adequação:', error);
+      toast.error('Erro ao rejeitar adequação');
+    }
+  };
+
+  // Função para cancelar avaliação
+  const cancelEvaluation = () => {
+    setEvaluatingAdequacy(null);
+    setRejectionReason('');
+    setAdminFeedback('');
+  };
+
   // Estado de carregamento e erros
   const [error, setError] = useState<string | null>(null);
 
@@ -359,6 +447,50 @@ const AdminProjectView = () => {
         </p>
       </div>
 
+      {/* Resumo das adequações */}
+      {(() => {
+        const pendingAdequacies = projectSteps.flatMap(step => 
+          step.subItems.filter(sub => sub.adequacyStatus === 'pending')
+        );
+        const approvedAdequacies = projectSteps.flatMap(step => 
+          step.subItems.filter(sub => sub.adequacyStatus === 'approved')
+        );
+        const rejectedAdequacies = projectSteps.flatMap(step => 
+          step.subItems.filter(sub => sub.adequacyStatus === 'rejected')
+        );
+
+        if (pendingAdequacies.length > 0 || approvedAdequacies.length > 0 || rejectedAdequacies.length > 0) {
+          return (
+            <div className="bg-white rounded-lg border p-4">
+              <h3 className="font-medium text-gray-900 mb-3">Status das Adequações</h3>
+              <div className="grid grid-cols-3 gap-4">
+                <div className="text-center">
+                  <div className="text-2xl font-bold text-yellow-600">{pendingAdequacies.length}</div>
+                  <div className="text-sm text-gray-600">Aguardando</div>
+                </div>
+                <div className="text-center">
+                  <div className="text-2xl font-bold text-green-600">{approvedAdequacies.length}</div>
+                  <div className="text-sm text-gray-600">Aprovadas</div>
+                </div>
+                <div className="text-center">
+                  <div className="text-2xl font-bold text-red-600">{rejectedAdequacies.length}</div>
+                  <div className="text-sm text-gray-600">Rejeitadas</div>
+                </div>
+              </div>
+              {pendingAdequacies.length > 0 && (
+                <div className="mt-3 p-2 bg-yellow-50 rounded border border-yellow-200">
+                  <p className="text-sm text-yellow-800">
+                    <AlertTriangle className="h-4 w-4 inline mr-1" />
+                    {pendingAdequacies.length} adequação(ões) aguardando sua avaliação
+                  </p>
+                </div>
+              )}
+            </div>
+          );
+        }
+        return null;
+      })()}
+
       {/* Step Counter - Mostra apenas o passo atual e o total */}
       {projectSteps.length > 0 && (
         <div className="flex flex-col items-center justify-center py-4">
@@ -395,22 +527,172 @@ const AdminProjectView = () => {
                   <AccordionTrigger>
                     <div className="flex items-center space-x-3">
                       <span className="font-medium">{sub.title}</span>
-                      {sub.completed && <CheckCircle size={16} className="text-green-500" />}
+                      {sub.adequacyStatus === 'approved' && <CheckCircle size={16} className="text-green-500" />}
+                      {sub.adequacyStatus === 'pending' && <Clock size={16} className="text-yellow-500" />}
+                      {sub.adequacyStatus === 'rejected' && <XCircle size={16} className="text-red-500" />}
                     </div>
                   </AccordionTrigger>
-                  <AccordionContent className="space-y-3 text-sm text-gray-600">
-                    {sub.description && <p>{sub.description}</p>}
-                    {sub.currentSituation && (
-                      <p>
-                        <span className="font-medium">Situação atual: </span>
-                        {sub.currentSituation}
-                      </p>
+                  <AccordionContent className="space-y-4">
+                    {/* Informações da avaliação */}
+                    <div className="bg-gray-50 rounded-lg p-3">
+                      <h4 className="font-medium text-gray-900 mb-2">Avaliação</h4>
+                      <div className="space-y-2 text-sm">
+                        {sub.evaluation && (
+                          <p>
+                            <span className="font-medium">Status: </span>
+                            <Badge className={`ml-1 ${
+                              sub.evaluation === 'nc' ? 'bg-red-100 text-red-800' : 
+                              sub.evaluation === 'r' ? 'bg-yellow-100 text-yellow-800' : 
+                              'bg-green-100 text-green-800'
+                            }`}>
+                              {sub.evaluation === 'nc' ? 'Não Conforme' : 
+                               sub.evaluation === 'r' ? 'Requer Adequação' : 'Não Aplicável'}
+                            </Badge>
+                          </p>
+                        )}
+                        {sub.currentSituation && (
+                          <p>
+                            <span className="font-medium">Situação atual: </span>
+                            {sub.currentSituation}
+                          </p>
+                        )}
+                        {sub.description && (
+                          <p>
+                            <span className="font-medium">Descrição: </span>
+                            {sub.description}
+                          </p>
+                        )}
+                      </div>
+                    </div>
+
+                    {/* Adequação do cliente */}
+                    {sub.adequacyReported && (
+                      <div className="bg-blue-50 rounded-lg p-3">
+                        <h4 className="font-medium text-blue-900 mb-2">Adequação do Cliente</h4>
+                        <div className="space-y-3">
+                          <div>
+                            <span className="font-medium text-sm">Descrição: </span>
+                            <p className="text-sm mt-1">{sub.adequacyDetails}</p>
+                          </div>
+                          
+                          {sub.adequacyImages && sub.adequacyImages.length > 0 && (
+                            <div>
+                              <span className="font-medium text-sm">Evidências: </span>
+                              <div className="grid grid-cols-3 gap-2 mt-2">
+                                {sub.adequacyImages.map((image, index) => (
+                                  <img
+                                    key={index}
+                                    src={image}
+                                    alt={`Evidência ${index + 1}`}
+                                    className="w-full h-16 object-cover rounded border cursor-pointer hover:opacity-80"
+                                    onClick={() => {
+                                      const modal = document.createElement('div');
+                                      modal.innerHTML = `
+                                        <div style="position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.8); display: flex; justify-content: center; align-items: center; z-index: 1000;" onclick="this.remove()">
+                                          <div style="position: relative; max-width: 90%; max-height: 90%;">
+                                            <img src="${image}" style="max-width: 100%; max-height: 100%; object-fit: contain;" alt="Imagem ampliada" />
+                                            <button style="position: absolute; top: 10px; right: 10px; background: rgba(0,0,0,0.5); color: white; border: none; border-radius: 50%; width: 30px; height: 30px; display: flex; align-items: center; justify-content: center; cursor: pointer;" onclick="this.parentElement.parentElement.remove()">✕</button>
+                                          </div>
+                                        </div>
+                                      `;
+                                      document.body.appendChild(modal);
+                                    }}
+                                  />
+                                ))}
+                              </div>
+                            </div>
+                          )}
+                          
+                          {sub.adequacyDate && (
+                            <div className="text-xs text-gray-500">
+                              Enviada em: {new Date(sub.adequacyDate).toLocaleDateString('pt-BR')} às {new Date(sub.adequacyDate).toLocaleTimeString('pt-BR')}
+                            </div>
+                          )}
+                        </div>
+                      </div>
                     )}
-                    {sub.evaluation && (
-                      <p>
-                        <span className="font-medium">Avaliação: </span>
-                        {sub.evaluation.toUpperCase()}
-                      </p>
+
+                    {/* Ações de avaliação */}
+                    {sub.adequacyStatus === 'pending' && (
+                      <div className="bg-yellow-50 rounded-lg p-3">
+                        <h4 className="font-medium text-yellow-900 mb-3">Avaliar Adequação</h4>
+                        <div className="space-y-3">
+                          <div className="flex space-x-2">
+                            <Button
+                              size="sm"
+                              onClick={() => approveAdequacy(sub.id)}
+                              className="bg-green-600 hover:bg-green-700"
+                            >
+                              <ThumbsUp className="h-4 w-4 mr-1" />
+                              Aprovar
+                            </Button>
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              onClick={() => setEvaluatingAdequacy(sub.id)}
+                              className="border-red-300 text-red-700 hover:bg-red-50"
+                            >
+                              <ThumbsDown className="h-4 w-4 mr-1" />
+                              Rejeitar
+                            </Button>
+                          </div>
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Formulário de rejeição */}
+                    {evaluatingAdequacy === sub.id && (
+                      <div className="bg-red-50 rounded-lg p-3">
+                        <h4 className="font-medium text-red-900 mb-3">Motivo da Rejeição</h4>
+                        <div className="space-y-3">
+                          <div>
+                            <Label className="text-sm font-medium">Motivo da rejeição:</Label>
+                            <Textarea
+                              value={rejectionReason}
+                              onChange={(e) => setRejectionReason(e.target.value)}
+                              placeholder="Descreva o motivo da rejeição..."
+                              className="mt-1"
+                              rows={3}
+                            />
+                          </div>
+                          <div className="flex space-x-2">
+                            <Button
+                              size="sm"
+                              onClick={() => rejectAdequacy(sub.id)}
+                              disabled={!rejectionReason.trim()}
+                              className="bg-red-600 hover:bg-red-700"
+                            >
+                              Confirmar Rejeição
+                            </Button>
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              onClick={cancelEvaluation}
+                            >
+                              Cancelar
+                            </Button>
+                          </div>
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Status da adequação */}
+                    {sub.adequacyStatus && sub.adequacyStatus !== 'pending' && (
+                      <div className={`rounded-lg p-3 ${
+                        sub.adequacyStatus === 'approved' ? 'bg-green-50' : 'bg-red-50'
+                      }`}>
+                        <h4 className={`font-medium mb-2 ${
+                          sub.adequacyStatus === 'approved' ? 'text-green-900' : 'text-red-900'
+                        }`}>
+                          {sub.adequacyStatus === 'approved' ? 'Adequação Aprovada' : 'Adequação Rejeitada'}
+                        </h4>
+                        {sub.adequacyStatus === 'rejected' && sub.adminRejectionReason && (
+                          <p className="text-sm text-red-800">
+                            <span className="font-medium">Motivo: </span>
+                            {sub.adminRejectionReason}
+                          </p>
+                        )}
+                      </div>
                     )}
                   </AccordionContent>
                 </AccordionItem>
