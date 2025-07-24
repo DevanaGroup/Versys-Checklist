@@ -3,6 +3,7 @@ import { User } from 'firebase/auth';
 import { doc, getDoc, updateDoc } from 'firebase/firestore';
 import { db } from '../lib/firebase';
 import { useAuth } from '../hooks/useAuth';
+import { getLocationWithFallback } from '../lib/locationService';
 
 interface UserData {
   uid: string;
@@ -55,57 +56,26 @@ const determineUserType = (email: string): 'admin' | 'client' | 'colaborador' =>
 // Função para capturar geolocalização
 const captureGeolocation = async (userId: string) => {
   try {
-    // Tentar obter coordenadas do navegador
-    if (navigator.geolocation) {
-      navigator.geolocation.getCurrentPosition(
-        async (position) => {
-          const { latitude, longitude } = position.coords;
-          
-          try {
-            // Obter informações adicionais da localização
-            const response = await fetch(`https://ipapi.co/json/`);
-            const data = await response.json();
-            
-            const locationData = {
-              latitude,
-              longitude,
-              city: data && !data.error ? data.city : undefined,
-              country: data && !data.error ? data.country_name : undefined,
-              region: data && !data.error ? data.region : undefined,
-              timestamp: new Date(),
-            };
-            
-            // Salvar no Firestore
-            await updateDoc(doc(db, 'users', userId), {
-              lastLocation: locationData
-            });
-            
-            console.log('AuthContext: Localização capturada e salva:', locationData);
-          } catch (error) {
-            console.error('AuthContext: Erro ao obter informações da localização:', error);
-            
-            // Salvar apenas coordenadas
-            const locationData = {
-              latitude,
-              longitude,
-              timestamp: new Date(),
-            };
-            
-            await updateDoc(doc(db, 'users', userId), {
-              lastLocation: locationData
-            });
-          }
-        },
-        (error) => {
-          console.warn('AuthContext: Erro ao obter geolocalização:', error);
-        },
-        {
-          enableHighAccuracy: true,
-          timeout: 10000,
-          maximumAge: 300000, // 5 minutos
-        }
-      );
-    }
+    const locationData = await getLocationWithFallback();
+    
+    // Filtrar valores undefined para evitar erro do Firestore
+    const locationToSave: any = {
+      latitude: locationData.latitude,
+      longitude: locationData.longitude,
+      timestamp: new Date(),
+    };
+    
+    // Adicionar campos opcionais apenas se não forem undefined
+    if (locationData.city) locationToSave.city = locationData.city;
+    if (locationData.country) locationToSave.country = locationData.country;
+    if (locationData.region) locationToSave.region = locationData.region;
+    
+    // Salvar no Firestore
+    await updateDoc(doc(db, 'users', userId), {
+      lastLocation: locationToSave
+    });
+    
+    console.log('AuthContext: Localização capturada e salva:', locationToSave);
   } catch (error) {
     console.error('AuthContext: Erro ao capturar geolocalização:', error);
   }

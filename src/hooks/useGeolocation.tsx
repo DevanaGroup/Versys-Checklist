@@ -1,4 +1,5 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
+import { getLocationWithFallback } from '../lib/locationService';
 
 interface GeolocationData {
   latitude: number;
@@ -23,136 +24,131 @@ export const useGeolocation = () => {
     error: null,
   });
   const [hasFetchedDetails, setHasFetchedDetails] = useState(false);
+  const watchIdRef = useRef<number | null>(null);
+  const intervalIdRef = useRef<NodeJS.Timeout | null>(null);
+  const firstDetailsRef = useRef<GeolocationData | null>(null);
 
   useEffect(() => {
-    let watchId: number | null = null;
-    let intervalId: NodeJS.Timeout | null = null;
-    let firstUpdate = true;
-    let firstDetails: GeolocationData | null = null;
+    let isMounted = true;
 
-    const fetchDetails = async (latitude: number, longitude: number) => {
+    const initializeLocation = async () => {
       try {
-        const response = await fetch(`https://ipapi.co/json/`);
-        const data = await response.json();
-        if (data && !data.error) {
-          return {
-            latitude,
-            longitude,
-            city: data.city,
-            country: data.country_name,
-            region: data.region,
-            timezone: data.timezone,
-            isp: data.org,
-          };
-        }
-      } catch {}
-      return { latitude, longitude };
+        setState(prev => ({ ...prev, loading: true, error: null }));
+        
+        const locationData = await getLocationWithFallback();
+        
+        if (!isMounted) return;
+        
+        setState({
+          location: locationData,
+          loading: false,
+          error: null,
+        });
+        firstDetailsRef.current = locationData;
+        setHasFetchedDetails(true);
+      } catch (error) {
+        if (!isMounted) return;
+        
+        console.error('Erro ao obter localização inicial:', error);
+        setState({
+          location: null,
+          loading: false,
+          error: 'Erro ao obter localização',
+        });
+      }
     };
 
-    const updatePosition = (latitude: number, longitude: number) => {
-      setState(prev => ({
-        ...prev,
-        location: prev.location
-          ? { ...prev.location, latitude, longitude }
-          : { latitude, longitude },
-        loading: false,
-        error: null,
-      }));
-    };
+    // Obter localização inicial
+    initializeLocation();
 
+    // Configurar watch de geolocalização se disponível
     if (navigator.geolocation) {
-      setState(prev => ({ ...prev, loading: true, error: null }));
-      watchId = navigator.geolocation.watchPosition(
-        async (position) => {
+      watchIdRef.current = navigator.geolocation.watchPosition(
+        (position) => {
+          if (!isMounted) return;
+          
           const { latitude, longitude } = position.coords;
-          if (firstUpdate && !hasFetchedDetails) {
-            const details = await fetchDetails(latitude, longitude);
-            setState({ location: details, loading: false, error: null });
-            setHasFetchedDetails(true);
-            firstDetails = details;
-            firstUpdate = false;
-          } else {
-            // Só atualiza lat/lng, mantém os dados extras da primeira vez
-            setState(prev => ({
-              ...prev,
-              location: firstDetails
-                ? { ...firstDetails, latitude, longitude }
-                : { latitude, longitude },
-              loading: false,
-              error: null,
-            }));
-          }
+          
+          setState(prev => ({
+            ...prev,
+            location: firstDetailsRef.current
+              ? { ...firstDetailsRef.current, latitude, longitude }
+              : { latitude, longitude },
+            loading: false,
+            error: null,
+          }));
         },
         (error) => {
-          setState({ location: null, loading: false, error: 'Não foi possível obter a localização' });
+          if (!isMounted) return;
+          
+          console.warn('Erro no watch de geolocalização:', error);
+          // Não definir erro aqui, pois já temos dados iniciais
         },
         {
           enableHighAccuracy: true,
           timeout: 10000,
-          maximumAge: 0,
+          maximumAge: 300000, // 5 minutos
         }
       );
-      // Atualização forçada a cada 1 segundo
-      intervalId = setInterval(() => {
-        navigator.geolocation.getCurrentPosition(
-          (position) => {
-            const { latitude, longitude } = position.coords;
-            // Só atualiza lat/lng, mantém os dados extras da primeira vez
+
+      // Atualização periódica a cada 30 segundos
+      intervalIdRef.current = setInterval(async () => {
+        if (!isMounted) return;
+        
+        try {
+          const locationData = await getLocationWithFallback();
+          if (isMounted) {
             setState(prev => ({
               ...prev,
-              location: firstDetails
-                ? { ...firstDetails, latitude, longitude }
-                : { latitude, longitude },
+              location: locationData,
               loading: false,
               error: null,
             }));
-          },
-          () => {},
-          {
-            enableHighAccuracy: true,
-            timeout: 10000,
-            maximumAge: 0,
+            firstDetailsRef.current = locationData;
           }
-        );
-      }, 1000);
-    } else {
-      // Fallback: usar apenas IP
-      (async () => {
-        setState(prev => ({ ...prev, loading: true, error: null }));
-        try {
-          const response = await fetch(`https://ipapi.co/json/`);
-          const data = await response.json();
-          if (data && !data.error) {
-            setState({
-              location: {
-                latitude: data.latitude,
-                longitude: data.longitude,
-                city: data.city,
-                country: data.country_name,
-                region: data.region,
-                timezone: data.timezone,
-                isp: data.org,
-              },
-              loading: false,
-              error: null,
-            });
-          } else {
-            setState({ location: null, loading: false, error: 'Geolocalização não suportada' });
-          }
-        } catch {
-          setState({ location: null, loading: false, error: 'Geolocalização não suportada' });
+        } catch (error) {
+          console.warn('Erro na atualização periódica de localização:', error);
         }
-      })();
+      }, 30000); // 30 segundos
     }
+
     return () => {
-      if (watchId !== null && navigator.geolocation) {
-        navigator.geolocation.clearWatch(watchId);
+      isMounted = false;
+      
+      if (watchIdRef.current) {
+        navigator.geolocation.clearWatch(watchIdRef.current);
       }
-      if (intervalId) {
-        clearInterval(intervalId);
+      
+      if (intervalIdRef.current) {
+        clearInterval(intervalIdRef.current);
       }
     };
-  }, [hasFetchedDetails]);
+  }, []);
 
-  return state;
+  const refreshLocation = async () => {
+    try {
+      setState(prev => ({ ...prev, loading: true, error: null }));
+      
+      const locationData = await getLocationWithFallback();
+      
+      setState({
+        location: locationData,
+        loading: false,
+        error: null,
+      });
+      firstDetailsRef.current = locationData;
+    } catch (error) {
+      console.error('Erro ao atualizar localização:', error);
+      setState(prev => ({
+        ...prev,
+        loading: false,
+        error: 'Erro ao atualizar localização',
+      }));
+    }
+  };
+
+  return {
+    ...state,
+    refreshLocation,
+  };
 };
