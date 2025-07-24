@@ -165,6 +165,23 @@ const App = () => (
               <Route index element={<ClientProjectView />} />
             </Route>
             
+            {/* Rotas para funcionalidades de projetos para clientes */}
+            <Route path="/client-projects/write/:id" element={
+              <ProtectedRoute requiredType="client">
+                <DashboardLayout />
+              </ProtectedRoute>
+            }>
+              <Route index element={<ProjectWrite />} />
+            </Route>
+            
+            <Route path="/client-projects/map/:id" element={
+              <ProtectedRoute requiredType="client">
+                <DashboardLayout />
+              </ProtectedRoute>
+            }>
+              <Route index element={<ProjectMap />} />
+            </Route>
+            
             <Route path="*" element={<NotFound />} />
           </Routes>
         </BrowserRouter>

@@ -12,7 +12,9 @@ import {
   Calendar,
   FileCheck,
   Eye,
-  ChevronRight
+  ChevronRight,
+  PlayCircle,
+  Globe
 } from "lucide-react";
 import { toast } from "sonner";
 import { useAuthContext } from "@/contexts/AuthContext";
@@ -281,20 +283,50 @@ const ClientProjects = () => {
                         </span>
                       </div>
                     </TableCell>
-                    <TableCell className="text-center">
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          handleProjectClick(project.id);
-                        }}
-                        className="flex items-center space-x-1"
-                      >
-                        <Eye className="h-4 w-4" />
-                        <span>Visualizar</span>
-                        <ChevronRight className="h-3 w-3" />
-                      </Button>
+                    <TableCell>
+                      <div className="flex items-center justify-center space-x-2">
+                        {/* Botão de preencher formulário - só aparece se o status for 'Iniciado' */}
+                        {project.status === 'Iniciado' && (
+                          <Button
+                            variant="ghost"
+                            className="h-8 w-8 p-0"
+                            title="Preencher formulário do projeto"
+                            onClick={e => {
+                              e.stopPropagation();
+                              navigate(`/client-projects/write/${project.id}`);
+                            }}
+                          >
+                            <PlayCircle className="h-5 w-5 text-green-600" />
+                          </Button>
+                        )}
+                        
+                        {/* Botão de visualizar mapa */}
+                        <Button
+                          variant="ghost"
+                          className="h-8 w-8 p-0"
+                          title="Visualizar locais no mapa"
+                          onClick={e => {
+                            e.stopPropagation();
+                            navigate(`/client-projects/map/${project.id}`);
+                          }}
+                        >
+                          <Globe className="h-5 w-5 text-blue-600" />
+                        </Button>
+                        
+                        {/* Botão de visualizar detalhes */}
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            handleProjectClick(project.id);
+                          }}
+                          className="flex items-center space-x-1"
+                        >
+                          <Eye className="h-4 w-4" />
+                          <span>Detalhes</span>
+                        </Button>
+                      </div>
                     </TableCell>
                   </TableRow>
                 ))}

@@ -1336,16 +1336,18 @@ const Projetos = () => {
             </div>
           ) : (
             <div className="space-y-4">
-              {/* Botão Novo Projeto */}
-              <div className="flex justify-start">
-                <Button
-                  onClick={() => navigate(`/projetos/new${selectedClient ? `?clienteId=${selectedClient.id}` : ''}`)}
-                  className="flex items-center space-x-2 bg-versys-primary hover:bg-versys-secondary"
-                >
-                  <Plus className="h-4 w-4" />
-                  <span>Novo Projeto</span>
-                </Button>
-              </div>
+              {/* Botão Novo Projeto - apenas para admins */}
+              {isAdmin && (
+                <div className="flex justify-start">
+                  <Button
+                    onClick={() => navigate(`/projetos/new${selectedClient ? `?clienteId=${selectedClient.id}` : ''}`)}
+                    className="flex items-center space-x-2 bg-versys-primary hover:bg-versys-secondary"
+                  >
+                    <Plus className="h-4 w-4" />
+                    <span>Novo Projeto</span>
+                  </Button>
+                </div>
+              )}
 
               {/* Tabela de Projetos */}
               <Card>
@@ -1371,7 +1373,7 @@ const Projetos = () => {
                           <TableHead>Consultor</TableHead>
                           <TableHead>Data de Início</TableHead>
                           <TableHead>Previsão</TableHead>
-                          <TableHead>Ações</TableHead>
+                          <TableHead className="text-center">Ações</TableHead>
                         </TableRow>
                       </TableHeader>
                       <TableBody>
@@ -1420,9 +1422,9 @@ const Projetos = () => {
                                 <span>{projeto.previsaoConclusao ? new Date(projeto.previsaoConclusao).toLocaleDateString('pt-BR') : 'Não definida'}</span>
                               </div>
                             </TableCell>
-                            <TableCell>
-                              <div className="flex items-center space-x-2">
-                                {/* Ícone de play, só aparece se o status for 'Iniciado' */}
+                            <TableCell className="text-center">
+                              <div className="flex items-center justify-center space-x-2">
+                                {/* Ícone de play, só aparece se o status for 'Iniciado' - disponível para todos */}
                                 {projeto.status === 'Iniciado' && (
                                   <Button
                                     variant="ghost"
@@ -1436,6 +1438,7 @@ const Projetos = () => {
                                     <PlayCircle className="h-5 w-5 text-green-600" />
                                   </Button>
                                 )}
+                                {/* Botão do mapa - disponível para todos */}
                                 <Button
                                   variant="ghost"
                                   className="h-8 w-8 p-0"

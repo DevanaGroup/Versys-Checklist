@@ -75,7 +75,9 @@ const ProjectWrite = () => {
 
   useEffect(() => {
     if (!id) {
-      navigate("/projetos");
+      // Verificar se o usuário é cliente ou admin para redirecionar corretamente
+      const isClient = window.location.pathname.includes('/client-projects');
+      navigate(isClient ? "/client-projects" : "/projetos");
       return;
     }
     loadProject();
@@ -89,7 +91,9 @@ const ProjectWrite = () => {
       const projectDoc = await getDoc(projectRef);
       if (!projectDoc.exists()) {
         toast.error('Projeto não encontrado');
-        navigate("/projetos");
+        // Verificar se o usuário é cliente ou admin para redirecionar corretamente
+        const isClient = window.location.pathname.includes('/client-projects');
+        navigate(isClient ? "/client-projects" : "/projetos");
         return;
       }
       const projectData = projectDoc.data();
@@ -224,7 +228,11 @@ const ProjectWrite = () => {
     return (
       <div className="flex flex-col items-center justify-center h-full p-6 space-y-4">
         <span className="text-lg font-medium text-gray-900">Projeto não encontrado</span>
-        <Button variant="outline" onClick={() => navigate('/projetos')} className="mt-2">
+        <Button variant="outline" onClick={() => {
+          // Verificar se o usuário é cliente ou admin para redirecionar corretamente
+          const isClient = window.location.pathname.includes('/client-projects');
+          navigate(isClient ? "/client-projects" : "/projetos");
+        }} className="mt-2">
           Voltar para a lista de projetos
         </Button>
       </div>
@@ -239,7 +247,11 @@ const ProjectWrite = () => {
       <Button
         variant="ghost"
         size="sm"
-        onClick={() => navigate("/projetos")}
+        onClick={() => {
+          // Verificar se o usuário é cliente ou admin para redirecionar corretamente
+          const isClient = window.location.pathname.includes('/client-projects');
+          navigate(isClient ? "/client-projects" : "/projetos");
+        }}
         className="flex items-center space-x-1 mb-4"
       >
         <ArrowLeft className="h-4 w-4" />

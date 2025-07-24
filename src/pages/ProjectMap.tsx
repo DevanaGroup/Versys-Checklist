@@ -96,7 +96,11 @@ export default function ProjectMap() {
 
   return (
     <div className="p-6 space-y-6">
-      <Button variant="ghost" size="sm" onClick={() => navigate("/projetos")} className="flex items-center space-x-1 mb-4">
+      <Button variant="ghost" size="sm" onClick={() => {
+        // Verificar se o usuário é cliente ou admin para redirecionar corretamente
+        const isClient = window.location.pathname.includes('/client-projects');
+        navigate(isClient ? "/client-projects" : "/projetos");
+      }} className="flex items-center space-x-1 mb-4">
         Voltar
       </Button>
       <Card>
