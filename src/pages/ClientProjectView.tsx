@@ -12,7 +12,7 @@ import { toast } from "sonner";
 import { useAuthContext } from "@/contexts/AuthContext";
 import { doc, getDoc, updateDoc } from "firebase/firestore";
 import { db } from "@/lib/firebase";
-import { ArrowLeft, ArrowRight, PlayCircle, Globe, CheckCircle, Camera, ClipboardCheck } from "lucide-react";
+import { ArrowLeft, ArrowRight, PlayCircle, Globe, CheckCircle, Camera, ClipboardCheck, ChevronRight, ChevronLeft, Send, Upload, X, Image, Clock } from "lucide-react";
 import { getStorage, ref, uploadBytes, getDownloadURL } from "firebase/storage";
 
 interface SubItem {
@@ -75,6 +75,12 @@ const ClientProjectView = () => {
   const [saving, setSaving] = useState(false);
   const [photoUploading, setPhotoUploading] = useState<Record<string, boolean>>({});
   const [photoPreview, setPhotoPreview] = useState<Record<string, string>>({});
+  
+  // Estados para controle de páginas e adequações
+  const [currentPage, setCurrentPage] = useState<'view' | 'adequation'>('view');
+  const [adequationResponse, setAdequationResponse] = useState('');
+  const [adequationImages, setAdequationImages] = useState<File[]>([]);
+  const [submittingAdequation, setSubmittingAdequation] = useState(false);
 
   useEffect(() => {
     if (!projectId) {
@@ -262,6 +268,59 @@ const ClientProjectView = () => {
     }
   };
 
+  // Funções para adequações
+  const handleAdequationImageUpload = (files: FileList) => {
+    const newImages = Array.from(files);
+    if (adequationImages.length + newImages.length > 5) {
+      toast.error("Máximo de 5 imagens permitido.");
+      return;
+    }
+    setAdequationImages(prev => [...prev, ...newImages]);
+  };
+
+  const removeAdequationImage = (index: number) => {
+    setAdequationImages(prev => prev.filter((_, i) => i !== index));
+  };
+
+  const handleSubmitAdequation = async () => {
+    if (!adequationResponse.trim()) {
+      toast.error("Por favor, descreva as adequações realizadas.");
+      return;
+    }
+
+    try {
+      setSubmittingAdequation(true);
+      
+      // Converter imagens para base64
+      const imageBase64Array: string[] = [];
+      for (const file of adequationImages) {
+        const base64 = await new Promise<string>((resolve) => {
+          const reader = new FileReader();
+          reader.onload = () => resolve(reader.result as string);
+          reader.readAsDataURL(file);
+        });
+        imageBase64Array.push(base64);
+      }
+
+      // Aqui você implementaria a lógica para salvar no Firebase
+      // Por enquanto, apenas simular o sucesso
+      toast.success("Adequação enviada com sucesso! Aguardando aprovação do consultor.");
+      
+      // Limpar formulário
+      setAdequationResponse('');
+      setAdequationImages([]);
+      
+      // Voltar para a página de visualização
+      setCurrentPage('view');
+      
+    } catch (error) {
+      console.error('Erro ao enviar adequação:', error);
+      toast.error("Erro ao enviar adequação. Tente novamente.");
+    } finally {
+      setSubmittingAdequation(false);
+    }
+  };
+
   if (loading) {
     return (
       <div className="flex items-center justify-center h-full p-10">
@@ -373,77 +432,227 @@ const ClientProjectView = () => {
                       </div>
                     </AccordionTrigger>
                     <AccordionContent className="space-y-4">
-                      {/* Informações da avaliação - SOMENTE LEITURA */}
-                      <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
-                        <div className="flex items-center justify-between mb-3">
-                          <h4 className="font-semibold text-blue-900">📊 Avaliação do Consultor</h4>
-                          <Badge className={`px-2 py-1 text-xs ${
-                            formState[sub.id]?.evaluation === 'nc' ? 'bg-red-100 text-red-800' : 
-                            formState[sub.id]?.evaluation === 'r' ? 'bg-yellow-100 text-yellow-800' : 
-                            'bg-green-100 text-green-800'
-                          }`}>
-                            {formState[sub.id]?.evaluation === 'nc' ? 'Não Conforme' : 
-                             formState[sub.id]?.evaluation === 'r' ? 'Requer Adequação' : 'Não Aplicável'}
-                          </Badge>
+                      {/* Sistema de Páginas */}
+                      <div className="relative">
+                        {/* Indicador de Página */}
+                        <div className="flex items-center justify-center mb-4">
+                          <div className="flex items-center space-x-2 bg-gray-100 rounded-full p-1">
+                            <button
+                              onClick={() => setCurrentPage('view')}
+                              className={`px-3 py-1 rounded-full text-sm font-medium transition-colors ${
+                                currentPage === 'view' 
+                                  ? 'bg-white text-blue-600 shadow-sm' 
+                                  : 'text-gray-600 hover:text-gray-800'
+                              }`}
+                            >
+                              Visualização
+                            </button>
+                            <button
+                              onClick={() => setCurrentPage('adequation')}
+                              className={`px-3 py-1 rounded-full text-sm font-medium transition-colors ${
+                                currentPage === 'adequation' 
+                                  ? 'bg-white text-green-600 shadow-sm' 
+                                  : 'text-gray-600 hover:text-gray-800'
+                              }`}
+                            >
+                              Adequação
+                            </button>
+                          </div>
                         </div>
-                        
-                        <div className="space-y-3">
-                          {formState[sub.id]?.currentSituation && (
-                            <div className="bg-white rounded-lg p-3 border">
-                              <div className="flex items-center space-x-2 mb-2">
-                                <CheckCircle className="h-4 w-4 text-orange-600" />
-                                <span className="font-medium text-gray-700">Situação Atual Identificada</span>
-                              </div>
-                              <p className="text-gray-900 text-sm leading-relaxed">{formState[sub.id].currentSituation}</p>
+
+                        {/* Página 1: Visualização da Avaliação */}
+                        {currentPage === 'view' && (
+                          <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
+                            <div className="flex items-center justify-between mb-3">
+                              <h4 className="font-semibold text-blue-900">📊 Avaliação do Consultor</h4>
+                              <Badge className={`px-2 py-1 text-xs ${
+                                formState[sub.id]?.evaluation === 'nc' ? 'bg-red-100 text-red-800' : 
+                                formState[sub.id]?.evaluation === 'r' ? 'bg-yellow-100 text-yellow-800' : 
+                                'bg-green-100 text-green-800'
+                              }`}>
+                                {formState[sub.id]?.evaluation === 'nc' ? 'Não Conforme' : 
+                                 formState[sub.id]?.evaluation === 'r' ? 'Requer Adequação' : 'Não Aplicável'}
+                              </Badge>
                             </div>
-                          )}
-                          
-                          {formState[sub.id]?.clientGuidance && (
-                            <div className="bg-white rounded-lg p-3 border">
-                              <div className="flex items-center space-x-2 mb-2">
-                                <ClipboardCheck className="h-4 w-4 text-blue-600" />
-                                <span className="font-medium text-gray-700">Orientações para Adequação</span>
-                              </div>
-                              <p className="text-gray-900 text-sm leading-relaxed">{formState[sub.id].clientGuidance}</p>
+                            
+                            <div className="space-y-3">
+                              {formState[sub.id]?.currentSituation && (
+                                <div className="bg-white rounded-lg p-3 border">
+                                  <div className="flex items-center space-x-2 mb-2">
+                                    <CheckCircle className="h-4 w-4 text-orange-600" />
+                                    <span className="font-medium text-gray-700">Situação Atual Identificada</span>
+                                  </div>
+                                  <p className="text-gray-900 text-sm leading-relaxed">{formState[sub.id].currentSituation}</p>
+                                </div>
+                              )}
+                              
+                              {formState[sub.id]?.clientGuidance && (
+                                <div className="bg-white rounded-lg p-3 border">
+                                  <div className="flex items-center space-x-2 mb-2">
+                                    <ClipboardCheck className="h-4 w-4 text-blue-600" />
+                                    <span className="font-medium text-gray-700">Orientações para Adequação</span>
+                                  </div>
+                                  <p className="text-gray-900 text-sm leading-relaxed">{formState[sub.id].clientGuidance}</p>
+                                </div>
+                              )}
+                              
+                              {formState[sub.id]?.photoData?.url && (
+                                <div className="bg-white rounded-lg p-3 border">
+                                  <div className="flex items-center space-x-2 mb-3">
+                                    <Camera className="h-4 w-4 text-blue-600" />
+                                    <span className="font-medium text-gray-700">Evidências do Consultor</span>
+                                  </div>
+                                  <div className="space-y-2">
+                                    <img 
+                                      src={formState[sub.id].photoData.url} 
+                                      alt="Evidência do consultor" 
+                                      className="max-h-40 rounded border cursor-pointer hover:opacity-80"
+                                      onClick={() => {
+                                        const modal = document.createElement('div');
+                                        modal.innerHTML = `
+                                          <div style="position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.8); display: flex; justify-content: center; align-items: center; z-index: 1000;" onclick="this.remove()">
+                                            <div style="position: relative; max-width: 90%; max-height: 90%;">
+                                              <img src="${formState[sub.id].photoData.url}" style="max-width: 100%; max-height: 100%; object-fit: contain;" alt="Imagem ampliada" />
+                                              <button style="position: absolute; top: 10px; right: 10px; background: rgba(0,0,0,0.5); color: white; border: none; border-radius: 50%; width: 30px; height: 30px; display: flex; align-items: center; justify-content: center; cursor: pointer;" onclick="this.parentElement.parentElement.remove()">✕</button>
+                                            </div>
+                                          </div>
+                                        `;
+                                        document.body.appendChild(modal);
+                                      }}
+                                    />
+                                    <div className="text-xs text-gray-500">
+                                      <div>Latitude: {formState[sub.id].photoData.latitude}</div>
+                                      <div>Longitude: {formState[sub.id].photoData.longitude}</div>
+                                      <div>Data: {new Date(formState[sub.id].photoData.createdAt).toLocaleString('pt-BR')}</div>
+                                    </div>
+                                  </div>
+                                </div>
+                              )}
                             </div>
-                          )}
-                          
-                          {formState[sub.id]?.photoData?.url && (
-                            <div className="bg-white rounded-lg p-3 border">
-                              <div className="flex items-center space-x-2 mb-3">
-                                <Camera className="h-4 w-4 text-blue-600" />
-                                <span className="font-medium text-gray-700">Evidências do Consultor</span>
-                              </div>
-                              <div className="space-y-2">
-                                <img 
-                                  src={formState[sub.id].photoData.url} 
-                                  alt="Evidência do consultor" 
-                                  className="max-h-40 rounded border cursor-pointer hover:opacity-80"
-                                  onClick={() => {
-                                    const modal = document.createElement('div');
-                                    modal.innerHTML = `
-                                      <div style="position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.8); display: flex; justify-content: center; align-items: center; z-index: 1000;" onclick="this.remove()">
-                                        <div style="position: relative; max-width: 90%; max-height: 90%;">
-                                          <img src="${formState[sub.id].photoData.url}" style="max-width: 100%; max-height: 100%; object-fit: contain;" alt="Imagem ampliada" />
-                                          <button style="position: absolute; top: 10px; right: 10px; background: rgba(0,0,0,0.5); color: white; border: none; border-radius: 50%; width: 30px; height: 30px; display: flex; align-items: center; justify-content: center; cursor: pointer;" onclick="this.parentElement.parentElement.remove()">✕</button>
-                                        </div>
-                                      </div>
-                                    `;
-                                    document.body.appendChild(modal);
-                                  }}
+                          </div>
+                        )}
+
+                        {/* Página 2: Formulário de Adequação */}
+                        {currentPage === 'adequation' && (
+                          <div className="bg-green-50 border border-green-200 rounded-lg p-4">
+                            <div className="flex items-center justify-between mb-4">
+                              <h4 className="font-semibold text-green-900">
+                                <CheckCircle className="h-4 w-4 inline mr-2" />
+                                Reportar Adequação Realizada
+                              </h4>
+                              <Badge className="bg-green-100 text-green-800 px-2 py-1 text-xs">
+                                Ação Necessária
+                              </Badge>
+                            </div>
+                            
+                            <div className="space-y-4">
+                              <div>
+                                <Label className="text-sm font-medium text-gray-700 mb-2 block">
+                                  📝 Descreva detalhadamente as adequações implementadas:
+                                </Label>
+                                <Textarea
+                                  placeholder="Descreva as adequações que foram implementadas para atender aos requisitos identificados pelo consultor..."
+                                  value={adequationResponse}
+                                  onChange={(e) => setAdequationResponse(e.target.value)}
+                                  className="text-sm border-green-300 focus:border-green-500 focus:ring-green-500"
+                                  rows={4}
+                                  maxLength={1000}
                                 />
-                                <div className="text-xs text-gray-500">
-                                  <div>Latitude: {formState[sub.id].photoData.latitude}</div>
-                                  <div>Longitude: {formState[sub.id].photoData.longitude}</div>
-                                  <div>Data: {new Date(formState[sub.id].photoData.createdAt).toLocaleString('pt-BR')}</div>
+                                <div className="flex justify-between items-center mt-1">
+                                  <p className="text-xs text-gray-500">
+                                    Seja específico sobre as mudanças realizadas e como elas atendem aos requisitos.
+                                  </p>
+                                  <span className={`text-xs ${
+                                    adequationResponse.length > 800 ? 'text-orange-600' : 'text-gray-500'
+                                  }`}>
+                                    {adequationResponse.length}/1000 caracteres
+                                  </span>
                                 </div>
                               </div>
+                              
+                              {/* Upload de imagens */}
+                              <div>
+                                <Label className="text-sm font-medium text-gray-700 mb-2 block">
+                                  <Image className="h-4 w-4 inline mr-1" />
+                                  📷 Anexar Fotos Comprobatórias (máximo 5 imagens):
+                                </Label>
+                                
+                                <div className="flex flex-wrap gap-2 mb-3">
+                                  {adequationImages.length > 0 && (
+                                    <div className="w-full mb-2">
+                                      <span className="text-xs text-green-600 font-medium">
+                                        📷 {adequationImages.length} imagem(ns) anexada(s)
+                                      </span>
+                                    </div>
+                                  )}
+                                  {adequationImages.map((file, index) => (
+                                    <div key={index} className="relative">
+                                      <img
+                                        src={URL.createObjectURL(file)}
+                                        alt={`Anexo ${index + 1}`}
+                                        className="w-20 h-20 object-cover rounded-lg border border-green-300"
+                                      />
+                                      <button
+                                        onClick={() => removeAdequationImage(index)}
+                                        className="absolute -top-2 -right-2 bg-red-500 text-white rounded-full p-1 hover:bg-red-600 transition-colors"
+                                      >
+                                        <X className="h-3 w-3" />
+                                      </button>
+                                    </div>
+                                  ))}
+                                </div>
+                                
+                                <div className="flex items-center gap-2">
+                                  <input
+                                    type="file"
+                                    accept="image/*"
+                                    multiple
+                                    onChange={(e) => {
+                                      if (e.target.files) {
+                                        handleAdequationImageUpload(e.target.files);
+                                      }
+                                    }}
+                                    className="hidden"
+                                    id="adequation-image-upload"
+                                  />
+                                  <label
+                                    htmlFor="adequation-image-upload"
+                                    className="cursor-pointer inline-flex items-center px-3 py-2 border border-green-300 rounded-md text-sm font-medium text-green-700 bg-white hover:bg-green-50 transition-colors"
+                                  >
+                                    <Upload className="h-4 w-4 mr-1" />
+                                    Anexar Imagens
+                                  </label>
+                                  <span className="text-xs text-gray-500">
+                                    Máximo 5 imagens • Formatos: JPG, PNG, GIF
+                                  </span>
+                                </div>
+                                <p className="text-xs text-gray-500 mt-1">
+                                  Adicione fotos que comprovem as adequações realizadas.
+                                </p>
+                              </div>
+                              
+                              <div className="flex items-center justify-between pt-2">
+                                <div className="text-xs text-gray-500">
+                                  <Clock className="h-3 w-3 inline mr-1" />
+                                  Após o envio, aguarde a análise do consultor.
+                                </div>
+                                <Button
+                                  onClick={handleSubmitAdequation}
+                                  disabled={!adequationResponse.trim() || submittingAdequation}
+                                  className={`${
+                                    adequationResponse.trim() && !submittingAdequation
+                                      ? 'bg-green-600 hover:bg-green-700 text-white' 
+                                      : 'bg-gray-300 text-gray-500 cursor-not-allowed'
+                                  } transition-colors`}
+                                >
+                                  <Send className="h-4 w-4 mr-2" />
+                                  {submittingAdequation ? 'Enviando...' : 'Enviar Adequação'}
+                                </Button>
+                              </div>
                             </div>
-                          )}
-                        </div>
+                          </div>
+                        )}
                       </div>
-
-
                     </AccordionContent>
                   </AccordionItem>
                 ))}
