@@ -413,6 +413,17 @@ const ProjectWrite = () => {
         customAccordions: updatedAccordions,
         progresso: newProgress
       } : null);
+      
+      // Atualizar o formState local para refletir imediatamente a aprovação
+      setFormState(prev => ({
+        ...prev,
+        [subItemId]: {
+          ...prev[subItemId],
+          adequacyStatus: 'approved',
+          completed: true
+        }
+      }));
+      
       setEvaluatingAdequacy(null);
       toast.success(`Adequação aprovada com sucesso! Progresso: ${newProgress}%`);
     } catch (error) {
@@ -459,6 +470,18 @@ const ProjectWrite = () => {
         customAccordions: updatedAccordions,
         progresso: newProgress
       } : null);
+      
+      // Atualizar o formState local para refletir imediatamente a rejeição
+      setFormState(prev => ({
+        ...prev,
+        [subItemId]: {
+          ...prev[subItemId],
+          adequacyStatus: 'rejected',
+          adminRejectionReason: rejectionReason,
+          completed: false
+        }
+      }));
+      
       setEvaluatingAdequacy(null);
       setRejectionReason('');
       toast.success(`Adequação rejeitada. Cliente será notificado. Progresso: ${newProgress}%`);
@@ -917,7 +940,10 @@ const ProjectWrite = () => {
         <div className="flex items-center justify-between pt-4 border-t border-gray-100">
           <Button
             variant="outline"
-            onClick={() => setCurrentStep(prev => Math.max(0, prev - 1))}
+            onClick={() => {
+              setCurrentStep(prev => Math.max(0, prev - 1));
+              setActiveTabs({}); // Resetar todas as abas para visualização ao navegar
+            }}
             disabled={currentStep === 0}
             className="flex items-center space-x-2"
           >
@@ -955,7 +981,10 @@ const ProjectWrite = () => {
             </AlertDialog>
           ) : (
             <Button
-              onClick={() => setCurrentStep(prev => Math.min(totalSteps - 1, prev + 1))}
+              onClick={() => {
+                setCurrentStep(prev => Math.min(totalSteps - 1, prev + 1));
+                setActiveTabs({}); // Resetar todas as abas para visualização ao navegar
+              }}
               className="flex items-center space-x-2"
             >
               <span>Próximo</span>

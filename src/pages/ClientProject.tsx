@@ -26,7 +26,8 @@ import {
   ArrowLeft,
   ArrowRight,
   Home,
-  Eye
+  Eye,
+  Camera
 } from "lucide-react";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { toast } from "sonner";
@@ -349,16 +350,16 @@ const ClientProject = () => {
       // Atualizar estado local
       setProjectDetails(prev => {
         if (!prev) return null;
-        return { ...prev, customAccordions: updatedAccordions };
+        const updatedProject = { ...prev, customAccordions: updatedAccordions };
+        
+        // Recriar steps com os dados atualizados para garantir sincronização
+        const updatedSteps = createStepsFromAccordions(updatedAccordions);
+        setSteps(updatedSteps);
+        
+        return updatedProject;
       });
 
-      // Atualizar steps
-      setSteps(prev => prev.map(step => {
-        if (step.id === currentStepData.id) {
-          return { ...step, status: 'completed' };
-        }
-        return step;
-      }));
+      // Steps já foram atualizados na função setProjectDetails acima
 
       const revisionText = currentStepData.adequacyStatus === 'rejected' ? ' (Revisão)' : '';
       toast.success(`Adequação enviada com sucesso${revisionText}! Aguardando aprovação do consultor.`);
@@ -489,7 +490,7 @@ const ClientProject = () => {
             </div>
             <div className="flex items-center space-x-4">
               <div className="text-sm text-gray-600">
-                {userData?.nome || userData?.email}
+                {userData?.email}
               </div>
               <Badge variant="outline" className="text-xs">
                 Cliente
@@ -792,8 +793,8 @@ const ClientProject = () => {
             </div>
           )}
 
-          {/* Status da adequação enviada */}
-          {currentStepData.adequacyStatus && currentStepData.adequacyStatus !== 'rejected' && (
+          {/* Status da adequação enviada - APENAS para o passo atual */}
+          {currentStepData.adequacyReported && currentStepData.adequacyStatus && currentStepData.adequacyStatus !== 'rejected' && (
             <div className={`rounded-lg p-4 ${
               currentStepData.adequacyStatus === 'approved' ? 'bg-green-50 border border-green-200' :
               currentStepData.adequacyStatus === 'rejected' ? 'bg-red-50 border border-red-200' :
