@@ -126,6 +126,9 @@ const AdminProjectView = () => {
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedImage, setSelectedImage] = useState<string | null>(null);
   const [imageModalOpen, setImageModalOpen] = useState(false);
+  
+  // Estado para controle de páginas (igual ao client view)
+  const [currentPage, setCurrentPage] = useState<'view' | 'adequation'>('view');
 
   useEffect(() => {
     if (!userData) {
@@ -779,6 +782,32 @@ const AdminProjectView = () => {
                     </div>
                   </AccordionTrigger>
                   <AccordionContent className="space-y-4">
+                    {/* View Toggle Buttons - Inside Accordion */}
+                    <div className="flex items-center justify-center mb-4">
+                      <div className="flex items-center space-x-2 bg-gray-100 rounded-full p-1">
+                        <button
+                          onClick={() => setCurrentPage('view')}
+                          className={`px-3 py-1 rounded-full text-sm font-medium transition-colors ${
+                            currentPage === 'view' 
+                              ? 'bg-white text-blue-600 shadow-sm' 
+                              : 'text-gray-600 hover:text-gray-800'
+                          }`}
+                        >
+                          Visualização
+                        </button>
+                        <button
+                          onClick={() => setCurrentPage('adequation')}
+                          className={`px-3 py-1 rounded-full text-sm font-medium transition-colors ${
+                            currentPage === 'adequation' 
+                              ? 'bg-white text-green-600 shadow-sm' 
+                              : 'text-gray-600 hover:text-gray-800'
+                          }`}
+                        >
+                          Adequação
+                        </button>
+                      </div>
+                    </div>
+                    
                     {/* Informações da avaliação */}
                     <div className="bg-gray-50 rounded-lg p-3">
                       <h4 className="font-medium text-gray-900 mb-2">Avaliação</h4>
@@ -953,9 +982,9 @@ const AdminProjectView = () => {
             <span>Anterior</span>
           </Button>
 
-          <p className="text-sm text-gray-500">
-            Passo {currentStep + 1} de {totalSteps}
-          </p>
+          <div className="text-sm text-gray-500">
+            Passo {currentStep + 1} de {totalSteps} - Modo Administração
+          </div>
 
           <Button
             onClick={nextStep}

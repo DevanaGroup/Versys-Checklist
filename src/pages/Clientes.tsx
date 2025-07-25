@@ -508,55 +508,50 @@ const Clientes = () => {
         </CardContent>
       </Card>
 
-      {/* Tabela de Clientes */}
+      {/* Lista de Clientes */}
       <Card>
         <CardHeader>
           <CardTitle>Lista de Clientes ({clientesFiltrados.length})</CardTitle>
         </CardHeader>
         <CardContent>
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead>Nome</TableHead>
-                <TableHead>Empresa</TableHead>
-                <TableHead>E-mail</TableHead>
-                <TableHead>Telefone</TableHead>
-                <TableHead>Status</TableHead>
-                <TableHead>Projetos</TableHead>
-                <TableHead>Data Criação</TableHead>
-                <TableHead className="text-center">Ações</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {loading ? (
-                <TableRow>
-                  <TableCell colSpan={8} className="text-center py-8">
-                    Carregando clientes...
-                  </TableCell>
-                </TableRow>
-              ) : clientesFiltrados.length === 0 ? (
-                <TableRow>
-                  <TableCell colSpan={8} className="text-center py-8 text-gray-500">
-                    {filtroNome || filtroStatus !== "todos" 
-                      ? "Nenhum cliente encontrado com os filtros aplicados" 
-                      : "Nenhum cliente cadastrado"}
-                  </TableCell>
-                </TableRow>
-              ) : (
-                clientesFiltrados.map((cliente) => (
-                  <TableRow key={cliente.id}>
-                    <TableCell className="font-medium">
-                      {cliente.nome}
-                    </TableCell>
-                    <TableCell>{cliente.empresa}</TableCell>
-                    <TableCell>{cliente.email}</TableCell>
-                    <TableCell>{cliente.telefone || '-'}</TableCell>
-                    <TableCell>{getStatusBadge(cliente.status)}</TableCell>
-                    <TableCell>{cliente.projetos}</TableCell>
-                    <TableCell>{new Date(cliente.dataCriacao).toLocaleDateString('pt-BR')}</TableCell>
-                    <TableCell className="text-center">
-                      <div className="flex justify-center gap-2">
-                        {/* Botão Editar */}
+          {loading ? (
+            <div className="text-center py-8">
+              Carregando clientes...
+            </div>
+          ) : clientesFiltrados.length === 0 ? (
+            <div className="text-center py-8 text-gray-500">
+              {filtroNome || filtroStatus !== "todos" 
+                ? "Nenhum cliente encontrado com os filtros aplicados" 
+                : "Nenhum cliente cadastrado"}
+            </div>
+          ) : (
+            <>
+              {/* Layout Mobile/Tablet - Cards */}
+              <div className="block xl:hidden space-y-4">
+                {clientesFiltrados.map((cliente) => (
+                  <div key={cliente.id} className="border rounded-lg p-4 bg-white shadow-sm">
+                    <div className="flex justify-between items-start mb-3">
+                      <div className="flex-1">
+                        <h3 className="font-semibold text-lg text-gray-900">{cliente.nome}</h3>
+                        <p className="text-sm text-gray-600 mt-1">{cliente.empresa}</p>
+                        <p className="text-sm text-gray-500">{cliente.email}</p>
+                        {cliente.telefone && (
+                          <p className="text-sm text-gray-500">{cliente.telefone}</p>
+                        )}
+                      </div>
+                      <div className="flex flex-col items-end gap-2">
+                        {getStatusBadge(cliente.status)}
+                        <span className="text-xs text-gray-500 bg-gray-100 px-2 py-1 rounded">
+                          {cliente.projetos} projeto{cliente.projetos !== 1 ? 's' : ''}
+                        </span>
+                      </div>
+                    </div>
+                    
+                    <div className="flex justify-between items-center pt-3 border-t border-gray-200">
+                      <span className="text-xs text-gray-500">
+                        Criado em {new Date(cliente.dataCriacao).toLocaleDateString('pt-BR')}
+                      </span>
+                      <div className="flex gap-2">
                         <Button
                           variant="outline"
                           size="sm"
@@ -564,17 +559,16 @@ const Clientes = () => {
                             setClienteEditando({ ...cliente });
                             setDialogEdicaoAberto(true);
                           }}
+                          className="h-8 w-8 p-0"
                         >
                           <Edit className="h-4 w-4" />
                         </Button>
-
-                        {/* Botões de Status */}
                         {cliente.status === 'ativo' ? (
                           <Button
                             variant="outline"
                             size="sm"
                             onClick={() => handleAlterarStatus(cliente.id, 'suspenso')}
-                            className="text-orange-600 border-orange-600 hover:bg-orange-50"
+                            className="h-8 w-8 p-0 text-orange-600 border-orange-600 hover:bg-orange-50"
                           >
                             <UserX className="h-4 w-4" />
                           </Button>
@@ -583,19 +577,17 @@ const Clientes = () => {
                             variant="outline"
                             size="sm"
                             onClick={() => handleAlterarStatus(cliente.id, 'ativo')}
-                            className="text-green-600 border-green-600 hover:bg-green-50"
+                            className="h-8 w-8 p-0 text-green-600 border-green-600 hover:bg-green-50"
                           >
                             <UserCheck className="h-4 w-4" />
                           </Button>
                         )}
-
-                        {/* Botão Deletar */}
                         <AlertDialog>
                           <AlertDialogTrigger asChild>
                             <Button
                               variant="outline"
                               size="sm"
-                              className="text-red-600 border-red-600 hover:bg-red-50"
+                              className="h-8 w-8 p-0 text-red-600 border-red-600 hover:bg-red-50"
                               disabled={cliente.projetos > 0}
                               title={cliente.projetos > 0 ? 'Não é possível deletar cliente com projetos ativos' : 'Deletar cliente'}
                             >
@@ -622,12 +614,107 @@ const Clientes = () => {
                           </AlertDialogContent>
                         </AlertDialog>
                       </div>
-                    </TableCell>
-                  </TableRow>
-                ))
-              )}
-            </TableBody>
-          </Table>
+                    </div>
+                  </div>
+                ))}
+              </div>
+
+              {/* Layout Desktop - Tabela */}
+              <div className="hidden xl:block">
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>Nome</TableHead>
+                      <TableHead>Empresa</TableHead>
+                      <TableHead>E-mail</TableHead>
+                      <TableHead>Telefone</TableHead>
+                      <TableHead>Status</TableHead>
+                      <TableHead>Projetos</TableHead>
+                      <TableHead>Data Criação</TableHead>
+                      <TableHead className="text-center">Ações</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {clientesFiltrados.map((cliente) => (
+                      <TableRow key={cliente.id}>
+                        <TableCell className="font-medium">{cliente.nome}</TableCell>
+                        <TableCell>{cliente.empresa}</TableCell>
+                        <TableCell>{cliente.email}</TableCell>
+                        <TableCell>{cliente.telefone || '-'}</TableCell>
+                        <TableCell>{getStatusBadge(cliente.status)}</TableCell>
+                        <TableCell>{cliente.projetos}</TableCell>
+                        <TableCell>{new Date(cliente.dataCriacao).toLocaleDateString('pt-BR')}</TableCell>
+                        <TableCell className="text-center">
+                          <div className="flex justify-center gap-2">
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              onClick={() => {
+                                setClienteEditando({ ...cliente });
+                                setDialogEdicaoAberto(true);
+                              }}
+                            >
+                              <Edit className="h-4 w-4" />
+                            </Button>
+                            {cliente.status === 'ativo' ? (
+                              <Button
+                                variant="outline"
+                                size="sm"
+                                onClick={() => handleAlterarStatus(cliente.id, 'suspenso')}
+                                className="text-orange-600 border-orange-600 hover:bg-orange-50"
+                              >
+                                <UserX className="h-4 w-4" />
+                              </Button>
+                            ) : (
+                              <Button
+                                variant="outline"
+                                size="sm"
+                                onClick={() => handleAlterarStatus(cliente.id, 'ativo')}
+                                className="text-green-600 border-green-600 hover:bg-green-50"
+                              >
+                                <UserCheck className="h-4 w-4" />
+                              </Button>
+                            )}
+                            <AlertDialog>
+                              <AlertDialogTrigger asChild>
+                                <Button
+                                  variant="outline"
+                                  size="sm"
+                                  className="text-red-600 border-red-600 hover:bg-red-50"
+                                  disabled={cliente.projetos > 0}
+                                  title={cliente.projetos > 0 ? 'Não é possível deletar cliente com projetos ativos' : 'Deletar cliente'}
+                                >
+                                  <Trash2 className="h-4 w-4" />
+                                </Button>
+                              </AlertDialogTrigger>
+                              <AlertDialogContent>
+                                <AlertDialogHeader>
+                                  <AlertDialogTitle>Confirmar Exclusão</AlertDialogTitle>
+                                  <AlertDialogDescription>
+                                    Tem certeza que deseja deletar o cliente "{cliente.nome}"?
+                                    Esta ação não pode ser desfeita e também removerá o acesso do usuário ao sistema.
+                                  </AlertDialogDescription>
+                                </AlertDialogHeader>
+                                <AlertDialogFooter>
+                                  <AlertDialogCancel>Cancelar</AlertDialogCancel>
+                                  <AlertDialogAction
+                                    onClick={() => handleDeletarCliente(cliente.id)}
+                                    className="bg-red-600 hover:bg-red-700"
+                                  >
+                                    Deletar
+                                  </AlertDialogAction>
+                                </AlertDialogFooter>
+                              </AlertDialogContent>
+                            </AlertDialog>
+                          </div>
+                        </TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              </div>
+            </>
+          )}
         </CardContent>
       </Card>
 

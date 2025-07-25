@@ -145,30 +145,36 @@ const ClientProjectView = () => {
       setProjectDetails(project);
       setProjectSteps(steps);
       
-      // Inicializar formState com dados existentes
+      // Inicializar formState com dados existentes - usando customAccordions para obter dados completos
       const initialState: Record<string, any> = {};
-      steps.forEach(step => {
-        step.subItems.forEach(sub => {
-          // Validar e limpar dados de adequação existentes
-          const adequacyData = validateAndCleanAdequationData({
-            adequacyReported: sub.adequacyReported,
-            adequacyDetails: sub.adequacyDetails,
-            adequacyImages: sub.adequacyImages,
-            adequacyDate: sub.adequacyDate,
-            adequacyStatus: sub.adequacyStatus,
-            adminRejectionReason: sub.adminRejectionReason,
-            adequacyRevisionCount: sub.adequacyRevisionCount
-          });
+      accordions.forEach(accordion => {
+        if (accordion.items && Array.isArray(accordion.items)) {
+          accordion.items.forEach(item => {
+            if (item.subItems && Array.isArray(item.subItems)) {
+              item.subItems.forEach(sub => {
+                // Validar e limpar dados de adequação existentes
+                const adequacyData = validateAndCleanAdequationData({
+                  adequacyReported: sub.adequacyReported,
+                  adequacyDetails: sub.adequacyDetails,
+                  adequacyImages: sub.adequacyImages,
+                  adequacyDate: sub.adequacyDate,
+                  adequacyStatus: sub.adequacyStatus,
+                  adminRejectionReason: sub.adminRejectionReason,
+                  adequacyRevisionCount: sub.adequacyRevisionCount
+                });
 
-          initialState[sub.id] = {
-            evaluation: sub.evaluation || '',
-            currentSituation: sub.currentSituation || '',
-            clientGuidance: sub.clientGuidance || '',
-            photoData: sub.photoData || null,
-            // Dados de adequação validados
-            ...adequacyData
-          };
-        });
+                initialState[sub.id] = {
+                  evaluation: sub.evaluation || '',
+                  currentSituation: sub.currentSituation || '',
+                  clientGuidance: sub.clientGuidance || '',
+                  photoData: sub.photoData || null,
+                  // Dados de adequação validados
+                  ...adequacyData
+                };
+              });
+            }
+          });
+        }
       });
       setFormState(initialState);
     } catch (error) {
@@ -374,15 +380,26 @@ const ClientProjectView = () => {
     try {
       setSubmittingAdequation(true);
       
-      // Converter imagens para base64
-      const imageBase64Array: string[] = [];
+      // Upload imagens para Firebase Storage e obter URLs
+      const imageUrls: string[] = [];
+      const storage = getStorage();
+      
       for (const file of adequationImages) {
-        const base64 = await new Promise<string>((resolve) => {
-          const reader = new FileReader();
-          reader.onload = () => resolve(reader.result as string);
-          reader.readAsDataURL(file);
-        });
-        imageBase64Array.push(base64);
+        try {
+          // Criar referência única para cada imagem
+          const timestamp = Date.now();
+          const fileName = `adequation_${currentSubItemId}_${timestamp}_${Math.random().toString(36).substr(2, 9)}.${file.name.split('.').pop()}`;
+          const storageRef = ref(storage, `adequation-images/${fileName}`);
+          
+          // Upload da imagem
+          const snapshot = await uploadBytes(storageRef, file);
+          const downloadURL = await getDownloadURL(snapshot.ref);
+          imageUrls.push(downloadURL);
+        } catch (uploadError) {
+          console.error('Erro ao fazer upload da imagem:', uploadError);
+          toast.error('Erro ao fazer upload de uma das imagens');
+          return;
+        }
       }
 
       // Obter o subItem atual
@@ -420,7 +437,7 @@ const ClientProjectView = () => {
                       ...subItem,
                       adequacyReported: true,
                       adequacyDetails: adequationResponse,
-                      adequacyImages: imageBase64Array,
+                      adequacyImages: imageUrls,
                       adequacyDate: new Date().toISOString(),
                       adequacyStatus: 'pending',
                       adequacyRevisionCount: newRevisionCount
@@ -452,7 +469,7 @@ const ClientProjectView = () => {
           ...prev[currentSubItemId],
           adequacyReported: true,
           adequacyDetails: adequationResponse,
-          adequacyImages: imageBase64Array,
+          adequacyImages: imageUrls,
           adequacyDate: new Date().toISOString(),
           adequacyStatus: 'pending',
           adequacyRevisionCount: newRevisionCount

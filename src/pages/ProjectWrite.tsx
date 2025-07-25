@@ -126,11 +126,14 @@ const ProjectWrite = () => {
           });
         }
       });
+      // Recalcular progresso baseado no estado atual dos subitens
+      const currentProgress = calculateProgress(accordions);
+      
       setProjectDetails({
         id: projectDoc.id,
         nome: projectData.nome,
         status: projectData.status || 'Iniciado',
-        progresso: projectData.progresso || 0,
+        progresso: currentProgress,
         dataInicio: projectData.dataInicio,
         previsaoConclusao: projectData.previsaoConclusao,
         consultor: projectData.consultor || 'Não definido',
@@ -139,6 +142,11 @@ const ProjectWrite = () => {
         customAccordions: accordions,
         itens: projectData.itens || []
       });
+      
+      // Atualizar progresso no Firebase se estiver diferente
+      if (currentProgress !== (projectData.progresso || 0)) {
+        updateDoc(projectRef, { progresso: currentProgress }).catch(console.error);
+      }
       setProjectSteps(steps);
       // Inicializa o estado do formulário
       const initialForm: Record<string, any> = {};
@@ -174,16 +182,119 @@ const ProjectWrite = () => {
   const handlePhoto = async (subId: string, file: File) => {
     if (!projectDetails) return;
     setPhotoUploading(prev => ({ ...prev, [subId]: true }));
+    
     try {
-      // Captura localização
+      console.log('🔄 Iniciando captura de foto e localização...');
+      
+      // Detectar se é mobile
+      const isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
+      console.log('📱 Dispositivo móvel detectado:', isMobile);
+      
+      // Função otimizada para mobile
       const getLocation = () => new Promise<{ latitude: number, longitude: number }>((resolve, reject) => {
-        if (!navigator.geolocation) return resolve({ latitude: 0, longitude: 0 });
+        console.log('📍 Verificando suporte à geolocalização...');
+        
+        if (!navigator.geolocation) {
+          console.error('❌ Geolocalização não suportada pelo navegador');
+          toast.error('Geolocalização não suportada');
+          return resolve({ latitude: 0, longitude: 0 });
+        }
+        
+        console.log('✅ Geolocalização suportada!');
+        
+        // Configurações otimizadas para mobile
+        const mobileOptions = {
+          enableHighAccuracy: isMobile, // Apenas em mobile
+          timeout: isMobile ? 20000 : 10000, // Mais tempo em mobile
+          maximumAge: 0 // Sempre nova leitura
+        };
+        
+        console.log('📡 Solicitando localização com opções mobile:', mobileOptions);
+        
+        // Forçar solicitação imediata
         navigator.geolocation.getCurrentPosition(
-          (pos) => resolve({ latitude: pos.coords.latitude, longitude: pos.coords.longitude }),
-          () => resolve({ latitude: 0, longitude: 0 })
+          (pos) => {
+            const lat = pos.coords.latitude;
+            const lng = pos.coords.longitude;
+            const accuracy = pos.coords.accuracy;
+            
+            console.log('🎯 SUCESSO! Localização capturada:');
+            console.log(`   📍 Latitude: ${lat}`);
+            console.log(`   📍 Longitude: ${lng}`);
+            console.log(`   🎯 Precisão: ${accuracy} metros`);
+            console.log(`   ⏰ Timestamp: ${new Date(pos.timestamp).toLocaleString()}`);
+            
+            // Toast diferenciado para mobile
+            if (isMobile) {
+              toast.success(`📱 Localização mobile capturada! ${Math.round(accuracy)}m`);
+            } else {
+              toast.success(`💻 Localização desktop capturada! ${Math.round(accuracy)}m`);
+            }
+            
+            resolve({ latitude: lat, longitude: lng });
+          },
+          (error) => {
+            console.error('❌ Erro na captura:', error.code, error.message);
+            
+            let errorMsg = '';
+            switch(error.code) {
+              case error.PERMISSION_DENIED:
+                errorMsg = 'Permissão negada';
+                if (isMobile) {
+                  toast.error('📱 Permissão de localização negada. Habilite o GPS e permita o acesso no navegador.');
+                } else {
+                  toast.error('Permissão de localização negada.');
+                }
+                break;
+              case error.POSITION_UNAVAILABLE:
+                errorMsg = 'GPS indisponível';
+                if (isMobile) {
+                  toast.warning('📱 GPS indisponível. Verifique se o GPS está ativado.');
+                } else {
+                  toast.warning('Localização indisponível.');
+                }
+                break;
+              case error.TIMEOUT:
+                errorMsg = 'Timeout';
+                if (isMobile) {
+                  toast.warning('📱 Timeout na localização. Tentando novamente...');
+                } else {
+                  toast.warning('Timeout na localização.');
+                }
+                break;
+              default:
+                errorMsg = 'Erro desconhecido';
+            }
+            
+            console.log(`🔄 Tentativa de fallback para ${isMobile ? 'mobile' : 'desktop'}...`);
+            
+            // Fallback com configurações mais simples
+            navigator.geolocation.getCurrentPosition(
+              (pos) => {
+                const lat = pos.coords.latitude;
+                const lng = pos.coords.longitude;
+                console.log('🎯 SUCESSO no fallback!');
+                console.log(`   📍 Latitude: ${lat}`);
+                console.log(`   📍 Longitude: ${lng}`);
+                
+                toast.success('✅ Localização capturada no fallback!');
+                resolve({ latitude: lat, longitude: lng });
+              },
+              (error2) => {
+                console.error('❌ Falha total:', error2.code, error2.message);
+                toast.warning(`Foto salva sem localização: ${errorMsg}`);
+                resolve({ latitude: 0, longitude: 0 });
+              },
+              { enableHighAccuracy: false, timeout: 8000, maximumAge: 60000 }
+            );
+          },
+          mobileOptions
         );
       });
       const { latitude, longitude } = await getLocation();
+      
+      console.log(`💾 Salvando foto com coordenadas: ${latitude}, ${longitude}`);
+      
       // Upload para o Storage
       const storage = getStorage();
       const storageRef = ref(storage, `projetos/${projectDetails.id}/subitens/${subId}/${Date.now()}_${file.name}`);
@@ -199,7 +310,13 @@ const ProjectWrite = () => {
         }
       }));
       setPhotoPreview(prev => ({ ...prev, [subId]: url }));
-      toast.success('Foto enviada com sucesso!');
+      
+      // Mensagem final de sucesso
+      if (latitude !== 0 && longitude !== 0) {
+        toast.success(`✅ Foto salva com localização: ${latitude.toFixed(6)}, ${longitude.toFixed(6)}`);
+      } else {
+        toast.success('✅ Foto salva (sem localização)');
+      }
     } catch (err) {
       toast.error('Erro ao enviar foto');
     } finally {
@@ -242,6 +359,25 @@ const ProjectWrite = () => {
     setShowSaveConfirmation(true);
   };
 
+  // Função para calcular progresso do projeto
+  const calculateProgress = (accordions: any[]): number => {
+    let totalSubItems = 0;
+    let completedSubItems = 0;
+    
+    accordions.forEach(accordion => {
+      accordion.items.forEach(item => {
+        item.subItems.forEach(subItem => {
+          totalSubItems++;
+          if (subItem.completed || subItem.adequacyStatus === 'approved') {
+            completedSubItems++;
+          }
+        });
+      });
+    });
+    
+    return totalSubItems > 0 ? Math.round((completedSubItems / totalSubItems) * 100) : 0;
+  };
+
   // Funções para adequação
   const approveAdequacy = async (subItemId: string) => {
     if (!projectDetails) return;
@@ -264,13 +400,21 @@ const ProjectWrite = () => {
         }))
       }));
 
+      // Calcular novo progresso
+      const newProgress = calculateProgress(updatedAccordions || []);
+
       await updateDoc(doc(db, 'projetos', projectDetails.id), {
-        customAccordions: updatedAccordions
+        customAccordions: updatedAccordions,
+        progresso: newProgress
       });
 
-      setProjectDetails(prev => prev ? { ...prev, customAccordions: updatedAccordions } : null);
+      setProjectDetails(prev => prev ? { 
+        ...prev, 
+        customAccordions: updatedAccordions,
+        progresso: newProgress
+      } : null);
       setEvaluatingAdequacy(null);
-      toast.success('Adequação aprovada com sucesso!');
+      toast.success(`Adequação aprovada com sucesso! Progresso: ${newProgress}%`);
     } catch (error) {
       console.error('Erro ao aprovar adequação:', error);
       toast.error('Erro ao aprovar adequação');
@@ -302,14 +446,22 @@ const ProjectWrite = () => {
         }))
       }));
 
+      // Calcular novo progresso
+      const newProgress = calculateProgress(updatedAccordions || []);
+
       await updateDoc(doc(db, 'projetos', projectDetails.id), {
-        customAccordions: updatedAccordions
+        customAccordions: updatedAccordions,
+        progresso: newProgress
       });
 
-      setProjectDetails(prev => prev ? { ...prev, customAccordions: updatedAccordions } : null);
+      setProjectDetails(prev => prev ? { 
+        ...prev, 
+        customAccordions: updatedAccordions,
+        progresso: newProgress
+      } : null);
       setEvaluatingAdequacy(null);
       setRejectionReason('');
-      toast.success('Adequação rejeitada. Cliente será notificado.');
+      toast.success(`Adequação rejeitada. Cliente será notificado. Progresso: ${newProgress}%`);
     } catch (error) {
       console.error('Erro ao rejeitar adequação:', error);
       toast.error('Erro ao rejeitar adequação');
@@ -421,26 +573,6 @@ const ProjectWrite = () => {
                 {currentItem.category}
               </Badge>
             </CardTitle>
-            
-            {/* Tabs de Visualização/Adequação */}
-            <div className="flex space-x-1 mb-4">
-              <Button
-                variant={activeTabs[currentItem.id] !== 'adequacao' ? 'default' : 'outline'}
-                size="sm"
-                onClick={() => handleTabChange(currentItem.id, 'visualizacao')}
-                className="flex-1"
-              >
-                Visualização
-              </Button>
-              <Button
-                variant={activeTabs[currentItem.id] === 'adequacao' ? 'default' : 'outline'}
-                size="sm"
-                onClick={() => handleTabChange(currentItem.id, 'adequacao')}
-                className="flex-1"
-              >
-                Adequação
-              </Button>
-            </div>
           </CardHeader>
           <CardContent>
             {currentItem.subItems && currentItem.subItems.length > 0 ? (
@@ -454,6 +586,32 @@ const ProjectWrite = () => {
                       </div>
                     </AccordionTrigger>
                     <AccordionContent className="space-y-4">
+                      {/* View Toggle Buttons - Exactly like client view */}
+                      <div className="flex items-center justify-center mb-4">
+                        <div className="flex items-center space-x-2 bg-gray-100 rounded-full p-1">
+                          <button
+                            onClick={() => handleTabChange(sub.id, 'visualizacao')}
+                            className={`px-3 py-1 rounded-full text-sm font-medium transition-colors ${
+                              (!activeTabs[sub.id] || activeTabs[sub.id] === 'visualizacao')
+                                ? 'bg-white text-blue-600 shadow-sm' 
+                                : 'text-gray-600 hover:text-gray-800'
+                            }`}
+                          >
+                            Visualização
+                          </button>
+                          <button
+                            onClick={() => handleTabChange(sub.id, 'adequacao')}
+                            className={`px-3 py-1 rounded-full text-sm font-medium transition-colors ${
+                              activeTabs[sub.id] === 'adequacao'
+                                ? 'bg-white text-green-600 shadow-sm' 
+                                : 'text-gray-600 hover:text-gray-800'
+                            }`}
+                          >
+                            Adequação
+                          </button>
+                        </div>
+                      </div>
+                      
                       {/* Conteúdo da aba Visualização */}
                       {(!activeTabs[sub.id] || activeTabs[sub.id] === 'visualizacao') && (
                         <div className="space-y-2">
@@ -483,14 +641,109 @@ const ProjectWrite = () => {
                             placeholder="Orientação para o cliente..."
                           />
                           <Label>Foto (opcional)</Label>
-                          <div
-                            className={`border-2 border-dashed rounded-lg p-4 flex flex-col items-center justify-center cursor-pointer transition hover:border-purple-400 bg-gray-50 relative ${photoUploading[sub.id] ? 'opacity-60 pointer-events-none' : ''}`}
-                            style={{ minHeight: 120 }}
-                            onClick={() => {
-                              if (!photoUploading[sub.id]) {
-                                document.getElementById(`file-input-${sub.id}`)?.click();
+                          {formState[sub.id]?.photoData?.url ? (
+                            <div className="border-2 border-dashed rounded-lg p-4 bg-gray-50 relative">
+                              <img src={formState[sub.id].photoData.url} alt="Foto do subitem" className="max-h-40 rounded border mb-2 mx-auto block" />
+                              <div className="flex gap-2 justify-center mt-2">
+                                <Button
+                                  type="button"
+                                  variant="outline"
+                                  size="sm"
+                                  onClick={() => {
+                                    document.getElementById(`camera-input-${sub.id}`)?.click();
+                                  }}
+                                  disabled={photoUploading[sub.id]}
+                                >
+                                  <Camera className="w-4 h-4 mr-2" />
+                                  Nova Foto
+                                </Button>
+                                <Button
+                                  type="button"
+                                  variant="outline"
+                                  size="sm"
+                                  onClick={() => {
+                                    const newFormState = { ...formState };
+                                    if (newFormState[sub.id]) {
+                                      newFormState[sub.id].photoData = null;
+                                    }
+                                    setFormState(newFormState);
+                                  }}
+                                  disabled={photoUploading[sub.id]}
+                                  className="text-red-600 border-red-600 hover:bg-red-50"
+                                >
+                                  Remover
+                                </Button>
+                              </div>
+                            </div>
+                          ) : (
+                            <div className="space-y-3">
+                              <div className="grid grid-cols-2 gap-3">
+                                <Button
+                                  type="button"
+                                  variant="outline"
+                                  className="h-20 flex flex-col items-center justify-center gap-2 border-2 border-dashed hover:border-purple-400 hover:bg-purple-50"
+                                  onClick={() => {
+                                    document.getElementById(`camera-input-${sub.id}`)?.click();
+                                  }}
+                                  disabled={photoUploading[sub.id]}
+                                >
+                                  <Camera className="w-6 h-6 text-purple-600" />
+                                  <span className="text-sm font-medium">Tirar Foto</span>
+                                </Button>
+                                <Button
+                                  type="button"
+                                  variant="outline"
+                                  className="h-20 flex flex-col items-center justify-center gap-2 border-2 border-dashed hover:border-blue-400 hover:bg-blue-50"
+                                  onClick={() => {
+                                    document.getElementById(`gallery-input-${sub.id}`)?.click();
+                                  }}
+                                  disabled={photoUploading[sub.id]}
+                                >
+                                  <svg className="w-6 h-6 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                                  </svg>
+                                  <span className="text-sm font-medium">Da Galeria</span>
+                                </Button>
+                              </div>
+                              <p className="text-xs text-gray-500 text-center">
+                                Ou arraste uma imagem aqui
+                              </p>
+                            </div>
+                          )}
+                          
+                          {/* Input para câmera - Múltiplas abordagens para compatibilidade */}
+                          <input
+                            id={`camera-input-${sub.id}`}
+                            type="file"
+                            accept="image/*,image/jpeg,image/png,image/gif,image/webp"
+                            capture="environment"
+                            className="hidden"
+                            disabled={photoUploading[sub.id]}
+                            onChange={e => {
+                              if (e.target.files && e.target.files[0]) {
+                                handlePhoto(sub.id, e.target.files[0]);
                               }
                             }}
+                          />
+                          
+
+                          {/* Input para galeria */}
+                          <input
+                            id={`gallery-input-${sub.id}`}
+                            type="file"
+                            accept="image/*"
+                            className="hidden"
+                            disabled={photoUploading[sub.id]}
+                            onChange={e => {
+                              if (e.target.files && e.target.files[0]) {
+                                handlePhoto(sub.id, e.target.files[0]);
+                              }
+                            }}
+                          />
+                          
+                          {/* Drag and drop area for gallery input */}
+                          <div
+                            className="border-2 border-dashed rounded-lg p-2 text-center text-xs text-gray-500 mt-2"
                             onDragOver={e => e.preventDefault()}
                             onDrop={e => {
                               e.preventDefault();
@@ -499,31 +752,17 @@ const ProjectWrite = () => {
                               if (file) handlePhoto(sub.id, file);
                             }}
                           >
-                            {formState[sub.id]?.photoData?.url ? (
-                              <img src={formState[sub.id].photoData.url} alt="Foto do subitem" className="max-h-40 rounded border mb-2" />
-                            ) : (
-                              <>
-                                <Camera className="w-8 h-8 text-purple-400 mb-2" />
-                                <span className="text-sm text-gray-600 text-center">Clique ou arraste uma imagem aqui<br/>para tirar/enviar foto</span>
-                              </>
-                            )}
-                            <input
-                              id={`file-input-${sub.id}`}
-                              type="file"
-                              accept="image/*"
-                              capture="environment"
-                              className="hidden"
-                              disabled={photoUploading[sub.id]}
-                              onChange={e => {
-                                if (e.target.files && e.target.files[0]) {
-                                  handlePhoto(sub.id, e.target.files[0]);
-                                }
-                              }}
-                            />
-                            {photoUploading[sub.id] && <span className="absolute bottom-2 left-0 right-0 text-xs text-center text-gray-500">Enviando foto...</span>}
+                            Ou arraste uma imagem aqui
                           </div>
+                          
+                          {photoUploading[sub.id] && (
+                            <div className="text-xs text-center text-gray-500 mt-2">
+                              Enviando foto...
+                            </div>
+                          )}
+                          
                           {formState[sub.id]?.photoData?.url && (
-                            <div className="text-xs text-gray-500 mt-1">
+                            <div className="text-xs text-gray-500 mt-2 p-2 bg-gray-50 rounded">
                               <div>Latitude: {formState[sub.id].photoData.latitude}</div>
                               <div>Longitude: {formState[sub.id].photoData.longitude}</div>
                               <div>Data: {new Date(formState[sub.id].photoData.createdAt).toLocaleString('pt-BR')}</div>
