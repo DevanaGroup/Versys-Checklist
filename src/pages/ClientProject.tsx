@@ -97,7 +97,7 @@ const ClientProject = () => {
   const wizardSteps: WizardStep[] = steps.map((s: any) => ({
     label: s.title,
     subtitle: s.category,
-    completed: currentStep > (s.stepNumber - 1),
+    completed: s.adequacyStatus === 'approved', // Só marca como concluído se foi aprovado pelo admin
   }));
   const [clientResponse, setClientResponse] = useState('');
   const [clientImages, setClientImages] = useState<File[]>([]);

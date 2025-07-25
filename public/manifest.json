@@ -5,7 +5,7 @@
   "description": "Sistema de Gestão VERSYS para Consultoria em Segurança Portuária",
   "start_url": "/",
   "display": "standalone",
-  "background_color": "#1e40af",
+  "background_color": "#000000",
   "theme_color": "#1e40af",
   "orientation": "landscape-primary",
   "icons": [

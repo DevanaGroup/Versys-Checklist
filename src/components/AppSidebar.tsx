@@ -30,10 +30,6 @@ const adminMenuItems = [{
   title: "Colaboradores",
   url: "/colaboradores",
   icon: UserCheck
-}, {
-  title: "Configurações",
-  url: "/configuracoes",
-  icon: Settings
 }];
 
 const clientMenuItems = [{
