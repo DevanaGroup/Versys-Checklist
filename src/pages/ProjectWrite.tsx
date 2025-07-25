@@ -12,7 +12,7 @@ import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, 
 import { toast } from "sonner";
 import { db } from "@/lib/firebase";
 import { doc, getDoc, updateDoc } from "firebase/firestore";
-import { ArrowLeft, ArrowRight, CheckCircle, Camera } from "lucide-react";
+import { ArrowLeft, ArrowRight, CheckCircle, Camera, ThumbsUp, ThumbsDown, Clock, XCircle, AlertTriangle, Eye, ZoomIn, X } from "lucide-react";
 import { getStorage, ref, uploadBytes, getDownloadURL } from "firebase/storage";
 
 interface SubItem {
@@ -28,6 +28,14 @@ interface SubItem {
     latitude: number;
     longitude: number;
   };
+  // Campos para adequação
+  adequacyReported?: boolean;
+  adequacyDetails?: string;
+  adequacyImages?: string[];
+  adequacyDate?: string;
+  adequacyStatus?: "pending" | "approved" | "rejected";
+  adminRejectionReason?: string;
+  adequacyRevisionCount?: number;
 }
 
 interface ProjectItem {
@@ -74,6 +82,16 @@ const ProjectWrite = () => {
   const [photoUploading, setPhotoUploading] = useState<Record<string, boolean>>({});
   const [photoPreview, setPhotoPreview] = useState<Record<string, string>>({});
   const [showSaveConfirmation, setShowSaveConfirmation] = useState(false);
+  
+  // Estados para adequação
+  const [evaluatingAdequacy, setEvaluatingAdequacy] = useState<string | null>(null);
+  const [rejectionReason, setRejectionReason] = useState('');
+  const [selectedImage, setSelectedImage] = useState<string | null>(null);
+  const [imageModalOpen, setImageModalOpen] = useState(false);
+  const [currentView, setCurrentView] = useState<'evaluation' | 'adequacy'>('evaluation');
+
+  // Adicione o estado para controlar a aba ativa de cada subitem
+  const [activeTabs, setActiveTabs] = useState<Record<string, 'visualizacao' | 'adequacao'>>({});
 
   useEffect(() => {
     if (!id) {
@@ -224,6 +242,100 @@ const ProjectWrite = () => {
     setShowSaveConfirmation(true);
   };
 
+  // Funções para adequação
+  const approveAdequacy = async (subItemId: string) => {
+    if (!projectDetails) return;
+    
+    try {
+      const updatedAccordions = projectDetails.customAccordions?.map(accordion => ({
+        ...accordion,
+        items: accordion.items.map(item => ({
+          ...item,
+          subItems: item.subItems.map(subItem => {
+            if (subItem.id === subItemId) {
+              return {
+                ...subItem,
+                adequacyStatus: 'approved' as const,
+                completed: true
+              };
+            }
+            return subItem;
+          })
+        }))
+      }));
+
+      await updateDoc(doc(db, 'projetos', projectDetails.id), {
+        customAccordions: updatedAccordions
+      });
+
+      setProjectDetails(prev => prev ? { ...prev, customAccordions: updatedAccordions } : null);
+      setEvaluatingAdequacy(null);
+      toast.success('Adequação aprovada com sucesso!');
+    } catch (error) {
+      console.error('Erro ao aprovar adequação:', error);
+      toast.error('Erro ao aprovar adequação');
+    }
+  };
+
+  const rejectAdequacy = async (subItemId: string) => {
+    if (!projectDetails || !rejectionReason.trim()) {
+      toast.error('Por favor, informe o motivo da rejeição.');
+      return;
+    }
+    
+    try {
+      const updatedAccordions = projectDetails.customAccordions?.map(accordion => ({
+        ...accordion,
+        items: accordion.items.map(item => ({
+          ...item,
+          subItems: item.subItems.map(subItem => {
+            if (subItem.id === subItemId) {
+              return {
+                ...subItem,
+                adequacyStatus: 'rejected' as const,
+                adminRejectionReason: rejectionReason,
+                completed: false
+              };
+            }
+            return subItem;
+          })
+        }))
+      }));
+
+      await updateDoc(doc(db, 'projetos', projectDetails.id), {
+        customAccordions: updatedAccordions
+      });
+
+      setProjectDetails(prev => prev ? { ...prev, customAccordions: updatedAccordions } : null);
+      setEvaluatingAdequacy(null);
+      setRejectionReason('');
+      toast.success('Adequação rejeitada. Cliente será notificado.');
+    } catch (error) {
+      console.error('Erro ao rejeitar adequação:', error);
+      toast.error('Erro ao rejeitar adequação');
+    }
+  };
+
+  const cancelEvaluation = () => {
+    setEvaluatingAdequacy(null);
+    setRejectionReason('');
+  };
+
+  const openImageModal = (imageUrl: string) => {
+    setSelectedImage(imageUrl);
+    setImageModalOpen(true);
+  };
+
+  const closeImageModal = () => {
+    setSelectedImage(null);
+    setImageModalOpen(false);
+  };
+
+  // Função para alternar a aba de um subitem
+  const handleTabChange = (subId: string, tab: 'visualizacao' | 'adequacao') => {
+    setActiveTabs(prev => ({ ...prev, [subId]: tab }));
+  };
+
   if (loading) {
     return (
       <div className="flex items-center justify-center h-full p-10">
@@ -309,6 +421,26 @@ const ProjectWrite = () => {
                 {currentItem.category}
               </Badge>
             </CardTitle>
+            
+            {/* Tabs de Visualização/Adequação */}
+            <div className="flex space-x-1 mb-4">
+              <Button
+                variant={activeTabs[currentItem.id] !== 'adequacao' ? 'default' : 'outline'}
+                size="sm"
+                onClick={() => handleTabChange(currentItem.id, 'visualizacao')}
+                className="flex-1"
+              >
+                Visualização
+              </Button>
+              <Button
+                variant={activeTabs[currentItem.id] === 'adequacao' ? 'default' : 'outline'}
+                size="sm"
+                onClick={() => handleTabChange(currentItem.id, 'adequacao')}
+                className="flex-1"
+              >
+                Adequação
+              </Button>
+            </div>
           </CardHeader>
           <CardContent>
             {currentItem.subItems && currentItem.subItems.length > 0 ? (
@@ -322,86 +454,216 @@ const ProjectWrite = () => {
                       </div>
                     </AccordionTrigger>
                     <AccordionContent className="space-y-4">
-                      <div className="space-y-2">
-                        <Label>Avaliação</Label>
-                        <RadioGroup
-                          value={formState[sub.id]?.evaluation || ''}
-                          onValueChange={val => handleChange(sub.id, 'evaluation', val)}
-                          className="flex flex-row space-x-4"
-                        >
-                          <RadioGroupItem value="nc" id={`nc-${sub.id}`} />
-                          <Label htmlFor={`nc-${sub.id}`}>NC</Label>
-                          <RadioGroupItem value="r" id={`r-${sub.id}`} />
-                          <Label htmlFor={`r-${sub.id}`}>R</Label>
-                          <RadioGroupItem value="na" id={`na-${sub.id}`} />
-                          <Label htmlFor={`na-${sub.id}`}>NA</Label>
-                        </RadioGroup>
-                      </div>
-                      <div className="space-y-2">
-                        <Label>Situação atual</Label>
-                        <Textarea
-                          value={formState[sub.id]?.currentSituation || ''}
-                          onChange={e => handleChange(sub.id, 'currentSituation', e.target.value)}
-                          placeholder="Situação atual..."
-                        />
-                      </div>
-                      <div className="space-y-2">
-                        <Label>Orientação para o cliente</Label>
-                        <Textarea
-                          value={formState[sub.id]?.clientGuidance || ''}
-                          onChange={e => handleChange(sub.id, 'clientGuidance', e.target.value)}
-                          placeholder="Orientação para o cliente..."
-                        />
-                      </div>
-                      <div className="space-y-2">
-                        <Label>Foto (opcional)</Label>
-                        <div
-                          className={`border-2 border-dashed rounded-lg p-4 flex flex-col items-center justify-center cursor-pointer transition hover:border-purple-400 bg-gray-50 relative ${photoUploading[sub.id] ? 'opacity-60 pointer-events-none' : ''}`}
-                          style={{ minHeight: 120 }}
-                          onClick={() => {
-                            if (!photoUploading[sub.id]) {
-                              document.getElementById(`file-input-${sub.id}`)?.click();
-                            }
-                          }}
-                          onDragOver={e => e.preventDefault()}
-                          onDrop={e => {
-                            e.preventDefault();
-                            if (photoUploading[sub.id]) return;
-                            const file = e.dataTransfer.files[0];
-                            if (file) handlePhoto(sub.id, file);
-                          }}
-                        >
-                          {formState[sub.id]?.photoData?.url ? (
-                            <img src={formState[sub.id].photoData.url} alt="Foto do subitem" className="max-h-40 rounded border mb-2" />
-                          ) : (
-                            <>
-                              <Camera className="w-8 h-8 text-purple-400 mb-2" />
-                              <span className="text-sm text-gray-600 text-center">Clique ou arraste uma imagem aqui<br/>para tirar/enviar foto</span>
-                            </>
-                          )}
-                          <input
-                            id={`file-input-${sub.id}`}
-                            type="file"
-                            accept="image/*"
-                            capture="environment"
-                            className="hidden"
-                            disabled={photoUploading[sub.id]}
-                            onChange={e => {
-                              if (e.target.files && e.target.files[0]) {
-                                handlePhoto(sub.id, e.target.files[0]);
+                      {/* Conteúdo da aba Visualização */}
+                      {(!activeTabs[sub.id] || activeTabs[sub.id] === 'visualizacao') && (
+                        <div className="space-y-2">
+                          <Label>Avaliação</Label>
+                          <RadioGroup
+                            value={formState[sub.id]?.evaluation || ''}
+                            onValueChange={val => handleChange(sub.id, 'evaluation', val)}
+                            className="flex flex-row space-x-4"
+                          >
+                            <RadioGroupItem value="nc" id={`nc-${sub.id}`} />
+                            <Label htmlFor={`nc-${sub.id}`}>NC</Label>
+                            <RadioGroupItem value="r" id={`r-${sub.id}`} />
+                            <Label htmlFor={`r-${sub.id}`}>R</Label>
+                            <RadioGroupItem value="na" id={`na-${sub.id}`} />
+                            <Label htmlFor={`na-${sub.id}`}>NA</Label>
+                          </RadioGroup>
+                          <Label>Situação atual</Label>
+                          <Textarea
+                            value={formState[sub.id]?.currentSituation || ''}
+                            onChange={e => handleChange(sub.id, 'currentSituation', e.target.value)}
+                            placeholder="Situação atual..."
+                          />
+                          <Label>Orientação para o cliente</Label>
+                          <Textarea
+                            value={formState[sub.id]?.clientGuidance || ''}
+                            onChange={e => handleChange(sub.id, 'clientGuidance', e.target.value)}
+                            placeholder="Orientação para o cliente..."
+                          />
+                          <Label>Foto (opcional)</Label>
+                          <div
+                            className={`border-2 border-dashed rounded-lg p-4 flex flex-col items-center justify-center cursor-pointer transition hover:border-purple-400 bg-gray-50 relative ${photoUploading[sub.id] ? 'opacity-60 pointer-events-none' : ''}`}
+                            style={{ minHeight: 120 }}
+                            onClick={() => {
+                              if (!photoUploading[sub.id]) {
+                                document.getElementById(`file-input-${sub.id}`)?.click();
                               }
                             }}
-                          />
-                          {photoUploading[sub.id] && <span className="absolute bottom-2 left-0 right-0 text-xs text-center text-gray-500">Enviando foto...</span>}
-                        </div>
-                        {formState[sub.id]?.photoData?.url && (
-                          <div className="text-xs text-gray-500 mt-1">
-                            <div>Latitude: {formState[sub.id].photoData.latitude}</div>
-                            <div>Longitude: {formState[sub.id].photoData.longitude}</div>
-                            <div>Data: {new Date(formState[sub.id].photoData.createdAt).toLocaleString('pt-BR')}</div>
+                            onDragOver={e => e.preventDefault()}
+                            onDrop={e => {
+                              e.preventDefault();
+                              if (photoUploading[sub.id]) return;
+                              const file = e.dataTransfer.files[0];
+                              if (file) handlePhoto(sub.id, file);
+                            }}
+                          >
+                            {formState[sub.id]?.photoData?.url ? (
+                              <img src={formState[sub.id].photoData.url} alt="Foto do subitem" className="max-h-40 rounded border mb-2" />
+                            ) : (
+                              <>
+                                <Camera className="w-8 h-8 text-purple-400 mb-2" />
+                                <span className="text-sm text-gray-600 text-center">Clique ou arraste uma imagem aqui<br/>para tirar/enviar foto</span>
+                              </>
+                            )}
+                            <input
+                              id={`file-input-${sub.id}`}
+                              type="file"
+                              accept="image/*"
+                              capture="environment"
+                              className="hidden"
+                              disabled={photoUploading[sub.id]}
+                              onChange={e => {
+                                if (e.target.files && e.target.files[0]) {
+                                  handlePhoto(sub.id, e.target.files[0]);
+                                }
+                              }}
+                            />
+                            {photoUploading[sub.id] && <span className="absolute bottom-2 left-0 right-0 text-xs text-center text-gray-500">Enviando foto...</span>}
                           </div>
-                        )}
-                      </div>
+                          {formState[sub.id]?.photoData?.url && (
+                            <div className="text-xs text-gray-500 mt-1">
+                              <div>Latitude: {formState[sub.id].photoData.latitude}</div>
+                              <div>Longitude: {formState[sub.id].photoData.longitude}</div>
+                              <div>Data: {new Date(formState[sub.id].photoData.createdAt).toLocaleString('pt-BR')}</div>
+                            </div>
+                          )}
+                        </div>
+                      )}
+
+                      {/* Conteúdo da aba Adequação */}
+                      {activeTabs[sub.id] === 'adequacao' && (
+                        <div className="space-y-6">
+                          {sub.adequacyReported ? (
+                            <>
+                              <div className="bg-blue-50 rounded-lg p-3 mb-4">
+                                <h5 className="font-medium text-blue-900 mb-2">Descrição da Adequação</h5>
+                                <p className="text-sm text-blue-800">{sub.adequacyDetails}</p>
+                              </div>
+                              {sub.adequacyImages && sub.adequacyImages.length > 0 && (
+                                <div className="mb-4">
+                                  <h5 className="font-medium text-gray-900 mb-2">Evidências ({sub.adequacyImages.length})</h5>
+                                  <div className="grid grid-cols-3 gap-2">
+                                    {sub.adequacyImages.map((image, index) => (
+                                      <div key={index} className="relative group">
+                                        <img
+                                          src={image}
+                                          alt={`Evidência ${index + 1}`}
+                                          className="w-full h-24 object-cover rounded border cursor-pointer hover:opacity-80 transition-opacity"
+                                          onClick={() => openImageModal(image)}
+                                        />
+                                        <div className="absolute inset-0 bg-black bg-opacity-0 group-hover:bg-opacity-20 transition-all duration-200 rounded flex items-center justify-center">
+                                          <div className="opacity-0 group-hover:opacity-100 transition-opacity">
+                                            <div className="bg-white rounded-full p-1">
+                                              <ZoomIn className="h-3 w-3 text-gray-600" />
+                                            </div>
+                                          </div>
+                                        </div>
+                                      </div>
+                                    ))}
+                                  </div>
+                                </div>
+                              )}
+                              {sub.adequacyDate && (
+                                <div className="text-xs text-blue-600 mb-2">
+                                  <Clock className="h-3 w-3 inline mr-1" />
+                                  Enviada em: {new Date(sub.adequacyDate).toLocaleDateString('pt-BR')} às {new Date(sub.adequacyDate).toLocaleTimeString('pt-BR')}
+                                </div>
+                              )}
+                              {sub.adequacyRevisionCount > 0 && (
+                                <div className="flex items-center space-x-2 text-orange-600 text-sm mb-2">
+                                  <AlertTriangle className="h-4 w-4" />
+                                  <span>{sub.adequacyRevisionCount} revisão{sub.adequacyRevisionCount > 1 ? 'ões' : 'ão'} anterior{sub.adequacyRevisionCount > 1 ? 'es' : ''}</span>
+                                </div>
+                              )}
+                              {/* Ações para adequações pendentes */}
+                              {sub.adequacyStatus === 'pending' && (
+                                <div className="flex items-center space-x-2 pt-3 border-t border-gray-100">
+                                  <Button
+                                    size="sm"
+                                    onClick={() => approveAdequacy(sub.id)}
+                                    className="bg-green-600 hover:bg-green-700"
+                                  >
+                                    <ThumbsUp className="h-4 w-4 mr-1" />
+                                    Aprovar
+                                  </Button>
+                                  <Button
+                                    size="sm"
+                                    variant="outline"
+                                    onClick={() => setEvaluatingAdequacy(sub.id)}
+                                    className="border-red-300 text-red-700 hover:bg-red-50"
+                                  >
+                                    <ThumbsDown className="h-4 w-4 mr-1" />
+                                    Rejeitar
+                                  </Button>
+                                </div>
+                              )}
+                              {/* Formulário de rejeição */}
+                              {evaluatingAdequacy === sub.id && (
+                                <div className="bg-red-50 rounded-lg p-3 mt-3 border border-red-200">
+                                  <h5 className="font-medium text-red-900 mb-2">Motivo da Rejeição</h5>
+                                  <div className="space-y-3">
+                                    <div>
+                                      <Label className="text-sm font-medium">Motivo da rejeição:</Label>
+                                      <Textarea
+                                        value={rejectionReason}
+                                        onChange={(e) => setRejectionReason(e.target.value)}
+                                        placeholder="Descreva o motivo da rejeição e orientações para correção..."
+                                        className="mt-1"
+                                        rows={3}
+                                      />
+                                    </div>
+                                    <div className="flex space-x-2">
+                                      <Button
+                                        size="sm"
+                                        onClick={() => rejectAdequacy(sub.id)}
+                                        disabled={!rejectionReason.trim()}
+                                        className="bg-red-600 hover:bg-red-700"
+                                      >
+                                        Confirmar Rejeição
+                                      </Button>
+                                      <Button
+                                        size="sm"
+                                        variant="outline"
+                                        onClick={cancelEvaluation}
+                                      >
+                                        Cancelar
+                                      </Button>
+                                    </div>
+                                  </div>
+                                </div>
+                              )}
+                              {/* Status de adequação aprovada/rejeitada */}
+                              {sub.adequacyStatus && sub.adequacyStatus !== 'pending' && (
+                                <div className={`rounded-lg p-3 mt-3 ${
+                                  sub.adequacyStatus === 'approved' ? 'bg-green-50 border border-green-200' : 'bg-red-50 border border-red-200'
+                                }`}>
+                                  <h5 className={`font-medium mb-2 ${
+                                    sub.adequacyStatus === 'approved' ? 'text-green-900' : 'text-red-900'
+                                  }`}>
+                                    {sub.adequacyStatus === 'approved' ? 'Adequação Aprovada' : 'Adequação Rejeitada'}
+                                  </h5>
+                                  {sub.adequacyStatus === 'rejected' && sub.adminRejectionReason && (
+                                    <p className="text-sm text-red-800">
+                                      <span className="font-medium">Motivo: </span>
+                                      {sub.adminRejectionReason}
+                                    </p>
+                                  )}
+                                </div>
+                              )}
+                            </>
+                          ) : (
+                            <div className="text-center py-8">
+                              <CheckCircle className="h-12 w-12 text-gray-400 mx-auto mb-4" />
+                              <h3 className="text-lg font-medium text-gray-900 mb-2">Nenhuma adequação encontrada</h3>
+                              <p className="text-gray-600">
+                                Não há adequações submetidas pelos clientes para este item.
+                              </p>
+                            </div>
+                          )}
+                        </div>
+                      )}
                     </AccordionContent>
                   </AccordionItem>
                 ))}
@@ -463,6 +725,25 @@ const ProjectWrite = () => {
               <ArrowRight size={16} />
             </Button>
           )}
+        </div>
+      )}
+
+      {/* Modal de Imagem */}
+      {imageModalOpen && selectedImage && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-75">
+          <div className="relative max-w-full max-h-full">
+            <img
+              src={selectedImage}
+              alt="Imagem ampliada"
+              className="max-w-full max-h-full object-contain"
+            />
+            <button
+              onClick={closeImageModal}
+              className="absolute top-4 right-4 bg-white p-2 rounded-full hover:bg-gray-200"
+            >
+              <X className="h-6 w-6 text-gray-800" />
+            </button>
+          </div>
         </div>
       )}
     </div>

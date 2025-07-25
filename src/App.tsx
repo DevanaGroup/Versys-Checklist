@@ -12,6 +12,7 @@ import Projetos from "./pages/Projetos";
 import NewProject from "./pages/NewProject";
 import EditProject from "./pages/EditProject";
 import AdminProjectView from "./pages/AdminProjectView";
+import AdminAdequacyManagement from "./pages/AdminAdequacyManagement";
 import NotFound from "./pages/NotFound";
 import ClientDashboard from "./pages/ClientDashboard";
 import ClientProjects from "./pages/ClientProjects";
@@ -118,6 +119,13 @@ const App = () => (
               </ProtectedRoute>
             }>
               <Route index element={<Colaboradores />} />
+            </Route>
+            <Route path="/adequacoes" element={
+              <ProtectedRoute requiredType="admin">
+                <DashboardLayout />
+              </ProtectedRoute>
+            }>
+              <Route index element={<AdminAdequacyManagement />} />
             </Route>
             <Route path="/relatorios" element={
               <ProtectedRoute requiredType="admin">

@@ -9,6 +9,7 @@ import { useAuthContext } from "@/contexts/AuthContext";
 import { toast } from "sonner";
 import { LocationInfo } from "@/components/LocationInfo";
 
+
 const adminMenuItems = [{
   title: "Dashboard",
   url: "/dashboard",
@@ -52,6 +53,7 @@ export function AppSidebar() {
   const location = useLocation();
   const { state } = useSidebar();
   const { userData, logout: authLogout } = useAuthContext();
+
   
   const currentPath = location.pathname;
   const isCollapsed = state === "collapsed";
@@ -60,6 +62,8 @@ export function AppSidebar() {
   useEffect(() => {
     console.log('AppSidebar: userData atualizado:', userData);
   }, [userData]);
+
+
 
   const handleLogout = async () => {
     try {
@@ -83,6 +87,9 @@ export function AppSidebar() {
     }
     if (path === "/client-projects") {
       return currentPath.startsWith("/client-projects");
+    }
+    if (path === "/adequacoes") {
+      return currentPath === "/adequacoes";
     }
     return currentPath.startsWith(path);
   };
@@ -195,6 +202,7 @@ export function AppSidebar() {
                           {isActive(item.url) && !isCollapsed && (
                             <div className="ml-auto w-2 h-2 bg-white rounded-full animate-pulse" />
                           )}
+
                         </NavLink>
                       </SidebarMenuButton>
                     </SidebarMenuItem>

@@ -40,7 +40,12 @@ import {
   ChevronDown,
   ChevronRight,
   Edit,
-  Settings
+  Settings,
+  Filter,
+  Search,
+  Download,
+  ZoomIn,
+  ZoomOut
 } from "lucide-react";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { toast } from "sonner";
@@ -115,6 +120,12 @@ const AdminProjectView = () => {
   const [adminImages, setAdminImages] = useState<File[]>([]);
   const [activeTab, setActiveTab] = useState('adequacoes');
   const [newAccordionTitle, setNewAccordionTitle] = useState('');
+  
+  // Novos estados para melhorar a interface de adequações
+  const [adequacyFilter, setAdequacyFilter] = useState<'all' | 'pending' | 'approved' | 'rejected'>('all');
+  const [searchTerm, setSearchTerm] = useState('');
+  const [selectedImage, setSelectedImage] = useState<string | null>(null);
+  const [imageModalOpen, setImageModalOpen] = useState(false);
 
   useEffect(() => {
     if (!userData) {
@@ -367,6 +378,57 @@ const AdminProjectView = () => {
     }
   }, [projectDetails]);
 
+  // Função para filtrar adequações
+  const getFilteredAdequacies = () => {
+    if (!projectDetails?.customAccordions) return [];
+    
+    let adequacies: any[] = [];
+    
+    projectDetails.customAccordions.forEach(accordion => {
+      accordion.items.forEach(item => {
+        item.subItems.forEach(subItem => {
+          if (subItem.adequacyReported) {
+            adequacies.push({
+              ...subItem,
+              accordionTitle: accordion.title,
+              itemTitle: item.title,
+              accordionId: accordion.id,
+              itemId: item.id
+            });
+          }
+        });
+      });
+    });
+    
+    // Aplicar filtros
+    if (adequacyFilter !== 'all') {
+      adequacies = adequacies.filter(adequacy => adequacy.adequacyStatus === adequacyFilter);
+    }
+    
+    if (searchTerm) {
+      adequacies = adequacies.filter(adequacy => 
+        adequacy.title.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        adequacy.adequacyDetails?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        adequacy.accordionTitle.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        adequacy.itemTitle.toLowerCase().includes(searchTerm.toLowerCase())
+      );
+    }
+    
+    return adequacies;
+  };
+
+  // Função para abrir modal de imagem
+  const openImageModal = (imageUrl: string) => {
+    setSelectedImage(imageUrl);
+    setImageModalOpen(true);
+  };
+
+  // Função para fechar modal de imagem
+  const closeImageModal = () => {
+    setSelectedImage(null);
+    setImageModalOpen(false);
+  };
+
   // Renderização de carregamento
   if (loading) {
     return (
@@ -447,45 +509,229 @@ const AdminProjectView = () => {
         </p>
       </div>
 
-      {/* Resumo das adequações */}
+      {/* Seção de Revisão de Adequações */}
       {(() => {
-        const pendingAdequacies = projectSteps.flatMap(step => 
-          step.subItems.filter(sub => sub.adequacyStatus === 'pending')
-        );
-        const approvedAdequacies = projectSteps.flatMap(step => 
-          step.subItems.filter(sub => sub.adequacyStatus === 'approved')
-        );
-        const rejectedAdequacies = projectSteps.flatMap(step => 
-          step.subItems.filter(sub => sub.adequacyStatus === 'rejected')
-        );
+        const adequacies = getFilteredAdequacies();
+        const pendingAdequacies = adequacies.filter(a => a.adequacyStatus === 'pending');
+        const approvedAdequacies = adequacies.filter(a => a.adequacyStatus === 'approved');
+        const rejectedAdequacies = adequacies.filter(a => a.adequacyStatus === 'rejected');
 
-        if (pendingAdequacies.length > 0 || approvedAdequacies.length > 0 || rejectedAdequacies.length > 0) {
+        if (adequacies.length > 0) {
           return (
-            <div className="bg-white rounded-lg border p-4">
-              <h3 className="font-medium text-gray-900 mb-3">Status das Adequações</h3>
-              <div className="grid grid-cols-3 gap-4">
-                <div className="text-center">
-                  <div className="text-2xl font-bold text-yellow-600">{pendingAdequacies.length}</div>
-                  <div className="text-sm text-gray-600">Aguardando</div>
+            <Card className="border-blue-200 bg-blue-50/30">
+              <CardHeader>
+                <CardTitle className="flex items-center space-x-2 text-blue-900">
+                  <ClipboardCheck className="h-5 w-5" />
+                  <span>Revisão de Adequações</span>
+                  {pendingAdequacies.length > 0 && (
+                    <Badge className="bg-yellow-100 text-yellow-800 border-yellow-200">
+                      {pendingAdequacies.length} pendente{pendingAdequacies.length > 1 ? 's' : ''}
+                    </Badge>
+                  )}
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                {/* Filtros e Busca */}
+                <div className="flex flex-col sm:flex-row gap-4">
+                  <div className="flex-1">
+                    <div className="relative">
+                      <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400" />
+                      <Input
+                        placeholder="Buscar adequações..."
+                        value={searchTerm}
+                        onChange={(e) => setSearchTerm(e.target.value)}
+                        className="pl-10"
+                      />
+                    </div>
+                  </div>
+                  <Select value={adequacyFilter} onValueChange={(value: any) => setAdequacyFilter(value)}>
+                    <SelectTrigger className="w-full sm:w-48">
+                      <SelectValue placeholder="Filtrar por status" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="all">Todas ({adequacies.length})</SelectItem>
+                      <SelectItem value="pending">Pendentes ({pendingAdequacies.length})</SelectItem>
+                      <SelectItem value="approved">Aprovadas ({approvedAdequacies.length})</SelectItem>
+                      <SelectItem value="rejected">Rejeitadas ({rejectedAdequacies.length})</SelectItem>
+                    </SelectContent>
+                  </Select>
                 </div>
-                <div className="text-center">
-                  <div className="text-2xl font-bold text-green-600">{approvedAdequacies.length}</div>
-                  <div className="text-sm text-gray-600">Aprovadas</div>
+
+                {/* Lista de Adequações */}
+                <div className="space-y-3">
+                  {adequacies.map((adequacy, index) => (
+                    <div key={`${adequacy.accordionId}_${adequacy.itemId}_${adequacy.id}`} className="bg-white rounded-lg border p-4 hover:shadow-md transition-shadow">
+                      <div className="flex items-start justify-between mb-3">
+                        <div className="flex-1">
+                          <div className="flex items-center space-x-2 mb-1">
+                            <h4 className="font-semibold text-gray-900">{adequacy.title}</h4>
+                            <Badge variant="outline" className="text-xs">
+                              {adequacy.accordionTitle} → {adequacy.itemTitle}
+                            </Badge>
+                          </div>
+                          <p className="text-sm text-gray-600 mb-2">{adequacy.adequacyDetails}</p>
+                          <div className="flex items-center space-x-4 text-xs text-gray-500">
+                            <span>
+                              <Calendar className="h-3 w-3 inline mr-1" />
+                              {new Date(adequacy.adequacyDate).toLocaleDateString('pt-BR')} às {new Date(adequacy.adequacyDate).toLocaleTimeString('pt-BR')}
+                            </span>
+                            {adequacy.adequacyRevisionCount > 0 && (
+                              <span className="text-orange-600">
+                                <AlertTriangle className="h-3 w-3 inline mr-1" />
+                                {adequacy.adequacyRevisionCount} revisão{adequacy.adequacyRevisionCount > 1 ? 'ões' : 'ão'}
+                              </span>
+                            )}
+                          </div>
+                        </div>
+                        <div className="flex items-center space-x-2">
+                          {adequacy.adequacyStatus === 'pending' && (
+                            <Badge className="bg-yellow-100 text-yellow-800 border-yellow-200">
+                              <Clock className="h-3 w-3 mr-1" />
+                              Pendente
+                            </Badge>
+                          )}
+                          {adequacy.adequacyStatus === 'approved' && (
+                            <Badge className="bg-green-100 text-green-800 border-green-200">
+                              <CheckCircle className="h-3 w-3 mr-1" />
+                              Aprovada
+                            </Badge>
+                          )}
+                          {adequacy.adequacyStatus === 'rejected' && (
+                            <Badge className="bg-red-100 text-red-800 border-red-200">
+                              <XCircle className="h-3 w-3 mr-1" />
+                              Rejeitada
+                            </Badge>
+                          )}
+                        </div>
+                      </div>
+
+                      {/* Evidências */}
+                      {adequacy.adequacyImages && adequacy.adequacyImages.length > 0 && (
+                        <div className="mb-3">
+                          <p className="text-sm font-medium text-gray-700 mb-2">Evidências ({adequacy.adequacyImages.length}):</p>
+                          <div className="grid grid-cols-4 gap-2">
+                            {adequacy.adequacyImages.map((image, imgIndex) => (
+                              <div key={imgIndex} className="relative group">
+                                <img
+                                  src={image}
+                                  alt={`Evidência ${imgIndex + 1}`}
+                                  className="w-full h-20 object-cover rounded border cursor-pointer hover:opacity-80 transition-opacity"
+                                  onClick={() => openImageModal(image)}
+                                />
+                                <div className="absolute inset-0 bg-black bg-opacity-0 group-hover:bg-opacity-20 transition-all duration-200 rounded flex items-center justify-center">
+                                  <div className="opacity-0 group-hover:opacity-100 transition-opacity">
+                                    <div className="bg-white rounded-full p-1">
+                                      <ZoomIn className="h-3 w-3 text-gray-600" />
+                                    </div>
+                                  </div>
+                                </div>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      )}
+
+                      {/* Ações para adequações pendentes */}
+                      {adequacy.adequacyStatus === 'pending' && (
+                        <div className="flex items-center space-x-2 pt-2 border-t border-gray-100">
+                          <Button
+                            size="sm"
+                            onClick={() => approveAdequacy(adequacy.id)}
+                            className="bg-green-600 hover:bg-green-700"
+                          >
+                            <ThumbsUp className="h-4 w-4 mr-1" />
+                            Aprovar
+                          </Button>
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            onClick={() => setEvaluatingAdequacy(adequacy.id)}
+                            className="border-red-300 text-red-700 hover:bg-red-50"
+                          >
+                            <ThumbsDown className="h-4 w-4 mr-1" />
+                            Rejeitar
+                          </Button>
+                        </div>
+                      )}
+
+                      {/* Formulário de rejeição */}
+                      {evaluatingAdequacy === adequacy.id && (
+                        <div className="bg-red-50 rounded-lg p-3 mt-3 border border-red-200">
+                          <h5 className="font-medium text-red-900 mb-2">Motivo da Rejeição</h5>
+                          <div className="space-y-3">
+                            <div>
+                              <Label className="text-sm font-medium">Motivo da rejeição:</Label>
+                              <Textarea
+                                value={rejectionReason}
+                                onChange={(e) => setRejectionReason(e.target.value)}
+                                placeholder="Descreva o motivo da rejeição e orientações para correção..."
+                                className="mt-1"
+                                rows={3}
+                              />
+                            </div>
+                            <div className="flex space-x-2">
+                              <Button
+                                size="sm"
+                                onClick={() => rejectAdequacy(adequacy.id)}
+                                disabled={!rejectionReason.trim()}
+                                className="bg-red-600 hover:bg-red-700"
+                              >
+                                Confirmar Rejeição
+                              </Button>
+                              <Button
+                                size="sm"
+                                variant="outline"
+                                onClick={cancelEvaluation}
+                              >
+                                Cancelar
+                              </Button>
+                            </div>
+                          </div>
+                        </div>
+                      )}
+
+                      {/* Status de adequação aprovada/rejeitada */}
+                      {adequacy.adequacyStatus && adequacy.adequacyStatus !== 'pending' && (
+                        <div className={`rounded-lg p-3 mt-3 ${
+                          adequacy.adequacyStatus === 'approved' ? 'bg-green-50 border border-green-200' : 'bg-red-50 border border-red-200'
+                        }`}>
+                          <h5 className={`font-medium mb-2 ${
+                            adequacy.adequacyStatus === 'approved' ? 'text-green-900' : 'text-red-900'
+                          }`}>
+                            {adequacy.adequacyStatus === 'approved' ? 'Adequação Aprovada' : 'Adequação Rejeitada'}
+                          </h5>
+                          {adequacy.adequacyStatus === 'rejected' && adequacy.adminRejectionReason && (
+                            <p className="text-sm text-red-800">
+                              <span className="font-medium">Motivo: </span>
+                              {adequacy.adminRejectionReason}
+                            </p>
+                          )}
+                        </div>
+                      )}
+                    </div>
+                  ))}
                 </div>
-                <div className="text-center">
-                  <div className="text-2xl font-bold text-red-600">{rejectedAdequacies.length}</div>
-                  <div className="text-sm text-gray-600">Rejeitadas</div>
+
+                {/* Resumo */}
+                <div className="bg-white rounded-lg border p-4">
+                  <h5 className="font-medium text-gray-900 mb-3">Resumo das Adequações</h5>
+                  <div className="grid grid-cols-3 gap-4 text-center">
+                    <div>
+                      <div className="text-2xl font-bold text-yellow-600">{pendingAdequacies.length}</div>
+                      <div className="text-sm text-gray-600">Pendentes</div>
+                    </div>
+                    <div>
+                      <div className="text-2xl font-bold text-green-600">{approvedAdequacies.length}</div>
+                      <div className="text-sm text-gray-600">Aprovadas</div>
+                    </div>
+                    <div>
+                      <div className="text-2xl font-bold text-red-600">{rejectedAdequacies.length}</div>
+                      <div className="text-sm text-gray-600">Rejeitadas</div>
+                    </div>
+                  </div>
                 </div>
-              </div>
-              {pendingAdequacies.length > 0 && (
-                <div className="mt-3 p-2 bg-yellow-50 rounded border border-yellow-200">
-                  <p className="text-sm text-yellow-800">
-                    <AlertTriangle className="h-4 w-4 inline mr-1" />
-                    {pendingAdequacies.length} adequação(ões) aguardando sua avaliação
-                  </p>
-                </div>
-              )}
-            </div>
+              </CardContent>
+            </Card>
           );
         }
         return null;
@@ -585,18 +831,7 @@ const AdminProjectView = () => {
                                     src={image}
                                     alt={`Evidência ${index + 1}`}
                                     className="w-full h-16 object-cover rounded border cursor-pointer hover:opacity-80"
-                                    onClick={() => {
-                                      const modal = document.createElement('div');
-                                      modal.innerHTML = `
-                                        <div style="position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.8); display: flex; justify-content: center; align-items: center; z-index: 1000;" onclick="this.remove()">
-                                          <div style="position: relative; max-width: 90%; max-height: 90%;">
-                                            <img src="${image}" style="max-width: 100%; max-height: 100%; object-fit: contain;" alt="Imagem ampliada" />
-                                            <button style="position: absolute; top: 10px; right: 10px; background: rgba(0,0,0,0.5); color: white; border: none; border-radius: 50%; width: 30px; height: 30px; display: flex; align-items: center; justify-content: center; cursor: pointer;" onclick="this.parentElement.parentElement.remove()">✕</button>
-                                          </div>
-                                        </div>
-                                      `;
-                                      document.body.appendChild(modal);
-                                    }}
+                                    onClick={() => openImageModal(image)}
                                   />
                                 ))}
                               </div>
@@ -730,6 +965,25 @@ const AdminProjectView = () => {
             <span>Próximo</span>
             <ArrowRight size={16} />
           </Button>
+        </div>
+      )}
+
+      {/* Modal de Imagem */}
+      {imageModalOpen && selectedImage && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-75">
+          <div className="relative max-w-full max-h-full">
+            <img
+              src={selectedImage}
+              alt="Imagem ampliada"
+              className="max-w-full max-h-full object-contain"
+            />
+            <button
+              onClick={closeImageModal}
+              className="absolute top-4 right-4 bg-white p-2 rounded-full hover:bg-gray-200"
+            >
+              <X className="h-6 w-6 text-gray-800" />
+            </button>
+          </div>
         </div>
       )}
     </div>

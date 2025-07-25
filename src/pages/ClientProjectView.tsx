@@ -12,7 +12,7 @@ import { toast } from "sonner";
 import { useAuthContext } from "@/contexts/AuthContext";
 import { doc, getDoc, updateDoc } from "firebase/firestore";
 import { db } from "@/lib/firebase";
-import { ArrowLeft, ArrowRight, PlayCircle, Globe, CheckCircle, Camera, ClipboardCheck, ChevronRight, ChevronLeft, Send, Upload, X, Image, Clock } from "lucide-react";
+import { ArrowLeft, ArrowRight, PlayCircle, Globe, CheckCircle, Camera, ClipboardCheck, ChevronRight, ChevronLeft, Send, Upload, X, Image, Clock, XCircle } from "lucide-react";
 import { getStorage, ref, uploadBytes, getDownloadURL } from "firebase/storage";
 
 interface SubItem {
@@ -28,6 +28,14 @@ interface SubItem {
     latitude: number;
     longitude: number;
   };
+  // Campos para adequações
+  adequacyReported?: boolean;
+  adequacyDetails?: string;
+  adequacyImages?: string[];
+  adequacyDate?: string;
+  adequacyStatus?: "pending" | "approved" | "rejected";
+  adminRejectionReason?: string;
+  adequacyRevisionCount?: number;
 }
 
 interface ProjectItem {
@@ -81,6 +89,7 @@ const ClientProjectView = () => {
   const [adequationResponse, setAdequationResponse] = useState('');
   const [adequationImages, setAdequationImages] = useState<File[]>([]);
   const [submittingAdequation, setSubmittingAdequation] = useState(false);
+  const [currentSubItemId, setCurrentSubItemId] = useState<string>('');
 
   useEffect(() => {
     if (!projectId) {
@@ -140,11 +149,24 @@ const ClientProjectView = () => {
       const initialState: Record<string, any> = {};
       steps.forEach(step => {
         step.subItems.forEach(sub => {
+          // Validar e limpar dados de adequação existentes
+          const adequacyData = validateAndCleanAdequationData({
+            adequacyReported: sub.adequacyReported,
+            adequacyDetails: sub.adequacyDetails,
+            adequacyImages: sub.adequacyImages,
+            adequacyDate: sub.adequacyDate,
+            adequacyStatus: sub.adequacyStatus,
+            adminRejectionReason: sub.adminRejectionReason,
+            adequacyRevisionCount: sub.adequacyRevisionCount
+          });
+
           initialState[sub.id] = {
             evaluation: sub.evaluation || '',
             currentSituation: sub.currentSituation || '',
             clientGuidance: sub.clientGuidance || '',
-            photoData: sub.photoData || null
+            photoData: sub.photoData || null,
+            // Dados de adequação validados
+            ...adequacyData
           };
         });
       });
@@ -282,6 +304,67 @@ const ClientProjectView = () => {
     setAdequationImages(prev => prev.filter((_, i) => i !== index));
   };
 
+  const handleOpenAdequation = (subItemId: string) => {
+    setCurrentSubItemId(subItemId);
+    const existingAdequation = formState[subItemId];
+    if (existingAdequation?.adequacyDetails) {
+      setAdequationResponse(existingAdequation.adequacyDetails);
+    } else {
+      setAdequationResponse('');
+    }
+    setAdequationImages([]);
+    setCurrentPage('adequation');
+  };
+
+  // Função para limpar objetos removendo campos undefined e validar dados
+  const cleanObjectForFirebase = (obj: any): any => {
+    if (obj === null || obj === undefined) return null;
+    if (typeof obj !== 'object') return obj;
+    
+    if (Array.isArray(obj)) {
+      return obj.map(cleanObjectForFirebase).filter(item => item !== null && item !== undefined);
+    }
+    
+    const cleaned: any = {};
+    for (const [key, value] of Object.entries(obj)) {
+      if (value !== undefined && value !== null) {
+        const cleanedValue = cleanObjectForFirebase(value);
+        if (cleanedValue !== null && cleanedValue !== undefined) {
+          cleaned[key] = cleanedValue;
+        }
+      }
+    }
+    return Object.keys(cleaned).length > 0 ? cleaned : null;
+  };
+
+  // Função para validar e limpar dados de adequação
+  const validateAndCleanAdequationData = (data: any) => {
+    if (!data || typeof data !== 'object') return {};
+    
+    const cleaned: any = {
+      adequacyReported: Boolean(data.adequacyReported),
+      adequacyDetails: String(data.adequacyDetails || ''),
+      adequacyImages: Array.isArray(data.adequacyImages) ? data.adequacyImages.filter((img: any) => img && typeof img === 'string') : [],
+      adequacyDate: data.adequacyDate ? String(data.adequacyDate) : new Date().toISOString(),
+      adequacyStatus: ['pending', 'approved', 'rejected'].includes(data.adequacyStatus) ? data.adequacyStatus : 'pending',
+      adequacyRevisionCount: Number(data.adequacyRevisionCount || 0)
+    };
+
+    // Só incluir adminRejectionReason se não for undefined/null
+    if (data.adminRejectionReason && typeof data.adminRejectionReason === 'string') {
+      cleaned.adminRejectionReason = data.adminRejectionReason;
+    }
+
+    // Remover campos undefined/null
+    Object.keys(cleaned).forEach(key => {
+      if (cleaned[key] === undefined || cleaned[key] === null) {
+        delete cleaned[key];
+      }
+    });
+
+    return cleaned;
+  };
+
   const handleSubmitAdequation = async () => {
     if (!adequationResponse.trim()) {
       toast.error("Por favor, descreva as adequações realizadas.");
@@ -302,9 +385,82 @@ const ClientProjectView = () => {
         imageBase64Array.push(base64);
       }
 
-      // Aqui você implementaria a lógica para salvar no Firebase
-      // Por enquanto, apenas simular o sucesso
-      toast.success("Adequação enviada com sucesso! Aguardando aprovação do consultor.");
+      // Obter o subItem atual
+      const currentSubItem = currentItem.subItems.find(sub => sub.id === currentSubItemId);
+      if (!currentSubItem) {
+        toast.error("Item não encontrado.");
+        return;
+      }
+
+      // Calcular contador de revisões
+      const currentRevisionCount = currentSubItem.adequacyRevisionCount || 0;
+      const newRevisionCount = currentSubItem.adequacyStatus === 'rejected' ? currentRevisionCount + 1 : currentRevisionCount;
+
+      // SALVAR NO FIREBASE - SOLUÇÃO DIRETA
+      const projectRef = doc(db, 'projetos', projectId!);
+      
+      // Buscar dados atuais
+      const projectDoc = await getDoc(projectRef);
+      const projectData = projectDoc.data();
+      const accordions = projectData.customAccordions || [];
+      
+      // Encontrar e atualizar o subItem específico
+      let updated = false;
+      const updatedAccordions = accordions.map(accordion => {
+        return {
+          ...accordion,
+          items: accordion.items?.map(item => {
+            if (item.id === currentItem.id) {
+              return {
+                ...item,
+                subItems: item.subItems?.map(subItem => {
+                  if (subItem.id === currentSubItemId) {
+                    updated = true;
+                    return {
+                      ...subItem,
+                      adequacyReported: true,
+                      adequacyDetails: adequationResponse,
+                      adequacyImages: imageBase64Array,
+                      adequacyDate: new Date().toISOString(),
+                      adequacyStatus: 'pending',
+                      adequacyRevisionCount: newRevisionCount
+                    };
+                  }
+                  return subItem;
+                })
+              };
+            }
+            return item;
+          })
+        };
+      });
+
+      if (!updated) {
+        toast.error("Item não encontrado.");
+        return;
+      }
+
+      // Salvar no Firebase
+      await updateDoc(projectRef, {
+        customAccordions: updatedAccordions
+      });
+
+      // Atualizar estado local
+      setFormState(prev => ({
+        ...prev,
+        [currentSubItemId]: {
+          ...prev[currentSubItemId],
+          adequacyReported: true,
+          adequacyDetails: adequationResponse,
+          adequacyImages: imageBase64Array,
+          adequacyDate: new Date().toISOString(),
+          adequacyStatus: 'pending',
+          adequacyRevisionCount: newRevisionCount
+        }
+      }));
+
+      const revisionText = currentSubItem.adequacyStatus === 'rejected' ? ' (Revisão)' : '';
+      toast.success(`Adequação enviada com sucesso${revisionText}! Aguardando aprovação do consultor.`);
       
       // Limpar formulário
       setAdequationResponse('');
@@ -448,7 +604,7 @@ const ClientProjectView = () => {
                               Visualização
                             </button>
                             <button
-                              onClick={() => setCurrentPage('adequation')}
+                              onClick={() => handleOpenAdequation(sub.id)}
                               className={`px-3 py-1 rounded-full text-sm font-medium transition-colors ${
                                 currentPage === 'adequation' 
                                   ? 'bg-white text-green-600 shadow-sm' 
@@ -528,6 +684,94 @@ const ClientProjectView = () => {
                                   </div>
                                 </div>
                               )}
+
+                              {/* Seção de Adequações Existentes */}
+                              {formState[sub.id]?.adequacyReported && (
+                                <div className="bg-white rounded-lg p-3 border border-green-200">
+                                  <div className="flex items-center justify-between mb-3">
+                                    <div className="flex items-center space-x-2">
+                                      <CheckCircle className="h-4 w-4 text-green-600" />
+                                      <span className="font-medium text-gray-700">Adequação Reportada</span>
+                                    </div>
+                                    <Badge className={`px-2 py-1 text-xs ${
+                                      formState[sub.id]?.adequacyStatus === 'pending' ? 'bg-yellow-100 text-yellow-800' :
+                                      formState[sub.id]?.adequacyStatus === 'approved' ? 'bg-green-100 text-green-800' :
+                                      formState[sub.id]?.adequacyStatus === 'rejected' ? 'bg-red-100 text-red-800' :
+                                      'bg-gray-100 text-gray-800'
+                                    }`}>
+                                      {formState[sub.id]?.adequacyStatus === 'pending' ? 'Pendente' :
+                                       formState[sub.id]?.adequacyStatus === 'approved' ? 'Aprovada' :
+                                       formState[sub.id]?.adequacyStatus === 'rejected' ? 'Rejeitada' : 'Desconhecido'}
+                                    </Badge>
+                                  </div>
+                                  
+                                  <div className="space-y-3">
+                                    {/* Detalhes da adequação */}
+                                    {formState[sub.id]?.adequacyDetails && (
+                                      <div className="bg-gray-50 rounded p-2">
+                                        <p className="text-sm text-gray-900 leading-relaxed">
+                                          {formState[sub.id].adequacyDetails}
+                                        </p>
+                                      </div>
+                                    )}
+
+                                    {/* Imagens da adequação */}
+                                    {formState[sub.id]?.adequacyImages && formState[sub.id].adequacyImages.length > 0 && (
+                                      <div>
+                                        <p className="text-sm font-medium text-gray-700 mb-2">Evidências da Adequação:</p>
+                                        <div className="grid grid-cols-4 gap-2">
+                                          {formState[sub.id].adequacyImages.map((image, imgIndex) => (
+                                            <div key={imgIndex} className="relative group">
+                                              <img
+                                                src={image}
+                                                alt={`Evidência ${imgIndex + 1}`}
+                                                className="w-full h-20 object-cover rounded border cursor-pointer hover:opacity-80 transition-opacity"
+                                                onClick={() => {
+                                                  const modal = document.createElement('div');
+                                                  modal.innerHTML = `
+                                                    <div style="position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.8); display: flex; justify-content: center; align-items: center; z-index: 1000;" onclick="this.remove()">
+                                                      <div style="position: relative; max-width: 90%; max-height: 90%;">
+                                                        <img src="${image}" style="max-width: 100%; max-height: 100%; object-fit: contain;" alt="Imagem ampliada" />
+                                                        <button style="position: absolute; top: 10px; right: 10px; background: rgba(0,0,0,0.5); color: white; border: none; border-radius: 50%; width: 30px; height: 30px; display: flex; align-items: center; justify-content: center; cursor: pointer;" onclick="this.parentElement.parentElement.remove()">✕</button>
+                                                      </div>
+                                                    </div>
+                                                  `;
+                                                  document.body.appendChild(modal);
+                                                }}
+                                              />
+                                            </div>
+                                          ))}
+                                        </div>
+                                      </div>
+                                    )}
+
+                                    {/* Data da adequação */}
+                                    {formState[sub.id]?.adequacyDate && (
+                                      <div className="text-xs text-gray-500">
+                                        Enviada em: {new Date(formState[sub.id].adequacyDate).toLocaleString('pt-BR')}
+                                      </div>
+                                    )}
+
+                                    {/* Motivo da rejeição */}
+                                    {formState[sub.id]?.adequacyStatus === 'rejected' && formState[sub.id]?.adminRejectionReason && (
+                                      <div className="bg-red-50 border border-red-200 rounded p-2">
+                                        <div className="flex items-center space-x-2 mb-1">
+                                          <XCircle className="h-4 w-4 text-red-600" />
+                                          <span className="font-medium text-red-900">Motivo da Rejeição:</span>
+                                        </div>
+                                        <p className="text-sm text-red-800">{formState[sub.id].adminRejectionReason}</p>
+                                      </div>
+                                    )}
+
+                                    {/* Contador de revisões */}
+                                    {formState[sub.id]?.adequacyRevisionCount && formState[sub.id].adequacyRevisionCount > 0 && (
+                                      <div className="text-xs text-gray-500">
+                                        Revisão #{formState[sub.id].adequacyRevisionCount}
+                                      </div>
+                                    )}
+                                  </div>
+                                </div>
+                              )}
                             </div>
                           </div>
                         )}
@@ -546,6 +790,45 @@ const ClientProjectView = () => {
                             </div>
                             
                             <div className="space-y-4">
+                              {/* Mostrar adequação existente se houver */}
+                              {formState[currentSubItemId]?.adequacyReported && (
+                                <div className="bg-blue-50 border border-blue-200 rounded-lg p-3 mb-4">
+                                  <div className="flex items-center justify-between mb-2">
+                                    <h5 className="font-medium text-blue-900">Adequação Anterior</h5>
+                                    <Badge className={`px-2 py-1 text-xs ${
+                                      formState[currentSubItemId]?.adequacyStatus === 'pending' ? 'bg-yellow-100 text-yellow-800' :
+                                      formState[currentSubItemId]?.adequacyStatus === 'approved' ? 'bg-green-100 text-green-800' :
+                                      formState[currentSubItemId]?.adequacyStatus === 'rejected' ? 'bg-red-100 text-red-800' :
+                                      'bg-gray-100 text-gray-800'
+                                    }`}>
+                                      {formState[currentSubItemId]?.adequacyStatus === 'pending' ? 'Pendente' :
+                                       formState[currentSubItemId]?.adequacyStatus === 'approved' ? 'Aprovada' :
+                                       formState[currentSubItemId]?.adequacyStatus === 'rejected' ? 'Rejeitada' : 'Desconhecido'}
+                                    </Badge>
+                                  </div>
+                                  
+                                  {formState[currentSubItemId]?.adequacyDetails && (
+                                    <p className="text-sm text-blue-800 mb-2">
+                                      {formState[currentSubItemId].adequacyDetails}
+                                    </p>
+                                  )}
+                                  
+                                  {formState[currentSubItemId]?.adequacyStatus === 'rejected' && formState[currentSubItemId]?.adminRejectionReason && (
+                                    <div className="bg-red-50 border border-red-200 rounded p-2">
+                                      <div className="flex items-center space-x-2 mb-1">
+                                        <XCircle className="h-4 w-4 text-red-600" />
+                                        <span className="font-medium text-red-900">Motivo da Rejeição:</span>
+                                      </div>
+                                      <p className="text-sm text-red-800">{formState[currentSubItemId].adminRejectionReason}</p>
+                                    </div>
+                                  )}
+                                  
+                                  <div className="text-xs text-blue-600 mt-2">
+                                    Enviada em: {formState[currentSubItemId]?.adequacyDate ? new Date(formState[currentSubItemId].adequacyDate).toLocaleString('pt-BR') : 'Data não disponível'}
+                                  </div>
+                                </div>
+                              )}
+
                               <div>
                                 <Label className="text-sm font-medium text-gray-700 mb-2 block">
                                   📝 Descreva detalhadamente as adequações implementadas:
@@ -646,7 +929,9 @@ const ClientProjectView = () => {
                                   } transition-colors`}
                                 >
                                   <Send className="h-4 w-4 mr-2" />
-                                  {submittingAdequation ? 'Enviando...' : 'Enviar Adequação'}
+                                  {submittingAdequation ? 'Enviando...' : 
+                                   formState[currentSubItemId]?.adequacyStatus === 'rejected' ? 'Enviar Revisão' : 
+                                   formState[currentSubItemId]?.adequacyReported ? 'Atualizar Adequação' : 'Enviar Adequação'}
                                 </Button>
                               </div>
                             </div>
