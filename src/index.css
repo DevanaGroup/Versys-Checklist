@@ -1,6 +1,11 @@
+/* stylelint-disable at-rule-no-unknown */
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
+/* stylelint-enable at-rule-no-unknown */
+
+/* Landscape orientation utilities */
+@import './styles/landscape.css';
 
 /* Definition of the design system. All colors, gradients, fonts, etc should be defined here. */
 
@@ -94,10 +99,12 @@
 
 @layer base {
   * {
+    /* stylelint-disable-next-line at-rule-no-unknown */
     @apply border-border;
   }
 
   body {
+    /* stylelint-disable-next-line at-rule-no-unknown */
     @apply bg-background text-foreground;
   }
 }

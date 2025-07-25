@@ -517,7 +517,9 @@ const Colaboradores = () => {
           <CardTitle>Lista de Colaboradores ({colaboradoresFiltrados.length})</CardTitle>
         </CardHeader>
         <CardContent>
-          <Table>
+          {/* Layout Desktop - Tabela */}
+          <div className="hidden md:block">
+            <Table>
             <TableHeader>
               <TableRow>
                 <TableHead>Nome</TableHead>
@@ -628,7 +630,133 @@ const Colaboradores = () => {
                 ))
               )}
             </TableBody>
-          </Table>
+            </Table>
+          </div>
+
+          {/* Layout Mobile - Cards */}
+          <div className="md:hidden space-y-4">
+            {loading ? (
+              <div className="text-center py-8">
+                <p>Carregando colaboradores...</p>
+              </div>
+            ) : colaboradoresFiltrados.length === 0 ? (
+              <div className="text-center py-8 text-gray-500">
+                <p>
+                  {filtroNome || filtroStatus !== "todos" 
+                    ? "Nenhum colaborador encontrado com os filtros aplicados" 
+                    : "Nenhum colaborador cadastrado"}
+                </p>
+              </div>
+            ) : (
+              colaboradoresFiltrados.map((colaborador) => (
+                <Card key={colaborador.id} className="p-4">
+                  <div className="space-y-3">
+                    {/* Header do Card */}
+                    <div className="flex items-start justify-between">
+                      <div className="flex-1">
+                        <h3 className="font-semibold text-lg text-gray-900">{colaborador.nome}</h3>
+                        <p className="text-sm text-gray-600">{colaborador.email}</p>
+                      </div>
+                      <div className="ml-2">
+                        {getStatusBadge(colaborador.status)}
+                      </div>
+                    </div>
+
+                    {/* Informações do Colaborador */}
+                    <div className="space-y-2">
+                      <div className="flex items-center gap-2">
+                        <span className="font-medium text-gray-700 text-sm">Nível:</span>
+                        {getNivelBadge(colaborador.nivel)}
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <span className="font-medium text-gray-700 text-sm">Tipo:</span>
+                        {getTipoBadge(colaborador.tipo)}
+                      </div>
+                      {colaborador.telefone && (
+                        <div className="flex items-center text-sm">
+                          <span className="font-medium text-gray-700 w-20">Telefone:</span>
+                          <span className="text-gray-600">{colaborador.telefone}</span>
+                        </div>
+                      )}
+                      <div className="flex items-center text-sm">
+                        <span className="font-medium text-gray-700 w-20">Admissão:</span>
+                        <span className="text-gray-600">{new Date(colaborador.dataAdmissao).toLocaleDateString('pt-BR')}</span>
+                      </div>
+                    </div>
+
+                    {/* Ações */}
+                    <div className="flex gap-2 pt-2 border-t">
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => {
+                          setColaboradorEditando({ ...colaborador });
+                          setDialogEdicaoAberto(true);
+                        }}
+                        className="flex-1"
+                      >
+                        <Edit className="h-4 w-4 mr-2" />
+                        Editar
+                      </Button>
+                      {colaborador.status === 'ativo' ? (
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => handleAlterarStatus(colaborador.id, 'suspenso')}
+                          className="flex-1 text-orange-600 border-orange-600 hover:bg-orange-50"
+                          title="Suspender colaborador"
+                        >
+                          <UserX className="h-4 w-4 mr-2" />
+                          Suspender
+                        </Button>
+                      ) : (
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => handleAlterarStatus(colaborador.id, 'ativo')}
+                          className="flex-1 text-green-600 border-green-600 hover:bg-green-50"
+                          title="Ativar colaborador"
+                        >
+                          <UserCheck className="h-4 w-4 mr-2" />
+                          Ativar
+                        </Button>
+                      )}
+                      <AlertDialog>
+                        <AlertDialogTrigger asChild>
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            className="text-red-600 border-red-600 hover:bg-red-50"
+                            title="Deletar colaborador"
+                          >
+                            <Trash2 className="h-4 w-4" />
+                          </Button>
+                        </AlertDialogTrigger>
+                        <AlertDialogContent>
+                          <AlertDialogHeader>
+                            <AlertDialogTitle>Confirmar Exclusão</AlertDialogTitle>
+                            <AlertDialogDescription>
+                              Tem certeza que deseja deletar o colaborador "{colaborador.nome}"?
+                              Esta ação não pode ser desfeita e também removerá o acesso do usuário ao sistema.
+                            </AlertDialogDescription>
+                          </AlertDialogHeader>
+                          <AlertDialogFooter>
+                            <AlertDialogCancel>Cancelar</AlertDialogCancel>
+                            <AlertDialogAction
+                              onClick={() => handleDeletarColaborador(colaborador.id)}
+                              className="bg-red-600 hover:bg-red-700"
+                            >
+                              Deletar
+                            </AlertDialogAction>
+                          </AlertDialogFooter>
+                        </AlertDialogContent>
+                      </AlertDialog>
+                    </div>
+                  </div>
+                </Card>
+              ))
+            )}
+          </div>
         </CardContent>
       </Card>
 

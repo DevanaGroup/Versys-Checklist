@@ -568,7 +568,18 @@ const ProjectWrite = () => {
         <Card>
           <CardHeader>
             <CardTitle className="flex items-center space-x-2">
-              <span>{currentItem.title}</span>
+              <span className="sm:hidden">
+                {currentItem.title.length > 25 
+                  ? currentItem.title.replace(/SÓCIOS\/PROPRIETÁRIOS\/REPRESENTANTES:/g, 'SÓCIOS/PROP./REPR.:')
+                                     .replace(/DOCUMENTAÇÃO\/PRELIMINAR/g, 'DOC./PRELIM.')
+                                     .replace(/INSTALAÇÃO PORTUÁRIA:/g, 'INST. PORT.:')
+                                     .substring(0, 35) + (currentItem.title.length > 35 ? '...' : '')
+                  : currentItem.title
+                }
+              </span>
+              <span className="hidden sm:inline">
+                {currentItem.title}
+              </span>
               <Badge variant="secondary" className="uppercase">
                 {currentItem.category}
               </Badge>
@@ -705,9 +716,7 @@ const ProjectWrite = () => {
                                   <span className="text-sm font-medium">Da Galeria</span>
                                 </Button>
                               </div>
-                              <p className="text-xs text-gray-500 text-center">
-                                Ou arraste uma imagem aqui
-                              </p>
+
                             </div>
                           )}
                           
@@ -742,18 +751,7 @@ const ProjectWrite = () => {
                           />
                           
                           {/* Drag and drop area for gallery input */}
-                          <div
-                            className="border-2 border-dashed rounded-lg p-2 text-center text-xs text-gray-500 mt-2"
-                            onDragOver={e => e.preventDefault()}
-                            onDrop={e => {
-                              e.preventDefault();
-                              if (photoUploading[sub.id]) return;
-                              const file = e.dataTransfer.files[0];
-                              if (file) handlePhoto(sub.id, file);
-                            }}
-                          >
-                            Ou arraste uma imagem aqui
-                          </div>
+
                           
                           {photoUploading[sub.id] && (
                             <div className="text-xs text-center text-gray-500 mt-2">

@@ -17,6 +17,7 @@ import NotFound from "./pages/NotFound";
 import ClientDashboard from "./pages/ClientDashboard";
 import ClientProjects from "./pages/ClientProjects";
 import ClientProjectView from "./pages/ClientProjectView";
+import LandscapeOnly from "./components/LandscapeOnly";
 
 import Clientes from "./pages/Clientes";
 import Colaboradores from "./pages/Colaboradores";
@@ -67,13 +68,14 @@ const ProtectedRoute = ({ children, requiredType }: { children: React.ReactNode,
 };
 
 const App = () => (
-  <TabletModeProvider>
-    <QueryClientProvider client={queryClient}>
-      <AuthProvider>
-        <TooltipProvider>
-          <Toaster />
-          <Sonner />
-          <BrowserRouter>
+  <LandscapeOnly>
+    <TabletModeProvider>
+      <QueryClientProvider client={queryClient}>
+        <AuthProvider>
+          <TooltipProvider>
+            <Toaster />
+            <Sonner />
+            <BrowserRouter>
           <Routes>
             <Route path="/" element={<Login />} />
             <Route path="/colaborador/primeiro-acesso" element={<ColaboradorFirstLogin />} />
@@ -195,11 +197,12 @@ const App = () => (
             
             <Route path="*" element={<NotFound />} />
           </Routes>
-        </BrowserRouter>
-      </TooltipProvider>
-    </AuthProvider>
-  </QueryClientProvider>
-  </TabletModeProvider>
+            </BrowserRouter>
+          </TooltipProvider>
+        </AuthProvider>
+      </QueryClientProvider>
+    </TabletModeProvider>
+  </LandscapeOnly>
 );
 
 export default App;

@@ -1364,166 +1364,339 @@ const Projetos = () => {
                       <p className="text-gray-500">Nenhum projeto encontrado. Crie seu primeiro projeto!</p>
                     </div>
                   ) : (
-                    <Table>
-                      <TableHeader>
-                        <TableRow>
-                          <TableHead>Nome</TableHead>
-                          <TableHead>Status</TableHead>
-                          <TableHead>Progresso</TableHead>
-                          <TableHead>Consultor</TableHead>
-                          <TableHead>Data de Início</TableHead>
-                          <TableHead>Previsão</TableHead>
-                          <TableHead className="text-center">Ações</TableHead>
-                        </TableRow>
-                      </TableHeader>
-                      <TableBody>
+                    <>
+                      {/* Tabela Otimizada para Landscape Mobile */}
+                      <div className="hidden portrait:sm:block landscape:block">
+                        <div className="overflow-x-auto">
+                          <Table>
+                            <TableHeader>
+                              <TableRow>
+                                <TableHead className="min-w-[120px] landscape:min-w-[100px]">Nome</TableHead>
+                                <TableHead className="min-w-[80px] landscape:min-w-[70px]">Status</TableHead>
+                                <TableHead className="min-w-[100px] landscape:min-w-[80px]">Progresso</TableHead>
+                                <TableHead className="min-w-[80px] landscape:min-w-[70px]">Consultor</TableHead>
+                                <TableHead className="min-w-[80px] landscape:min-w-[70px]">Início</TableHead>
+                                <TableHead className="min-w-[80px] landscape:min-w-[70px]">Previsão</TableHead>
+                                <TableHead className="text-center min-w-[100px] landscape:min-w-[80px]">Ações</TableHead>
+                              </TableRow>
+                            </TableHeader>
+                          <TableBody>
+                            {getProjetosDoCliente().map((projeto) => (
+                              <TableRow 
+                                key={projeto.id} 
+                                className="cursor-pointer hover:bg-versys-secondary/5"
+                                onClick={() => handleViewDetails(projeto)}
+                              >
+                                <TableCell className="font-medium">
+                                  <div className="flex items-center space-x-2">
+                                    <Building className="h-4 w-4 text-versys-primary" />
+                                    <span className="text-versys-primary">{projeto.nome}</span>
+                                  </div>
+                                </TableCell>
+                                <TableCell>
+                                  <Badge className={getStatusColor(projeto.status)}>
+                                    {projeto.status}
+                                  </Badge>
+                                </TableCell>
+                                <TableCell>
+                                  <div className="flex items-center space-x-2">
+                                    <div className="flex-1 max-w-[80px]">
+                                      <Progress value={projeto.progresso} className="h-2" />
+                                    </div>
+                                    <span className="text-sm text-versys-primary font-medium">
+                                      {projeto.progresso}%
+                                    </span>
+                                  </div>
+                                </TableCell>
+                                <TableCell>
+                                  <div className="flex items-center space-x-1">
+                                    <User className="h-3 w-3" />
+                                    <span>{projeto.consultor}</span>
+                                  </div>
+                                </TableCell>
+                                <TableCell>
+                                  <div className="flex items-center space-x-1">
+                                    <Calendar className="h-3 w-3" />
+                                    <span>{new Date(projeto.dataInicio).toLocaleDateString('pt-BR')}</span>
+                                  </div>
+                                </TableCell>
+                                <TableCell>
+                                  <div className="flex items-center space-x-1">
+                                    <Calendar className="h-3 w-3" />
+                                    <span>{projeto.previsaoConclusao ? new Date(projeto.previsaoConclusao).toLocaleDateString('pt-BR') : 'Não definida'}</span>
+                                  </div>
+                                </TableCell>
+                                <TableCell className="text-center">
+                                  <div className="flex items-center justify-center space-x-2">
+                                    {projeto.status === 'Iniciado' && (
+                                      <Button
+                                        variant="ghost"
+                                        className="h-8 w-8 p-0"
+                                        title="Preencher formulário do projeto"
+                                        onClick={e => {
+                                          e.stopPropagation();
+                                          navigate(`/projetos/write/${projeto.id}`);
+                                        }}
+                                      >
+                                        <PlayCircle className="h-5 w-5 text-green-600" />
+                                      </Button>
+                                    )}
+                                    <Button
+                                      variant="ghost"
+                                      className="h-8 w-8 p-0"
+                                      title="Visualizar locais no mapa"
+                                      onClick={e => {
+                                        e.stopPropagation();
+                                        navigate(`/projetos/map/${projeto.id}`);
+                                      }}
+                                    >
+                                      <Globe className="h-5 w-5 text-blue-600" />
+                                    </Button>
+                                    <DropdownMenu>
+                                      <DropdownMenuTrigger asChild>
+                                        <Button 
+                                          variant="ghost" 
+                                          className="h-8 w-8 p-0"
+                                          onClick={(e) => e.stopPropagation()}
+                                        >
+                                          <MoreVertical className="h-4 w-4" />
+                                        </Button>
+                                      </DropdownMenuTrigger>
+                                      <DropdownMenuContent align="end">
+                                        <DropdownMenuItem onClick={(e) => {
+                                          e.stopPropagation();
+                                          handleViewDetails(projeto);
+                                        }}>
+                                          <Eye className="h-4 w-4 mr-2" />
+                                          Ver Detalhes
+                                        </DropdownMenuItem>
+                                        {isAdmin && (
+                                          <DropdownMenuItem onClick={(e) => {
+                                            e.stopPropagation();
+                                            navigate(`/projetos/edit/${projeto.id}`);
+                                          }}>
+                                            <Edit className="h-4 w-4 mr-2" />
+                                            Editar Projeto
+                                          </DropdownMenuItem>
+                                        )}
+                                        {isAdmin && (
+                                          <AlertDialog>
+                                            <AlertDialogTrigger asChild>
+                                              <DropdownMenuItem 
+                                                className="text-red-600 focus:text-red-600 focus:bg-red-50"
+                                                onSelect={(e) => e.preventDefault()}
+                                                onClick={(e) => e.stopPropagation()}
+                                              >
+                                                <Trash2 className="h-4 w-4 mr-2" />
+                                                {deletingProject === projeto.id ? 'Deletando...' : 'Excluir Projeto'}
+                                              </DropdownMenuItem>
+                                            </AlertDialogTrigger>
+                                            <AlertDialogContent>
+                                              <AlertDialogHeader>
+                                                <AlertDialogTitle>Confirmar Exclusão</AlertDialogTitle>
+                                                <AlertDialogDescription>
+                                                  Tem certeza que deseja excluir o projeto "{projeto.nome}"? 
+                                                  Esta ação não pode ser desfeita e todos os dados relacionados ao projeto serão perdidos permanentemente.
+                                                </AlertDialogDescription>
+                                              </AlertDialogHeader>
+                                              <AlertDialogFooter>
+                                                <AlertDialogCancel onClick={(e) => e.stopPropagation()}>
+                                                  Cancelar
+                                                </AlertDialogCancel>
+                                                <AlertDialogAction
+                                                  onClick={(e) => {
+                                                    e.stopPropagation();
+                                                    handleDeleteProject(projeto.id);
+                                                  }}
+                                                  className="bg-red-600 hover:bg-red-700"
+                                                >
+                                                  Confirmar Exclusão
+                                                </AlertDialogAction>
+                                              </AlertDialogFooter>
+                                            </AlertDialogContent>
+                                          </AlertDialog>
+                                        )}
+                                      </DropdownMenuContent>
+                                    </DropdownMenu>
+                                  </div>
+                                </TableCell>
+                              </TableRow>
+                            ))}
+                          </TableBody>
+                          </Table>
+                        </div>
+                      </div>
+
+                      {/* Cards para Portrait Mobile apenas */}
+                      <div className="portrait:block landscape:hidden sm:hidden space-y-4">
                         {getProjetosDoCliente().map((projeto) => (
-                          <TableRow 
+                          <Card 
                             key={projeto.id} 
-                            className="cursor-pointer hover:bg-versys-secondary/5"
+                            className="cursor-pointer hover:shadow-md transition-shadow"
                             onClick={() => handleViewDetails(projeto)}
                           >
-                            <TableCell className="font-medium">
-                              <div className="flex items-center space-x-2">
-                                <Building className="h-4 w-4 text-versys-primary" />
-                                <span className="text-versys-primary">{projeto.nome}</span>
+                            <CardContent className="p-4">
+                              {/* Header do Card */}
+                              <div className="flex items-start justify-between mb-3">
+                                <div className="flex items-center space-x-3 flex-1">
+                                  <Building className="h-5 w-5 text-versys-primary flex-shrink-0" />
+                                  <div className="min-w-0 flex-1">
+                                    <h3 className="font-medium text-versys-primary truncate">{projeto.nome}</h3>
+                                    <p className="text-sm text-gray-500 truncate">ID: #{projeto.id.slice(-6)}</p>
+                                  </div>
+                                </div>
+                                <Badge className={`ml-2 flex-shrink-0 ${getStatusColor(projeto.status)}`}>
+                                  {projeto.status}
+                                </Badge>
                               </div>
-                            </TableCell>
-                            <TableCell>
-                              <Badge className={getStatusColor(projeto.status)}>
-                                {projeto.status}
-                              </Badge>
-                            </TableCell>
-                            <TableCell>
-                              <div className="flex items-center space-x-2">
-                                <div className="flex-1 max-w-[80px]">
+
+                              {/* Informações do Projeto */}
+                              <div className="space-y-3">
+                                {/* Consultor */}
+                                <div className="flex items-center space-x-2">
+                                  <User className="h-4 w-4 text-gray-400" />
+                                  <span className="text-sm text-gray-600">Consultor:</span>
+                                  <span className="text-sm font-medium">{projeto.consultor}</span>
+                                </div>
+
+                                {/* Progresso */}
+                                <div className="space-y-1">
+                                  <div className="flex items-center justify-between">
+                                    <span className="text-sm text-gray-600">Progresso</span>
+                                    <span className="text-sm font-medium text-versys-primary">
+                                      {projeto.progresso}%
+                                    </span>
+                                  </div>
                                   <Progress value={projeto.progresso} className="h-2" />
                                 </div>
-                                <span className="text-sm text-versys-primary font-medium">
-                                  {projeto.progresso}%
-                                </span>
-                              </div>
-                            </TableCell>
-                            <TableCell>
-                              <div className="flex items-center space-x-1">
-                                <User className="h-3 w-3" />
-                                <span>{projeto.consultor}</span>
-                              </div>
-                            </TableCell>
-                            <TableCell>
-                              <div className="flex items-center space-x-1">
-                                <Calendar className="h-3 w-3" />
-                                <span>{new Date(projeto.dataInicio).toLocaleDateString('pt-BR')}</span>
-                              </div>
-                            </TableCell>
-                            <TableCell>
-                              <div className="flex items-center space-x-1">
-                                <Calendar className="h-3 w-3" />
-                                <span>{projeto.previsaoConclusao ? new Date(projeto.previsaoConclusao).toLocaleDateString('pt-BR') : 'Não definida'}</span>
-                              </div>
-                            </TableCell>
-                            <TableCell className="text-center">
-                              <div className="flex items-center justify-center space-x-2">
-                                {/* Ícone de play, só aparece se o status for 'Iniciado' - disponível para todos */}
-                                {projeto.status === 'Iniciado' && (
-                                  <Button
-                                    variant="ghost"
-                                    className="h-8 w-8 p-0"
-                                    title="Preencher formulário do projeto"
-                                    onClick={e => {
-                                      e.stopPropagation();
-                                      navigate(`/projetos/write/${projeto.id}`);
-                                    }}
-                                  >
-                                    <PlayCircle className="h-5 w-5 text-green-600" />
-                                  </Button>
-                                )}
-                                {/* Botão do mapa - disponível para todos */}
-                                <Button
-                                  variant="ghost"
-                                  className="h-8 w-8 p-0"
-                                  title="Visualizar locais no mapa"
-                                  onClick={e => {
-                                    e.stopPropagation();
-                                    navigate(`/projetos/map/${projeto.id}`);
-                                  }}
-                                >
-                                  <Globe className="h-5 w-5 text-blue-600" />
-                                </Button>
-                                {/* Dropdown de ações existente */}
-                                <DropdownMenu>
-                                  <DropdownMenuTrigger asChild>
-                                    <Button 
-                                      variant="ghost" 
-                                      className="h-8 w-8 p-0"
-                                      onClick={(e) => e.stopPropagation()}
-                                    >
-                                      <MoreVertical className="h-4 w-4" />
-                                    </Button>
-                                  </DropdownMenuTrigger>
-                                  <DropdownMenuContent align="end">
-                                    <DropdownMenuItem onClick={(e) => {
-                                      e.stopPropagation();
-                                      handleViewDetails(projeto);
-                                    }}>
-                                      <Eye className="h-4 w-4 mr-2" />
-                                      Ver Detalhes
-                                    </DropdownMenuItem>
 
-                                    {isAdmin && (
+                                {/* Datas */}
+                                <div className="grid grid-cols-1 gap-2">
+                                  <div className="flex items-center space-x-2">
+                                    <Calendar className="h-4 w-4 text-gray-400" />
+                                    <span className="text-sm text-gray-600">Início:</span>
+                                    <span className="text-sm">
+                                      {new Date(projeto.dataInicio).toLocaleDateString('pt-BR')}
+                                    </span>
+                                  </div>
+                                  <div className="flex items-center space-x-2">
+                                    <Clock className="h-4 w-4 text-gray-400" />
+                                    <span className="text-sm text-gray-600">Previsão:</span>
+                                    <span className="text-sm">
+                                      {projeto.previsaoConclusao 
+                                        ? new Date(projeto.previsaoConclusao).toLocaleDateString('pt-BR')
+                                        : 'Não definida'
+                                      }
+                                    </span>
+                                  </div>
+                                </div>
+
+                                {/* Ações */}
+                                <div className="flex items-center justify-between pt-2 border-t">
+                                  <div className="flex items-center space-x-1 flex-1">
+                                    {projeto.status === 'Iniciado' && (
+                                      <Button
+                                        variant="outline"
+                                        size="sm"
+                                        className="flex items-center space-x-1 text-xs px-2 py-1 h-7 flex-shrink-0"
+                                        onClick={e => {
+                                          e.stopPropagation();
+                                          navigate(`/projetos/write/${projeto.id}`);
+                                        }}
+                                      >
+                                        <PlayCircle className="h-3 w-3 text-green-600" />
+                                        <span className="hidden xs:inline">Preencher</span>
+                                        <span className="xs:hidden">Preench.</span>
+                                      </Button>
+                                    )}
+                                    
+                                    <Button
+                                      variant="outline"
+                                      size="sm"
+                                      className="flex items-center space-x-1 text-xs px-2 py-1 h-7 flex-shrink-0"
+                                      onClick={e => {
+                                        e.stopPropagation();
+                                        navigate(`/projetos/map/${projeto.id}`);
+                                      }}
+                                    >
+                                      <Globe className="h-3 w-3 text-blue-600" />
+                                      <span>Mapa</span>
+                                    </Button>
+                                  </div>
+                                  
+                                  <DropdownMenu>
+                                    <DropdownMenuTrigger asChild>
+                                      <Button 
+                                        variant="ghost" 
+                                        size="sm"
+                                        className="h-8 w-8 p-0"
+                                        onClick={(e) => e.stopPropagation()}
+                                      >
+                                        <MoreVertical className="h-4 w-4" />
+                                      </Button>
+                                    </DropdownMenuTrigger>
+                                    <DropdownMenuContent align="end">
                                       <DropdownMenuItem onClick={(e) => {
                                         e.stopPropagation();
-                                        navigate(`/projetos/edit/${projeto.id}`);
+                                        handleViewDetails(projeto);
                                       }}>
-                                        <Edit className="h-4 w-4 mr-2" />
-                                        Editar Projeto
+                                        <Eye className="h-4 w-4 mr-2" />
+                                        Ver Detalhes
                                       </DropdownMenuItem>
-                                    )}
-                                    {isAdmin && (
-                                      <AlertDialog>
-                                        <AlertDialogTrigger asChild>
-                                          <DropdownMenuItem 
-                                            className="text-red-600 focus:text-red-600 focus:bg-red-50"
-                                            onSelect={(e) => e.preventDefault()}
-                                            onClick={(e) => e.stopPropagation()}
-                                          >
-                                            <Trash2 className="h-4 w-4 mr-2" />
-                                            {deletingProject === projeto.id ? 'Deletando...' : 'Excluir Projeto'}
-                                          </DropdownMenuItem>
-                                        </AlertDialogTrigger>
-                                        <AlertDialogContent>
-                                          <AlertDialogHeader>
-                                            <AlertDialogTitle>Confirmar Exclusão</AlertDialogTitle>
-                                            <AlertDialogDescription>
-                                              Tem certeza que deseja excluir o projeto "{projeto.nome}"? 
-                                              Esta ação não pode ser desfeita e todos os dados relacionados ao projeto serão perdidos permanentemente.
-                                            </AlertDialogDescription>
-                                          </AlertDialogHeader>
-                                          <AlertDialogFooter>
-                                            <AlertDialogCancel onClick={(e) => e.stopPropagation()}>
-                                              Cancelar
-                                            </AlertDialogCancel>
-                                            <AlertDialogAction
-                                              onClick={(e) => {
-                                                e.stopPropagation();
-                                                handleDeleteProject(projeto.id);
-                                              }}
-                                              className="bg-red-600 hover:bg-red-700"
+                                      {isAdmin && (
+                                        <DropdownMenuItem onClick={(e) => {
+                                          e.stopPropagation();
+                                          navigate(`/projetos/edit/${projeto.id}`);
+                                        }}>
+                                          <Edit className="h-4 w-4 mr-2" />
+                                          Editar Projeto
+                                        </DropdownMenuItem>
+                                      )}
+                                      {isAdmin && (
+                                        <AlertDialog>
+                                          <AlertDialogTrigger asChild>
+                                            <DropdownMenuItem 
+                                              className="text-red-600 focus:text-red-600 focus:bg-red-50"
+                                              onSelect={(e) => e.preventDefault()}
+                                              onClick={(e) => e.stopPropagation()}
                                             >
-                                              Confirmar Exclusão
-                                            </AlertDialogAction>
-                                          </AlertDialogFooter>
-                                        </AlertDialogContent>
-                                      </AlertDialog>
-                                    )}
-                                  </DropdownMenuContent>
-                                </DropdownMenu>
+                                              <Trash2 className="h-4 w-4 mr-2" />
+                                              {deletingProject === projeto.id ? 'Deletando...' : 'Excluir'}
+                                            </DropdownMenuItem>
+                                          </AlertDialogTrigger>
+                                          <AlertDialogContent>
+                                            <AlertDialogHeader>
+                                              <AlertDialogTitle>Confirmar Exclusão</AlertDialogTitle>
+                                              <AlertDialogDescription>
+                                                Tem certeza que deseja excluir o projeto "{projeto.nome}"?
+                                              </AlertDialogDescription>
+                                            </AlertDialogHeader>
+                                            <AlertDialogFooter>
+                                              <AlertDialogCancel onClick={(e) => e.stopPropagation()}>
+                                                Cancelar
+                                              </AlertDialogCancel>
+                                              <AlertDialogAction
+                                                onClick={(e) => {
+                                                  e.stopPropagation();
+                                                  handleDeleteProject(projeto.id);
+                                                }}
+                                                className="bg-red-600 hover:bg-red-700"
+                                              >
+                                                Confirmar
+                                              </AlertDialogAction>
+                                            </AlertDialogFooter>
+                                          </AlertDialogContent>
+                                        </AlertDialog>
+                                      )}
+                                    </DropdownMenuContent>
+                                  </DropdownMenu>
+                                </div>
                               </div>
-                            </TableCell>
-                          </TableRow>
+                            </CardContent>
+                          </Card>
                         ))}
-                      </TableBody>
-                    </Table>
+                      </div>
+                    </>
                   )}
                 </CardContent>
               </Card>

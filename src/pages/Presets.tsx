@@ -854,45 +854,140 @@ const Presets = () => {
             ))}
           </div>
         ) : (
-          <div className="overflow-x-auto">
-            <table className="min-w-full divide-y divide-gray-200 bg-white rounded-lg shadow-sm">
-              <thead>
-                <tr>
-                  <th className="px-4 py-2 text-left text-sm font-semibold text-gray-700">Nome</th>
-                  <th className="px-4 py-2 text-left text-sm font-semibold text-gray-700">Descrição</th>
-                  <th className="px-4 py-2 text-left text-sm font-semibold text-gray-700">Acordeões</th>
-                  <th className="px-4 py-2 text-left text-sm font-semibold text-gray-700">Itens</th>
-                  <th className="px-4 py-2 text-center text-sm font-semibold text-gray-700">Ação</th>
-                </tr>
-              </thead>
-              <tbody>
-                {presets.map((preset) => (
-                  <tr key={preset.id} className="hover:bg-gray-50">
-                    <td className="px-4 py-2 font-medium text-gray-900 truncate max-w-xs">{preset.nome}</td>
-                    <td className="px-4 py-2 text-gray-600 truncate max-w-xs">{preset.descricao}</td>
-                    <td className="px-4 py-2 text-gray-600">{preset.accordions.length}</td>
-                    <td className="px-4 py-2 text-gray-600">{getTotalItems(preset)}</td>
-                    <td className="px-4 py-2 flex gap-1 justify-center">
+          <>
+            {/* Versão Desktop - Tabela */}
+            <div className="hidden md:block overflow-x-auto">
+              <table className="min-w-full divide-y divide-gray-200 bg-white rounded-lg shadow-sm">
+                <thead>
+                  <tr>
+                    <th className="px-4 py-2 text-left text-sm font-semibold text-gray-700">Nome</th>
+                    <th className="px-4 py-2 text-left text-sm font-semibold text-gray-700">Descrição</th>
+                    <th className="px-4 py-2 text-left text-sm font-semibold text-gray-700">Acordeões</th>
+                    <th className="px-4 py-2 text-left text-sm font-semibold text-gray-700">Itens</th>
+                    <th className="px-4 py-2 text-center text-sm font-semibold text-gray-700">Ação</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {presets.map((preset) => (
+                    <tr key={preset.id} className="hover:bg-gray-50">
+                      <td className="px-4 py-2 font-medium text-gray-900 truncate max-w-xs">{preset.nome}</td>
+                      <td className="px-4 py-2 text-gray-600 truncate max-w-xs">{preset.descricao}</td>
+                      <td className="px-4 py-2 text-gray-600">{preset.accordions.length}</td>
+                      <td className="px-4 py-2 text-gray-600">{getTotalItems(preset)}</td>
+                      <td className="px-4 py-2 flex gap-1 justify-center">
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => openViewMode(preset)}
+                          aria-label="Visualizar"
+                        >
+                          <Eye className="h-4 w-4" />
+                        </Button>
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => openEditMode(preset)}
+                          aria-label="Editar"
+                        >
+                          <Edit2 className="h-4 w-4" />
+                        </Button>
+                        <AlertDialog>
+                          <AlertDialogTrigger asChild>
+                            <Button variant="ghost" size="sm" className="text-red-500 hover:text-red-700" aria-label="Excluir">
+                              <Trash2 className="h-4 w-4" />
+                            </Button>
+                          </AlertDialogTrigger>
+                          <AlertDialogContent>
+                            <AlertDialogHeader>
+                              <AlertDialogTitle>Confirmar Exclusão</AlertDialogTitle>
+                              <AlertDialogDescription>
+                                Tem certeza que deseja excluir o preset "{preset.nome}"? Esta ação não pode ser desfeita.
+                              </AlertDialogDescription>
+                            </AlertDialogHeader>
+                            <AlertDialogFooter>
+                              <AlertDialogCancel>Cancelar</AlertDialogCancel>
+                              <AlertDialogAction
+                                onClick={() => handleDeletePreset(preset)}
+                                className="bg-red-600 hover:bg-red-700"
+                              >
+                                Excluir
+                              </AlertDialogAction>
+                            </AlertDialogFooter>
+                          </AlertDialogContent>
+                        </AlertDialog>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+
+            {/* Versão Mobile - Cards */}
+            <div className="md:hidden space-y-4">
+              {presets.map((preset) => (
+                <Card key={preset.id} className="hover:shadow-md transition-shadow">
+                  <CardContent className="p-4">
+                    {/* Header do Card */}
+                    <div className="flex items-start justify-between mb-3">
+                      <div className="flex-1">
+                        <h3 className="font-semibold text-gray-900 mb-1">{preset.nome}</h3>
+                        <p className="text-sm text-gray-600 line-clamp-2">{preset.descricao}</p>
+                      </div>
+                      <Badge variant="secondary" className="ml-2 shrink-0">
+                        Personalizado
+                      </Badge>
+                    </div>
+
+                    {/* Estatísticas */}
+                    <div className="flex items-center gap-4 mb-4 p-3 bg-gray-50 rounded-lg">
+                      <div className="flex items-center gap-2">
+                        <div className="w-8 h-8 bg-blue-100 rounded-full flex items-center justify-center">
+                          <span className="text-sm font-semibold text-blue-600">
+                            {preset.accordions.length}
+                          </span>
+                        </div>
+                        <span className="text-sm text-gray-600">Acordeões</span>
+                      </div>
+                      <div className="w-px h-6 bg-gray-300"></div>
+                      <div className="flex items-center gap-2">
+                        <div className="w-8 h-8 bg-green-100 rounded-full flex items-center justify-center">
+                          <span className="text-sm font-semibold text-green-600">
+                            {getTotalItems(preset)}
+                          </span>
+                        </div>
+                        <span className="text-sm text-gray-600">Itens</span>
+                      </div>
+                    </div>
+
+                    {/* Ações */}
+                    <div className="flex items-center justify-end gap-2 pt-2 border-t">
                       <Button
-                        variant="ghost"
+                        variant="outline"
                         size="sm"
                         onClick={() => openViewMode(preset)}
-                        aria-label="Visualizar"
+                        className="flex items-center gap-2"
                       >
                         <Eye className="h-4 w-4" />
+                        <span>Ver</span>
                       </Button>
                       <Button
-                        variant="ghost"
+                        variant="outline"
                         size="sm"
                         onClick={() => openEditMode(preset)}
-                        aria-label="Editar"
+                        className="flex items-center gap-2"
                       >
                         <Edit2 className="h-4 w-4" />
+                        <span>Editar</span>
                       </Button>
                       <AlertDialog>
                         <AlertDialogTrigger asChild>
-                          <Button variant="ghost" size="sm" className="text-red-500 hover:text-red-700" aria-label="Excluir">
+                          <Button 
+                            variant="outline" 
+                            size="sm" 
+                            className="text-red-600 border-red-200 hover:bg-red-50 flex items-center gap-2"
+                          >
                             <Trash2 className="h-4 w-4" />
+                            <span>Excluir</span>
                           </Button>
                         </AlertDialogTrigger>
                         <AlertDialogContent>
@@ -913,12 +1008,12 @@ const Presets = () => {
                           </AlertDialogFooter>
                         </AlertDialogContent>
                       </AlertDialog>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
+                    </div>
+                  </CardContent>
+                </Card>
+              ))}
+            </div>
+          </>
         )
       )}
     </div>
@@ -933,27 +1028,30 @@ const Presets = () => {
     const currentAccordion = selectedPreset.accordions[currentViewStep];
 
     return (
-      <div className="max-w-4xl mx-auto">
+      <div className="w-full sm:max-w-4xl mx-auto">
         <div className="bg-white rounded-lg shadow-sm border min-h-[600px]">
           {/* Cabeçalho */}
-          <div className="px-6 py-4 border-b border-gray-200">
+          <div className="px-3 sm:px-6 py-3 sm:py-4 border-b border-gray-200">
             <div className="flex items-center justify-between">
-              <h1 className="text-xl font-semibold text-gray-900">{selectedPreset.nome}</h1>
-              <div className="flex gap-2">
+              <h1 className="text-lg sm:text-xl font-semibold text-gray-900 truncate pr-2">{selectedPreset.nome}</h1>
+              <div className="flex gap-1 sm:gap-2 flex-shrink-0">
                 <Button
                   variant="outline"
                   onClick={() => openEditMode(selectedPreset)}
-                  className="text-blue-600 border-blue-200 hover:bg-blue-50"
+                  className="text-blue-600 border-blue-200 hover:bg-blue-50 text-xs sm:text-sm px-2 sm:px-3"
+                  size="sm"
                 >
-                  <Edit2 className="h-4 w-4 mr-2" />
-                  Editar
+                  <Edit2 className="h-3 w-3 sm:h-4 sm:w-4 sm:mr-2" />
+                  <span className="hidden sm:inline">Editar</span>
                 </Button>
                 <Button
                   variant="outline"
                   onClick={backToList}
-                  className="text-gray-600 border-gray-200 hover:bg-gray-50"
+                  className="text-gray-600 border-gray-200 hover:bg-gray-50 text-xs sm:text-sm px-2 sm:px-3"
+                  size="sm"
                 >
-                  Cancelar
+                  <span className="hidden sm:inline">Cancelar</span>
+                  <span className="sm:hidden">✕</span>
                 </Button>
               </div>
             </div>
@@ -962,13 +1060,13 @@ const Presets = () => {
           {totalSteps > 0 ? (
             <>
               {/* Indicadores de Etapas */}
-              <div className="px-6 py-6 border-b border-gray-100">
-                <div className="flex items-center justify-center space-x-8">
+              <div className="px-3 sm:px-6 py-4 sm:py-6 border-b border-gray-100">
+                <div className="flex items-center justify-center space-x-2 sm:space-x-4 md:space-x-8 overflow-x-auto">
                   {selectedPreset.accordions.map((accordion, index) => (
-                    <div key={index} className="flex flex-col items-center">
+                    <div key={index} className="flex flex-col items-center min-w-0 flex-shrink-0">
                       <div className="flex items-center">
                         <div
-                          className={`w-8 h-8 rounded-full flex items-center justify-center text-sm font-medium transition-all duration-200 ${
+                          className={`w-6 h-6 sm:w-8 sm:h-8 rounded-full flex items-center justify-center text-xs sm:text-sm font-medium transition-all duration-200 ${
                             index === currentViewStep
                               ? 'bg-blue-600 text-white shadow-lg'
                               : index < currentViewStep
@@ -984,25 +1082,37 @@ const Presets = () => {
                         </div>
                         {index < totalSteps - 1 && (
                           <div
-                            className={`w-16 h-0.5 ml-2 transition-all duration-200 ${
+                            className={`w-4 sm:w-8 md:w-16 h-0.5 ml-1 sm:ml-2 transition-all duration-200 ${
                               index < currentViewStep ? 'bg-green-500' : 'bg-gray-200'
                             }`}
                           />
                         )}
                       </div>
-                      <div className="mt-2 text-center">
+                      <div className="mt-1 sm:mt-2 text-center max-w-[80px] sm:max-w-none">
                         <p
-                          className={`text-xs font-medium transition-all duration-200 ${
+                          className={`text-xs font-medium transition-all duration-200 truncate ${
                             index === currentViewStep
                               ? 'text-blue-600'
                               : index < currentViewStep
                               ? 'text-green-600'
                               : 'text-gray-500'
                           }`}
+                          title={accordion.title}
                         >
-                          {accordion.title}
+                          <span className="sm:hidden">
+                            {accordion.title.length > 15 
+                              ? accordion.title.replace(/SÓCIOS\/PROPRIETÁRIOS\/REPRESENTANTES:/g, 'SÓCIOS/PROP./REPR.:')
+                                               .replace(/DOCUMENTAÇÃO\/PRELIMINAR/g, 'DOC./PRELIM.')
+                                               .replace(/INSTALAÇÃO PORTUÁRIA:/g, 'INST. PORT.:')
+                                               .substring(0, 20) + (accordion.title.length > 20 ? '...' : '')
+                              : accordion.title
+                            }
+                          </span>
+                          <span className="hidden sm:inline">
+                            {accordion.title}
+                          </span>
                         </p>
-                        <p className="text-xs text-gray-400 mt-1">
+                        <p className="text-xs text-gray-400 mt-1 hidden sm:block">
                           {accordion.items.length} {accordion.items.length === 1 ? 'item' : 'itens'}
                         </p>
                       </div>
@@ -1012,29 +1122,40 @@ const Presets = () => {
               </div>
 
               {/* Conteúdo da Etapa Atual */}
-              <div className="px-6 py-8">
-                <div className="max-w-2xl mx-auto">
-                  <div className="text-center mb-8">
-                    <h2 className="text-2xl font-bold text-gray-900 mb-2">
-                      {currentAccordion.title}
+              <div className="px-3 sm:px-6 py-4 sm:py-8">
+                <div className="w-full landscape:max-w-4xl portrait:sm:max-w-2xl mx-auto">
+                  <div className="text-center mb-4 landscape:mb-6 sm:mb-8">
+                    <h2 className="text-sm landscape:text-base sm:text-lg md:text-xl lg:text-2xl font-bold text-gray-900 mb-2 px-2 leading-tight">
+                      <span className="portrait:block landscape:hidden sm:hidden">
+                        {currentAccordion.title.length > 25 
+                          ? currentAccordion.title.replace(/SÓCIOS\/PROPRIETÁRIOS\/REPRESENTANTES:/g, 'SÓCIOS/PROP./REPR.:')
+                                                   .replace(/DOCUMENTAÇÃO\/PRELIMINAR/g, 'DOC./PRELIM.')
+                                                   .replace(/INSTALAÇÃO PORTUÁRIA:/g, 'INST. PORT.:')
+                                                   .substring(0, 35) + (currentAccordion.title.length > 35 ? '...' : '')
+                          : currentAccordion.title
+                        }
+                      </span>
+                      <span className="hidden portrait:sm:inline landscape:inline">
+                        {currentAccordion.title}
+                      </span>
                     </h2>
-                    <p className="text-gray-600">
+                    <p className="text-xs sm:text-sm md:text-base text-gray-600">
                       Etapa {currentViewStep + 1} de {totalSteps}
                     </p>
                   </div>
 
                   {currentAccordion.items.length > 0 ? (
-                    <div className="space-y-4">
+                    <div className="space-y-3 sm:space-y-4">
                       {currentAccordion.items.map((item, itemIndex) => (
                         <div
                           key={itemIndex}
-                          className="flex gap-4 p-4 bg-gray-50 rounded-lg border border-gray-200 hover:bg-gray-100 transition-colors"
+                          className="flex gap-3 sm:gap-4 p-3 sm:p-4 bg-gray-50 rounded-lg border border-gray-200 hover:bg-gray-100 transition-colors"
                         >
-                          <div className="w-8 h-8 rounded-full bg-blue-100 flex items-center justify-center shrink-0">
-                            <span className="text-sm font-medium text-blue-600">{itemIndex + 1}</span>
+                          <div className="w-6 h-6 sm:w-8 sm:h-8 rounded-full bg-blue-100 flex items-center justify-center shrink-0">
+                            <span className="text-xs sm:text-sm font-medium text-blue-600">{itemIndex + 1}</span>
                           </div>
                           <div className="flex-1">
-                            <p className="text-gray-800 leading-relaxed">{item}</p>
+                            <p className="text-sm sm:text-base text-gray-800 leading-relaxed">{item}</p>
                           </div>
                         </div>
                       ))}
@@ -1051,20 +1172,22 @@ const Presets = () => {
                 </div>
               </div>
 
-              {/* Navegação */}
-              <div className="px-6 py-4 border-t border-gray-100 bg-gray-50">
-                <div className="flex items-center justify-between">
+              {/* Navegação Otimizada para Landscape */}
+              <div className="px-3 sm:px-6 py-3 sm:py-4 border-t border-gray-100 bg-gray-50">
+                <div className="flex items-center justify-between landscape:justify-center landscape:gap-8">
                   <Button
                     variant="outline"
                     onClick={() => setCurrentViewStep(Math.max(0, currentViewStep - 1))}
                     disabled={currentViewStep === 0}
-                    className="flex items-center gap-2"
+                    className="flex items-center gap-1 sm:gap-2 text-xs landscape:text-sm sm:text-sm px-2 landscape:px-4 sm:px-3"
+                    size="sm"
                   >
-                    <ArrowLeft className="h-4 w-4" />
-                    Anterior
+                    <ArrowLeft className="h-3 w-3 sm:h-4 sm:w-4" />
+                    <span className="hidden xs:inline landscape:inline">Anterior</span>
+                    <span className="xs:hidden landscape:hidden">‹</span>
                   </Button>
                   
-                  <span className="text-sm text-gray-500">
+                  <span className="text-xs sm:text-sm text-gray-500 font-medium">
                     Passo {currentViewStep + 1} de {totalSteps}
                   </span>
                   
@@ -1072,10 +1195,12 @@ const Presets = () => {
                     variant="outline"
                     onClick={() => setCurrentViewStep(Math.min(totalSteps - 1, currentViewStep + 1))}
                     disabled={currentViewStep === totalSteps - 1}
-                    className="flex items-center gap-2"
+                    className="flex items-center gap-1 sm:gap-2 text-xs landscape:text-sm sm:text-sm px-2 landscape:px-4 sm:px-3"
+                    size="sm"
                   >
-                    Próximo
-                    <ArrowRight className="h-4 w-4" />
+                    <span className="hidden xs:inline landscape:inline">Próximo</span>
+                    <span className="xs:hidden landscape:hidden">›</span>
+                    <ArrowRight className="h-3 w-3 sm:h-4 sm:w-4" />
                   </Button>
                 </div>
               </div>

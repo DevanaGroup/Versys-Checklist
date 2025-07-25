@@ -1,0 +1,109 @@
+/* Forced Landscape Orientation for Mobile/Tablet */
+
+/* Hide portrait warning in landscape */
+@media screen and (orientation: landscape) {
+  .landscape-only-warning {
+    display: none !important;
+  }
+}
+
+/* Show portrait warning in portrait mode for mobile/tablet */
+@media screen and (orientation: portrait) and (max-width: 1024px) {
+  .landscape-only-warning {
+    display: flex !important;
+  }
+}
+
+/* Landscape orientation utilities */
+@media screen and (orientation: landscape) and (max-width: 1024px) {
+  .landscape\:block {
+    display: block !important;
+  }
+  
+  .landscape\:hidden {
+    display: none !important;
+  }
+  
+  .landscape\:inline {
+    display: inline !important;
+  }
+  
+  .landscape\:max-w-4xl {
+    max-width: 56rem !important;
+  }
+  
+  .landscape\:mb-6 {
+    margin-bottom: 1.5rem !important;
+  }
+  
+  .landscape\:text-base {
+    font-size: 1rem !important;
+    line-height: 1.5rem !important;
+  }
+  
+  .landscape\:text-sm {
+    font-size: 0.875rem !important;
+    line-height: 1.25rem !important;
+  }
+  
+  .landscape\:px-4 {
+    padding-left: 1rem !important;
+    padding-right: 1rem !important;
+  }
+  
+  .landscape\:justify-center {
+    justify-content: center !important;
+  }
+  
+  .landscape\:gap-8 {
+    gap: 2rem !important;
+  }
+  
+  .landscape\:min-w-\[100px\] {
+    min-width: 100px !important;
+  }
+  
+  .landscape\:min-w-\[70px\] {
+    min-width: 70px !important;
+  }
+  
+  .landscape\:min-w-\[80px\] {
+    min-width: 80px !important;
+  }
+}
+
+/* Portrait orientation media queries */
+@media screen and (orientation: portrait) {
+  .portrait\:block {
+    display: block !important;
+  }
+  
+  .portrait\:sm\:max-w-2xl {
+    max-width: 42rem !important;
+  }
+  
+  .portrait\:sm\:inline {
+    display: inline !important;
+  }
+  
+  .portrait\:sm\:block {
+    display: block !important;
+  }
+}
+
+/* Ensure proper mobile landscape experience */
+@media screen and (orientation: landscape) and (max-height: 500px) {
+  /* Compact spacing for very short landscape screens */
+  .landscape\:py-2 {
+    padding-top: 0.5rem !important;
+    padding-bottom: 0.5rem !important;
+  }
+  
+  .landscape\:mb-4 {
+    margin-bottom: 1rem !important;
+  }
+  
+  .landscape\:space-y-2 > * + * {
+    margin-top: 0.5rem !important;
+  }
+}

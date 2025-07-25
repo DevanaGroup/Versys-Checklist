@@ -620,7 +620,7 @@ const Clientes = () => {
               </div>
 
               {/* Layout Desktop - Tabela */}
-              <div className="hidden xl:block">
+              <div className="hidden md:block">
                 <Table>
                   <TableHeader>
                     <TableRow>
@@ -712,6 +712,114 @@ const Clientes = () => {
                     ))}
                   </TableBody>
                 </Table>
+              </div>
+
+              {/* Layout Mobile - Cards */}
+              <div className="md:hidden space-y-4">
+                {clientesFiltrados.map((cliente) => (
+                  <Card key={cliente.id} className="p-4">
+                    <div className="space-y-3">
+                      {/* Header do Card */}
+                      <div className="flex items-start justify-between">
+                        <div className="flex-1">
+                          <h3 className="font-semibold text-lg text-gray-900">{cliente.nome}</h3>
+                          <p className="text-sm text-gray-600">{cliente.empresa}</p>
+                        </div>
+                        <div className="ml-2">
+                          {getStatusBadge(cliente.status)}
+                        </div>
+                      </div>
+
+                      {/* Informações do Cliente */}
+                      <div className="space-y-2">
+                        <div className="flex items-center text-sm">
+                          <span className="font-medium text-gray-700 w-20">Email:</span>
+                          <span className="text-gray-600 break-all">{cliente.email}</span>
+                        </div>
+                        {cliente.telefone && (
+                          <div className="flex items-center text-sm">
+                            <span className="font-medium text-gray-700 w-20">Telefone:</span>
+                            <span className="text-gray-600">{cliente.telefone}</span>
+                          </div>
+                        )}
+                        <div className="flex items-center text-sm">
+                          <span className="font-medium text-gray-700 w-20">Projetos:</span>
+                          <span className="text-gray-600">{cliente.projetos}</span>
+                        </div>
+                        <div className="flex items-center text-sm">
+                          <span className="font-medium text-gray-700 w-20">Criado:</span>
+                          <span className="text-gray-600">{new Date(cliente.dataCriacao).toLocaleDateString('pt-BR')}</span>
+                        </div>
+                      </div>
+
+                      {/* Ações */}
+                      <div className="flex gap-2 pt-2 border-t">
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => {
+                            setClienteEditando({ ...cliente });
+                            setDialogEdicaoAberto(true);
+                          }}
+                          className="flex-1"
+                        >
+                          <Edit className="h-4 w-4 mr-2" />
+                          Editar
+                        </Button>
+                        {cliente.status === 'ativo' ? (
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => handleAlterarStatus(cliente.id, 'suspenso')}
+                            className="flex-1 text-orange-600 border-orange-600 hover:bg-orange-50"
+                          >
+                            <UserX className="h-4 w-4 mr-2" />
+                            Suspender
+                          </Button>
+                        ) : (
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => handleAlterarStatus(cliente.id, 'ativo')}
+                            className="flex-1 text-green-600 border-green-600 hover:bg-green-50"
+                          >
+                            <UserCheck className="h-4 w-4 mr-2" />
+                            Ativar
+                          </Button>
+                        )}
+                        <AlertDialog>
+                          <AlertDialogTrigger asChild>
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              className="text-red-600 border-red-600 hover:bg-red-50"
+                            >
+                              <Trash2 className="h-4 w-4" />
+                            </Button>
+                          </AlertDialogTrigger>
+                          <AlertDialogContent>
+                            <AlertDialogHeader>
+                              <AlertDialogTitle>Tem certeza?</AlertDialogTitle>
+                              <AlertDialogDescription>
+                                Esta ação não pode ser desfeita. Isso irá deletar permanentemente o cliente
+                                e remover todos os dados associados.
+                              </AlertDialogDescription>
+                            </AlertDialogHeader>
+                            <AlertDialogFooter>
+                              <AlertDialogCancel>Cancelar</AlertDialogCancel>
+                              <AlertDialogAction
+                                onClick={() => handleDeletarCliente(cliente.id)}
+                                className="bg-red-600 hover:bg-red-700"
+                              >
+                                Deletar
+                              </AlertDialogAction>
+                            </AlertDialogFooter>
+                          </AlertDialogContent>
+                        </AlertDialog>
+                      </div>
+                    </div>
+                  </Card>
+                ))}
               </div>
             </>
           )}

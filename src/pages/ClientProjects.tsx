@@ -220,118 +220,230 @@ const ClientProjects = () => {
               </p>
             </div>
           ) : (
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>Nome do Projeto</TableHead>
-                  <TableHead>Status</TableHead>
-                  <TableHead>Consultor</TableHead>
-                  <TableHead>Progresso</TableHead>
-                  <TableHead>Data de Início</TableHead>
-                  <TableHead>Previsão de Conclusão</TableHead>
-                  <TableHead className="text-center">Ações</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
+            <>
+              {/* Versão Desktop - Tabela */}
+              <div className="hidden md:block">
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>Nome do Projeto</TableHead>
+                      <TableHead>Status</TableHead>
+                      <TableHead>Consultor</TableHead>
+                      <TableHead>Progresso</TableHead>
+                      <TableHead>Data de Início</TableHead>
+                      <TableHead>Previsão de Conclusão</TableHead>
+                      <TableHead className="text-center">Ações</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {projectDetails.map((project) => (
+                      <TableRow 
+                        key={project.id} 
+                        className="cursor-pointer hover:bg-versys-secondary/5"
+                        onClick={() => handleProjectClick(project.id)}
+                      >
+                        <TableCell>
+                          <div className="flex items-center space-x-3">
+                            <div className="flex-shrink-0">
+                              <Building className="h-5 w-5 text-versys-primary" />
+                            </div>
+                            <div>
+                              <div className="font-medium text-gray-900">{project.nome}</div>
+                              <div className="text-sm text-gray-500">Projeto #{project.id.slice(-6)}</div>
+                            </div>
+                          </div>
+                        </TableCell>
+                        <TableCell>
+                          <Badge 
+                            variant={project.status === 'Concluído' ? 'default' : 
+                                    project.status === 'Em Andamento' ? 'secondary' : 
+                                    project.status === 'Iniciado' ? 'outline' : 'destructive'}
+                            className={project.status === 'Concluído' ? 'bg-green-100 text-green-800' : 
+                                      project.status === 'Em Andamento' ? 'bg-blue-100 text-blue-800' : 
+                                      project.status === 'Iniciado' ? 'bg-yellow-100 text-yellow-800' : ''}
+                          >
+                            {project.status}
+                          </Badge>
+                        </TableCell>
+                        <TableCell>
+                          <div className="flex items-center space-x-1">
+                            <User className="h-3 w-3" />
+                            <span>{project.consultor}</span>
+                          </div>
+                        </TableCell>
+                        <TableCell>
+                          <div className="flex items-center space-x-2">
+                            <div className="flex-1 max-w-[80px]">
+                              <Progress value={project.progresso} className="h-2" />
+                            </div>
+                            <span className="text-sm text-versys-primary font-medium">
+                              {project.progresso}%
+                            </span>
+                          </div>
+                        </TableCell>
+                        <TableCell>
+                          <div className="flex items-center space-x-1">
+                            <Calendar className="h-3 w-3" />
+                            <span>{new Date(project.dataInicio).toLocaleDateString('pt-BR')}</span>
+                          </div>
+                        </TableCell>
+                        <TableCell>
+                          <div className="flex items-center space-x-1">
+                            <Clock className="h-3 w-3" />
+                            <span>
+                              {project.previsaoConclusao 
+                                ? new Date(project.previsaoConclusao).toLocaleDateString('pt-BR')
+                                : 'Não definida'
+                              }
+                            </span>
+                          </div>
+                        </TableCell>
+                        <TableCell>
+                          <div className="flex items-center justify-center space-x-2">
+                            {/* Botão de preencher formulário - só aparece se o status for 'Iniciado' */}
+                            {project.status === 'Iniciado' && (
+                              <Button
+                                variant="ghost"
+                                className="h-8 w-8 p-0"
+                                title="Preencher formulário do projeto"
+                                onClick={e => {
+                                  e.stopPropagation();
+                                  navigate(`/client-projects/write/${project.id}`);
+                                }}
+                              >
+                                <PlayCircle className="h-5 w-5 text-green-600" />
+                              </Button>
+                            )}
+                            
+                            {/* Botão de visualizar mapa */}
+                            <Button
+                              variant="ghost"
+                              className="h-8 w-8 p-0"
+                              title="Visualizar locais no mapa"
+                              onClick={e => {
+                                e.stopPropagation();
+                                navigate(`/client-projects/map/${project.id}`);
+                              }}
+                            >
+                              <Globe className="h-5 w-5 text-blue-600" />
+                            </Button>
+                          </div>
+                        </TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              </div>
+
+              {/* Versão Mobile - Cards */}
+              <div className="md:hidden space-y-4">
                 {projectDetails.map((project) => (
-                  <TableRow 
+                  <Card 
                     key={project.id} 
-                    className="cursor-pointer hover:bg-versys-secondary/5"
+                    className="cursor-pointer hover:shadow-md transition-shadow"
                     onClick={() => handleProjectClick(project.id)}
                   >
-                    <TableCell className="font-medium">
-                      <div className="flex items-center space-x-2">
-                        <Building className="h-4 w-4 text-versys-primary" />
-                        <span className="text-versys-primary">{project.nome}</span>
+                    <CardContent className="p-4">
+                      {/* Header do Card */}
+                      <div className="flex items-start justify-between mb-3">
+                        <div className="flex items-center space-x-3 flex-1">
+                          <Building className="h-5 w-5 text-versys-primary flex-shrink-0" />
+                          <div className="min-w-0 flex-1">
+                            <h3 className="font-medium text-gray-900 truncate">{project.nome}</h3>
+                            <p className="text-sm text-gray-500 truncate">Projeto #{project.id.slice(-6)}</p>
+                          </div>
+                        </div>
+                        <Badge 
+                          variant={project.status === 'Concluído' ? 'default' : 
+                                  project.status === 'Em Andamento' ? 'secondary' : 
+                                  project.status === 'Iniciado' ? 'outline' : 'destructive'}
+                          className={`ml-2 flex-shrink-0 ${
+                            project.status === 'Concluído' ? 'bg-green-100 text-green-800' : 
+                            project.status === 'Em Andamento' ? 'bg-blue-100 text-blue-800' : 
+                            project.status === 'Iniciado' ? 'bg-yellow-100 text-yellow-800' : ''
+                          }`}
+                        >
+                          {project.status}
+                        </Badge>
                       </div>
-                    </TableCell>
-                    <TableCell>
-                      <Badge className={getStatusColor(project.status)}>
-                        {project.status}
-                      </Badge>
-                    </TableCell>
-                    <TableCell>
-                      <div className="flex items-center space-x-1">
-                        <User className="h-3 w-3" />
-                        <span>{project.consultor}</span>
-                      </div>
-                    </TableCell>
-                    <TableCell>
-                      <div className="flex items-center space-x-2">
-                        <div className="flex-1 max-w-[80px]">
+
+                      {/* Informações do Projeto */}
+                      <div className="space-y-3">
+                        {/* Consultor */}
+                        <div className="flex items-center space-x-2">
+                          <User className="h-4 w-4 text-gray-400" />
+                          <span className="text-sm text-gray-600">Consultor:</span>
+                          <span className="text-sm font-medium">{project.consultor}</span>
+                        </div>
+
+                        {/* Progresso */}
+                        <div className="space-y-1">
+                          <div className="flex items-center justify-between">
+                            <span className="text-sm text-gray-600">Progresso</span>
+                            <span className="text-sm font-medium text-versys-primary">
+                              {project.progresso}%
+                            </span>
+                          </div>
                           <Progress value={project.progresso} className="h-2" />
                         </div>
-                        <span className="text-sm text-versys-primary font-medium">
-                          {project.progresso}%
-                        </span>
-                      </div>
-                    </TableCell>
-                    <TableCell>
-                      <div className="flex items-center space-x-1">
-                        <Calendar className="h-3 w-3" />
-                        <span>{new Date(project.dataInicio).toLocaleDateString('pt-BR')}</span>
-                      </div>
-                    </TableCell>
-                    <TableCell>
-                      <div className="flex items-center space-x-1">
-                        <Clock className="h-3 w-3" />
-                        <span>
-                          {project.previsaoConclusao 
-                            ? new Date(project.previsaoConclusao).toLocaleDateString('pt-BR')
-                            : 'Não definida'
-                          }
-                        </span>
-                      </div>
-                    </TableCell>
-                    <TableCell>
-                      <div className="flex items-center justify-center space-x-2">
-                        {/* Botão de preencher formulário - só aparece se o status for 'Iniciado' */}
-                        {project.status === 'Iniciado' && (
+
+                        {/* Datas */}
+                        <div className="grid grid-cols-1 gap-2">
+                          <div className="flex items-center space-x-2">
+                            <Calendar className="h-4 w-4 text-gray-400" />
+                            <span className="text-sm text-gray-600">Início:</span>
+                            <span className="text-sm">
+                              {new Date(project.dataInicio).toLocaleDateString('pt-BR')}
+                            </span>
+                          </div>
+                          <div className="flex items-center space-x-2">
+                            <Clock className="h-4 w-4 text-gray-400" />
+                            <span className="text-sm text-gray-600">Previsão:</span>
+                            <span className="text-sm">
+                              {project.previsaoConclusao 
+                                ? new Date(project.previsaoConclusao).toLocaleDateString('pt-BR')
+                                : 'Não definida'
+                              }
+                            </span>
+                          </div>
+                        </div>
+
+                        {/* Ações */}
+                        <div className="flex items-center justify-end space-x-2 pt-2 border-t">
+                          {project.status === 'Iniciado' && (
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              className="flex items-center space-x-2"
+                              onClick={e => {
+                                e.stopPropagation();
+                                navigate(`/client-projects/write/${project.id}`);
+                              }}
+                            >
+                              <PlayCircle className="h-4 w-4 text-green-600" />
+                              <span>Preencher</span>
+                            </Button>
+                          )}
+                          
                           <Button
-                            variant="ghost"
-                            className="h-8 w-8 p-0"
-                            title="Preencher formulário do projeto"
+                            variant="outline"
+                            size="sm"
+                            className="flex items-center space-x-2"
                             onClick={e => {
                               e.stopPropagation();
-                              navigate(`/client-projects/write/${project.id}`);
+                              navigate(`/client-projects/map/${project.id}`);
                             }}
                           >
-                            <PlayCircle className="h-5 w-5 text-green-600" />
+                            <Globe className="h-4 w-4 text-blue-600" />
+                            <span>Mapa</span>
                           </Button>
-                        )}
-                        
-                        {/* Botão de visualizar mapa */}
-                        <Button
-                          variant="ghost"
-                          className="h-8 w-8 p-0"
-                          title="Visualizar locais no mapa"
-                          onClick={e => {
-                            e.stopPropagation();
-                            navigate(`/client-projects/map/${project.id}`);
-                          }}
-                        >
-                          <Globe className="h-5 w-5 text-blue-600" />
-                        </Button>
-                        
-                        {/* Botão de visualizar detalhes */}
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            handleProjectClick(project.id);
-                          }}
-                          className="flex items-center space-x-1"
-                        >
-                          <Eye className="h-4 w-4" />
-                          <span>Detalhes</span>
-                        </Button>
+                        </div>
                       </div>
-                    </TableCell>
-                  </TableRow>
+                    </CardContent>
+                  </Card>
                 ))}
-              </TableBody>
-            </Table>
+              </div>
+            </>
           )}
         </CardContent>
       </Card>
