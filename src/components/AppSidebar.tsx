@@ -146,7 +146,7 @@ export function AppSidebar() {
           <SidebarHeader className="p-6 flex items-center justify-center border-b border-white/10">
             <div className="flex items-center space-x-3">
               <img 
-                src="/lovable-uploads/a4359bba-bc5d-4bf2-98b0-566712fd53b8.png" 
+                src="/versys-logo.png" 
                 alt="VERSYS Logo" 
                 className="h-12 w-auto transition-all duration-300" 
               />
