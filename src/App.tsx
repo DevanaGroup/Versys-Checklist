@@ -17,7 +17,7 @@ import NotFound from "./pages/NotFound";
 import ClientDashboard from "./pages/ClientDashboard";
 import ClientProjects from "./pages/ClientProjects";
 import ClientProjectView from "./pages/ClientProjectView";
-import LandscapeOnly from "./components/LandscapeOnly";
+
 
 import Clientes from "./pages/Clientes";
 import Colaboradores from "./pages/Colaboradores";
@@ -68,8 +68,7 @@ const ProtectedRoute = ({ children, requiredType }: { children: React.ReactNode,
 };
 
 const App = () => (
-  <LandscapeOnly>
-    <TabletModeProvider>
+  <TabletModeProvider>
       <QueryClientProvider client={queryClient}>
         <AuthProvider>
           <TooltipProvider>
@@ -202,7 +201,6 @@ const App = () => (
         </AuthProvider>
       </QueryClientProvider>
     </TabletModeProvider>
-  </LandscapeOnly>
 );
 
 export default App;

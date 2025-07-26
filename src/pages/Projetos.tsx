@@ -12,6 +12,7 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog";
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Plus, Building, Calendar, User, FileText, CheckCircle, Clock, AlertCircle, ArrowLeft, Send, Download, CheckCircle2, XCircle, AlertTriangle, Eye, ClipboardCheck, Trash2, MoreVertical, Edit, Grid, List, ChevronRight, ChevronLeft, PlayCircle, PauseCircle, RotateCcw, FileTextIcon, MessageSquare, CheckSquare, X, Globe } from "lucide-react";
@@ -125,12 +126,17 @@ const Projetos = () => {
 
   const [updatingStatus, setUpdatingStatus] = useState<{ [itemId: string]: boolean }>({});
   const [deletingProject, setDeletingProject] = useState<string | null>(null);
+  const [showNewProjectModal, setShowNewProjectModal] = useState(false);
+  const [selectedClienteForNew, setSelectedClienteForNew] = useState<string>('none');
+  const [selectedPreset, setSelectedPreset] = useState<string>('none');
+  const [presets, setPresets] = useState<any[]>([]);
 
   const isAdmin = userData?.type === 'admin';
 
   useEffect(() => {
     loadClientes();
     loadProjetos();
+    loadPresets();
   }, []);
 
   const loadClientes = async () => {
@@ -169,6 +175,45 @@ const Projetos = () => {
     } finally {
       setLoadingClientes(false);
     }
+  };
+
+  const loadPresets = async () => {
+    try {
+      const presetsRef = collection(db, 'presets');
+      const querySnapshot = await getDocs(presetsRef);
+      
+      const presetsData = querySnapshot.docs.map(doc => ({
+        id: doc.id,
+        ...doc.data()
+      }));
+      
+      setPresets(presetsData);
+    } catch (error) {
+      console.error('Erro ao carregar presets:', error);
+      toast.error('Erro ao carregar presets');
+    }
+  };
+
+  const handleCreateNewProject = () => {
+    let url = '/projetos/new';
+    const params = new URLSearchParams();
+    
+    if (selectedClienteForNew && selectedClienteForNew !== 'none') {
+      params.append('clienteId', selectedClienteForNew);
+    }
+    
+    if (selectedPreset && selectedPreset !== 'none') {
+      params.append('presetId', selectedPreset);
+    }
+    
+    if (params.toString()) {
+      url += '?' + params.toString();
+    }
+    
+    setShowNewProjectModal(false);
+    setSelectedClienteForNew('none');
+    setSelectedPreset('none');
+    navigate(url);
   };
 
   const loadProjetos = async () => {
@@ -981,23 +1026,7 @@ const Projetos = () => {
         <>
           {listView === 'cards' ? (
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-              {/* Card Novo Projeto */}
-              <Card 
-                className="border-2 border-dashed border-versys-secondary hover:border-versys-primary transition-colors cursor-pointer group"
-                onClick={() => navigate("/projetos/new")}
-              >
-                <CardContent className="flex flex-col items-center justify-center h-48 text-center">
-                  <div className="w-16 h-16 bg-versys-secondary/20 rounded-full flex items-center justify-center mb-4 group-hover:bg-versys-primary/20 transition-colors">
-                    <Plus className="h-8 w-8 text-versys-secondary group-hover:text-versys-primary" />
-                  </div>
-                  <h3 className="text-lg font-semibold text-versys-primary group-hover:text-versys-secondary">
-                    Novo Projeto
-                  </h3>
-                  <p className="text-sm text-gray-600 mt-2">
-                    Clique para criar um novo projeto
-                  </p>
-                </CardContent>
-              </Card>
+
 
               {/* Card Projetos Sem Cliente */}
               <Card 
@@ -1073,7 +1102,7 @@ const Projetos = () => {
               {/* Botão Novo Projeto */}
               <div className="flex justify-start">
                 <Button
-                  onClick={() => navigate("/projetos/new")}
+                  onClick={() => setShowNewProjectModal(true)}
                   className="flex items-center space-x-2 bg-versys-primary hover:bg-versys-secondary"
                 >
                   <Plus className="h-4 w-4" />
@@ -1185,23 +1214,7 @@ const Projetos = () => {
          <>
            {listView === 'cards' ? (
              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-               {/* Card Novo Projeto */}
-               <Card 
-                 className="border-2 border-dashed border-versys-secondary hover:border-versys-primary transition-colors cursor-pointer group"
-                 onClick={() => navigate(`/projetos/new?clienteId=${selectedClient?.id}`)}
-               >
-                 <CardContent className="flex flex-col items-center justify-center h-48 text-center">
-                   <div className="w-16 h-16 bg-versys-secondary/20 rounded-full flex items-center justify-center mb-4 group-hover:bg-versys-primary/20 transition-colors">
-                     <Plus className="h-8 w-8 text-versys-secondary group-hover:text-versys-primary" />
-                   </div>
-                   <h3 className="text-lg font-semibold text-versys-primary group-hover:text-versys-secondary">
-                     Novo Projeto
-                   </h3>
-                   <p className="text-sm text-gray-600 mt-2">
-                     Criar projeto para {selectedClient?.nome}
-                   </p>
-                 </CardContent>
-               </Card>
+
                
                {/* Loading ou Cards dos Projetos */}
                {loading ? (
@@ -1336,18 +1349,7 @@ const Projetos = () => {
             </div>
           ) : (
             <div className="space-y-4">
-              {/* Botão Novo Projeto - apenas para admins */}
-              {isAdmin && (
-                <div className="flex justify-start">
-                  <Button
-                    onClick={() => navigate(`/projetos/new${selectedClient ? `?clienteId=${selectedClient.id}` : ''}`)}
-                    className="flex items-center space-x-2 bg-versys-primary hover:bg-versys-secondary"
-                  >
-                    <Plus className="h-4 w-4" />
-                    <span>Novo Projeto</span>
-                  </Button>
-                </div>
-              )}
+
 
               {/* Tabela de Projetos */}
               <Card>
@@ -1704,6 +1706,95 @@ const Projetos = () => {
           )}
         </>
       )}
+      
+      {/* Modal de Novo Projeto */}
+      <Dialog open={showNewProjectModal} onOpenChange={setShowNewProjectModal}>
+        <DialogContent className="sm:max-w-[500px]">
+          <DialogHeader>
+            <DialogTitle className="flex items-center space-x-2">
+              <Plus className="h-5 w-5" />
+              <span>Criar Novo Projeto</span>
+            </DialogTitle>
+            <DialogDescription>
+              Configure as opções iniciais para o novo projeto
+            </DialogDescription>
+          </DialogHeader>
+          
+          <div className="space-y-6 py-4">
+            {/* Seleção de Cliente */}
+            <div className="space-y-2">
+              <Label className="text-sm font-medium">Cliente (Opcional)</Label>
+              <Select value={selectedClienteForNew} onValueChange={setSelectedClienteForNew}>
+                <SelectTrigger>
+                  <SelectValue placeholder="Selecione um cliente ou deixe em branco" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="none">Nenhum cliente selecionado</SelectItem>
+                  {clientes.map((cliente) => (
+                    <SelectItem key={cliente.id} value={cliente.id}>
+                      <div className="flex items-center space-x-2">
+                        <Building className="h-4 w-4" />
+                        <span>{cliente.nome} - {cliente.empresa}</span>
+                      </div>
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            
+            {/* Seleção de Preset */}
+            <div className="space-y-2">
+              <Label className="text-sm font-medium">Preset/Template (Opcional)</Label>
+              <Select value={selectedPreset} onValueChange={setSelectedPreset}>
+                <SelectTrigger>
+                  <SelectValue placeholder="Selecione um preset ou comece do zero" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="none">Começar do zero</SelectItem>
+                  {presets.map((preset) => (
+                    <SelectItem key={preset.id} value={preset.id}>
+                      <div className="flex items-center space-x-2">
+                        <ClipboardCheck className="h-4 w-4" />
+                        <div>
+                          <div className="font-medium">{preset.nome}</div>
+                          {preset.descricao && (
+                            <div className="text-xs text-muted-foreground">{preset.descricao}</div>
+                          )}
+                        </div>
+                      </div>
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              {selectedPreset && (
+                <div className="text-xs text-muted-foreground">
+                  💡 O preset selecionado será usado como base para estruturar o projeto
+                </div>
+              )}
+            </div>
+          </div>
+          
+          <DialogFooter>
+            <Button 
+              variant="outline" 
+              onClick={() => {
+                setShowNewProjectModal(false);
+                setSelectedClienteForNew('none');
+                setSelectedPreset('none');
+              }}
+            >
+              Cancelar
+            </Button>
+            <Button 
+              onClick={handleCreateNewProject}
+              className="bg-versys-primary hover:bg-versys-secondary"
+            >
+              <Plus className="h-4 w-4 mr-2" />
+              Criar Projeto
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 };

@@ -1,18 +1,4 @@
-/* Forced Landscape Orientation for Mobile/Tablet */
-
-/* Hide portrait warning in landscape */
-@media screen and (orientation: landscape) {
-  .landscape-only-warning {
-    display: none !important;
-  }
-}
-
-/* Show portrait warning in portrait mode for mobile/tablet */
-@media screen and (orientation: portrait) and (max-width: 1024px) {
-  .landscape-only-warning {
-    display: flex !important;
-  }
-}
+/* Multi-Orientation Support for Mobile/Tablet */
 
 /* Landscape orientation utilities */
 @media screen and (orientation: landscape) and (max-width: 1024px) {
