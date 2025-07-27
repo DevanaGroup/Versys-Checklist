@@ -1,5 +1,5 @@
 
-const CACHE_NAME = 'versys-pwa-v2';
+const CACHE_NAME = 'versys-pwa-v3';
 const urlsToCache = [
   '/',
   '/static/js/bundle.js',
@@ -32,11 +32,31 @@ self.addEventListener('fetch', (event) => {
     return;
   }
   
+  // Não interceptar módulos JavaScript/TypeScript do Vite em desenvolvimento
+  if (event.request.url.includes('/src/') || 
+      event.request.url.includes('/@vite/') ||
+      event.request.url.includes('/@fs/') ||
+      event.request.url.includes('.tsx') ||
+      event.request.url.includes('.ts') ||
+      event.request.url.includes('.jsx') ||
+      event.request.url.includes('.js') && event.request.url.includes('?')) {
+    return;
+  }
+  
+  // Só cachear requisições GET
+  if (event.request.method !== 'GET') {
+    return;
+  }
+  
   event.respondWith(
     caches.match(event.request)
       .then((response) => {
         // Return cached version or fetch from network
         return response || fetch(event.request);
+      })
+      .catch(() => {
+        // Se falhar, sempre buscar da rede
+        return fetch(event.request);
       })
   );
 });
