@@ -1,5 +1,5 @@
 
-const CACHE_NAME = 'versys-pwa-v3';
+const CACHE_NAME = 'versys-pwa-v4-fixed';
 const urlsToCache = [
   '/',
   '/static/js/bundle.js',
@@ -17,12 +17,22 @@ const urlsToCache = [
 
 // Install event
 self.addEventListener('install', (event) => {
+  console.log('SW installing...');
   event.waitUntil(
     caches.open(CACHE_NAME)
       .then((cache) => {
         return cache.addAll(urlsToCache);
       })
   );
+  // Forçar ativação imediata
+  self.skipWaiting();
+});
+
+// Message event para forçar atualização
+self.addEventListener('message', (event) => {
+  if (event.data && event.data.type === 'SKIP_WAITING') {
+    self.skipWaiting();
+  }
 });
 
 // Fetch event
@@ -63,15 +73,23 @@ self.addEventListener('fetch', (event) => {
 
 // Activate event
 self.addEventListener('activate', (event) => {
+  console.log('SW activating...');
   event.waitUntil(
-    caches.keys().then((cacheNames) => {
-      return Promise.all(
-        cacheNames.map((cacheName) => {
-          if (cacheName !== CACHE_NAME) {
-            return caches.delete(cacheName);
-          }
-        })
-      );
-    })
+    Promise.all([
+      // Limpar caches antigos
+      caches.keys().then((cacheNames) => {
+        return Promise.all(
+          cacheNames.map((cacheName) => {
+            if (cacheName !== CACHE_NAME) {
+              console.log('Deleting old cache:', cacheName);
+              return caches.delete(cacheName);
+            }
+          })
+        );
+      }),
+      // Tomar controle de todas as abas imediatamente
+      self.clients.claim()
+    ])
   );
+  console.log('SW activated and claimed all clients');
 });

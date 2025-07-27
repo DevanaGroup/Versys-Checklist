@@ -44,14 +44,44 @@
     <!-- PWA Service Worker Registration -->
     <script>
       if ('serviceWorker' in navigator) {
-        window.addEventListener('load', () => {
-          navigator.serviceWorker.register('/sw.js')
-            .then((registration) => {
-              console.log('SW registered: ', registration);
-            })
-            .catch((registrationError) => {
-              console.log('SW registration failed: ', registrationError);
-            });
+        window.addEventListener('load', async () => {
+          try {
+            // Primeiro, desregistrar qualquer service worker existente
+            const registrations = await navigator.serviceWorker.getRegistrations();
+            for (let registration of registrations) {
+              console.log('Unregistering old SW:', registration);
+              await registration.unregister();
+            }
+            
+            // Limpar todos os caches
+            if ('caches' in window) {
+              const cacheNames = await caches.keys();
+              await Promise.all(
+                cacheNames.map(cacheName => {
+                  console.log('Deleting cache:', cacheName);
+                  return caches.delete(cacheName);
+                })
+              );
+            }
+            
+            // Aguardar um pouco antes de registrar o novo SW
+            setTimeout(async () => {
+              try {
+                const registration = await navigator.serviceWorker.register('/sw.js');
+                console.log('SW registered: ', registration);
+                
+                // Forçar atualização se houver um SW em espera
+                if (registration.waiting) {
+                  registration.waiting.postMessage({ type: 'SKIP_WAITING' });
+                }
+              } catch (registrationError) {
+                console.log('SW registration failed: ', registrationError);
+              }
+            }, 1000);
+            
+          } catch (error) {
+            console.error('Error managing service worker:', error);
+          }
         });
       }
     </script>
