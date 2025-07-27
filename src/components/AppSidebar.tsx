@@ -139,35 +139,35 @@ export function AppSidebar() {
 
   return (
     <div className="relative">
-      <Sidebar className="border-r-0">
+      <Sidebar className="border-r-0" collapsible="offcanvas">
         <div className="absolute inset-0 bg-gradient-to-b from-versys-primary to-versys-secondary"></div>
         <div className="relative z-10 h-full flex flex-col">
-          {/* Header com logo */}
-          <SidebarHeader className="p-6 flex items-center justify-center border-b border-white/10">
-            <div className="flex items-center space-x-3">
+          {/* Header com logo - responsivo */}
+          <SidebarHeader className="border-b border-white/10">
+            <div className="flex items-center justify-center">
               <img 
-                src="/versys-logo.png" 
+                src={`/versys-logo.png?v=${Date.now()}`} 
                 alt="VERSYS Logo" 
-                className="h-12 w-auto transition-all duration-300" 
+                className="w-12 h-12 md:w-16 md:h-16 object-contain"
               />
             </div>
           </SidebarHeader>
 
-          {/* Área do usuário */}
-          <div className="px-4 py-6 border-b border-white/10">
-            <div className="flex items-center space-x-3">
-              <Avatar className="h-10 w-10 border-2 border-white/20">
+          {/* Área do usuário - responsivo */}
+          <div className="px-3 md:px-4 py-4 md:py-6 border-b border-white/10">
+            <div className="flex items-center gap-2 md:gap-3">
+              <Avatar className="h-8 w-8 md:h-10 md:w-10 border-2 border-white/20">
                 <AvatarImage src="" />
-                <AvatarFallback className="bg-white/20 text-white text-sm font-medium">
+                <AvatarFallback className="bg-white/10 text-white font-semibold text-xs md:text-sm">
                   {getUserInitials()}
                 </AvatarFallback>
               </Avatar>
               {!isCollapsed && (
-                <div className="flex flex-col min-w-0 flex-1">
-                  <span className="text-white text-sm font-medium truncate">
+                <div className="flex-1 min-w-0">
+                  <span className="text-white text-xs md:text-sm font-medium truncate block">
                     {getUserDisplayName()}
                   </span>
-                  <span className="text-white/60 text-xs truncate">
+                  <span className="text-white/60 text-xs truncate block">
                     {getUserRole()}
                   </span>
                 </div>
@@ -176,7 +176,7 @@ export function AppSidebar() {
           </div>
 
           {/* Menu principal - ocupa o espaço disponível */}
-          <SidebarContent className="flex-1 px-3 py-4">
+          <SidebarContent className="flex-1 px-2 md:px-3 py-3 md:py-4">
             <SidebarGroup>
               <SidebarGroupContent>
                 <SidebarMenu className="space-y-1">
@@ -185,20 +185,19 @@ export function AppSidebar() {
                       <SidebarMenuButton 
                         asChild 
                         className={`
-                          h-10 px-3 py-2 rounded-lg transition-all duration-200 hover:scale-105 active:scale-95
+                          h-9 md:h-10 px-2 md:px-3 py-2 rounded-lg transition-all duration-200 hover:scale-105 active:scale-95
                           ${isActive(item.url) 
                             ? "bg-white/20 text-white font-medium shadow-sm hover:bg-white/25" 
                             : "text-white/80 hover:bg-white/10 hover:text-white"
                           }
                         `}
                       >
-                        <NavLink to={item.url} className="flex items-center gap-3">
+                        <NavLink to={item.url} className="flex items-center gap-2 md:gap-3">
                           <item.icon className="h-4 w-4 flex-shrink-0" />
-                          {!isCollapsed && <span className="truncate">{item.title}</span>}
+                          {!isCollapsed && <span className="truncate text-sm md:text-base">{item.title}</span>}
                           {isActive(item.url) && !isCollapsed && (
                             <div className="ml-auto w-2 h-2 bg-white rounded-full animate-pulse" />
                           )}
-
                         </NavLink>
                       </SidebarMenuButton>
                     </SidebarMenuItem>
@@ -221,16 +220,16 @@ export function AppSidebar() {
                       <SidebarMenuButton 
                         asChild 
                         className={`
-                          h-10 px-3 py-2 rounded-lg transition-all duration-200
+                          h-9 md:h-10 px-2 md:px-3 py-2 rounded-lg transition-all duration-200
                           ${isActive(item.url) 
                             ? "bg-white/20 text-white font-medium shadow-sm" 
                             : "text-white/80 hover:bg-white/10 hover:text-white"
                           }
                         `}
                       >
-                        <NavLink to={item.url} className="flex items-center gap-3">
+                        <NavLink to={item.url} className="flex items-center gap-2 md:gap-3">
                           <item.icon className="h-4 w-4 flex-shrink-0" />
-                          {!isCollapsed && <span className="truncate">{item.title}</span>}
+                          {!isCollapsed && <span className="truncate text-sm md:text-base">{item.title}</span>}
                         </NavLink>
                       </SidebarMenuButton>
                     </SidebarMenuItem>
@@ -243,20 +242,20 @@ export function AppSidebar() {
             {!isCollapsed && <LocationInfo />}
           </SidebarContent>
 
-          {/* Footer com botão de sair */}
-          <SidebarFooter className="p-4 border-t border-white/10 mt-auto">
+          {/* Footer com botão de sair - responsivo */}
+          <SidebarFooter className="p-3 md:p-4 border-t border-white/10 mt-auto">
             <Button 
               variant="ghost" 
               onClick={handleLogout} 
               className="
-                w-full h-10 px-3 py-2 rounded-lg
-                justify-start gap-3
+                w-full h-9 md:h-10 px-2 md:px-3 py-2 rounded-lg
+                justify-start gap-2 md:gap-3
                 text-white/80 hover:bg-white/10 hover:text-white
                 transition-all duration-200
               "
             >
               <LogOut className="h-4 w-4 flex-shrink-0" />
-              {!isCollapsed && <span className="truncate">Sair</span>}
+              {!isCollapsed && <span className="truncate text-sm md:text-base">Sair</span>}
             </Button>
           </SidebarFooter>
         </div>
