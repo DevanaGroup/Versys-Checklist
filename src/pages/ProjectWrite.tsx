@@ -12,7 +12,8 @@ import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, 
 import { toast } from "sonner";
 import { db } from "@/lib/firebase";
 import { doc, getDoc, updateDoc } from "firebase/firestore";
-import { ArrowLeft, ArrowRight, CheckCircle, Camera, ThumbsUp, ThumbsDown, Clock, XCircle, AlertTriangle, Eye, ZoomIn, X } from "lucide-react";
+import { ArrowLeft, ArrowRight, CheckCircle, Camera, ThumbsUp, ThumbsDown, Clock, XCircle, AlertTriangle, Eye, ZoomIn, X, Mic, MicOff } from "lucide-react";
+// Removido import do Transformers.js - usando Web Speech API nativa
 import { getStorage, ref, uploadBytes, getDownloadURL } from "firebase/storage";
 
 interface SubItem {
@@ -87,6 +88,11 @@ const ProjectWrite = () => {
   const [evaluatingAdequacy, setEvaluatingAdequacy] = useState<string | null>(null);
   const [rejectionReason, setRejectionReason] = useState('');
   const [selectedImage, setSelectedImage] = useState<string | null>(null);
+  
+  // Estados para transcrição de áudio com Web Speech API
+  const [speechRecognition, setSpeechRecognition] = useState<any>(null);
+  const [isRecording, setIsRecording] = useState<Record<string, boolean>>({});
+  const [isTranscribing, setIsTranscribing] = useState<Record<string, boolean>>({});
   const [imageModalOpen, setImageModalOpen] = useState(false);
   const [currentView, setCurrentView] = useState<'evaluation' | 'adequacy'>('evaluation');
 
@@ -103,6 +109,61 @@ const ProjectWrite = () => {
     loadProject();
     // eslint-disable-next-line
   }, [id]);
+
+  // Função para melhorar pontuação e formatação do texto transcrito (versão conservadora)
+  const improveTranscription = (text: string): string => {
+    if (!text) return text;
+    
+    let improvedText = text.trim();
+    
+    // Capitalizar primeira letra apenas se não houver pontuação já presente
+    if (improvedText.length > 0 && !/^[A-ZÀ-Ü]/.test(improvedText)) {
+      improvedText = improvedText.charAt(0).toUpperCase() + improvedText.slice(1);
+    }
+    
+    // Corrigir espaçamentos múltiplos
+    improvedText = improvedText.replace(/\s{2,}/g, ' ');
+    
+    // Corrigir espaçamento antes de pontuação existente
+    improvedText = improvedText.replace(/\s+([,.!?;:])/g, '$1');
+    
+    // Apenas adicionar ponto final se realmente não houver pontuação e a frase parecer completa
+    if (!/[.!?;:]$/.test(improvedText) && improvedText.length > 10) {
+      // Verificar se termina com palavras que indicam fim de frase
+      if (/\b(concluído|finalizado|terminado|pronto|ok|certo|feito|acabado)$/gi.test(improvedText)) {
+        improvedText += '.';
+      }
+      // Ou se parece ser uma frase declarativa completa (mais de 5 palavras)
+      else if (improvedText.split(' ').length >= 5) {
+        improvedText += '.';
+      }
+    }
+    
+    return improvedText;
+  };
+
+  // Inicializar Web Speech API para transcrição de áudio
+  useEffect(() => {
+    console.log('Inicializando Web Speech API...');
+    
+    // Verificar suporte do navegador
+    const SpeechRecognition = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
+    
+    if (SpeechRecognition) {
+      const recognition = new SpeechRecognition();
+      recognition.lang = 'pt-BR';
+      recognition.interimResults = true; // Mostrar resultados intermediários
+      recognition.maxAlternatives = 1;
+      recognition.continuous = true; // Gravação contínua
+      recognition.serviceURI = 'pt-BR';
+      
+      setSpeechRecognition(recognition);
+      console.log('Web Speech API inicializada com sucesso!');
+    } else {
+      console.error('Web Speech API não suportada pelo navegador');
+      toast.error('Transcrição de áudio não suportada neste navegador');
+    }
+  }, []);
 
   const loadProject = async () => {
     try {
@@ -177,6 +238,89 @@ const ProjectWrite = () => {
         [field]: value
       }
     }));
+  };
+
+  // Função para iniciar transcrição com Web Speech API
+  const startRecording = (subId: string) => {
+    if (!speechRecognition) {
+      toast.error('Transcrição de áudio não suportada neste navegador');
+      return;
+    }
+
+    try {
+      setIsRecording(prev => ({ ...prev, [subId]: true }));
+      setIsTranscribing(prev => ({ ...prev, [subId]: false }));
+      
+      // Configurar eventos da Speech Recognition
+      speechRecognition.onstart = () => {
+        console.log('Reconhecimento de voz iniciado para', subId);
+        toast.success('Gravação iniciada! Fale agora...');
+      };
+
+      speechRecognition.onresult = (event: any) => {
+        let interimTranscript = '';
+        let finalTranscriptPart = '';
+        
+        // Processar todos os resultados
+        for (let i = event.resultIndex; i < event.results.length; i++) {
+          const transcript = event.results[i][0].transcript;
+          
+          if (event.results[i].isFinal) {
+            finalTranscriptPart += transcript;
+          } else {
+            interimTranscript += transcript;
+          }
+        }
+        
+        // Se temos resultado final, processar e adicionar ao campo
+        if (finalTranscriptPart) {
+          console.log('Texto final:', finalTranscriptPart);
+          
+          // Aplicar melhorias de pontuação apenas no texto final
+          const improvedTranscript = improveTranscription(finalTranscriptPart);
+          console.log('Texto melhorado:', improvedTranscript);
+          
+          // Adicionar ao campo atual
+          const currentText = formState[subId]?.currentSituation || '';
+          const newText = currentText ? `${currentText} ${improvedTranscript}` : improvedTranscript;
+          
+          handleChange(subId, 'currentSituation', newText);
+        }
+        
+        // Log do progresso (resultado intermediário)
+        if (interimTranscript) {
+          console.log('Transcrevendo...:', interimTranscript);
+        }
+      };
+
+      speechRecognition.onerror = (event: any) => {
+        console.error('Erro na transcrição:', event.error);
+        toast.error('Erro ao transcrever áudio: ' + event.error);
+        setIsRecording(prev => ({ ...prev, [subId]: false }));
+        setIsTranscribing(prev => ({ ...prev, [subId]: false }));
+      };
+
+      speechRecognition.onend = () => {
+        console.log('Reconhecimento de voz finalizado para', subId);
+        setIsRecording(prev => ({ ...prev, [subId]: false }));
+        setIsTranscribing(prev => ({ ...prev, [subId]: false }));
+      };
+
+      // Iniciar reconhecimento
+      speechRecognition.start();
+    } catch (error) {
+      console.error('Erro ao iniciar reconhecimento:', error);
+      toast.error('Erro ao iniciar transcrição');
+      setIsRecording(prev => ({ ...prev, [subId]: false }));
+    }
+  };
+
+  // Função para parar transcrição
+  const stopRecording = (subId: string) => {
+    if (speechRecognition && isRecording[subId]) {
+      speechRecognition.stop();
+      toast.info('Finalizando transcrição...');
+    }
   };
 
   const handlePhoto = async (subId: string, file: File) => {
@@ -648,34 +792,72 @@ const ProjectWrite = () => {
                       
                       {/* Conteúdo da aba Visualização */}
                       {(!activeTabs[sub.id] || activeTabs[sub.id] === 'visualizacao') && (
-                        <div className="space-y-2">
-                          <Label>Avaliação</Label>
-                          <RadioGroup
-                            value={formState[sub.id]?.evaluation || ''}
-                            onValueChange={val => handleChange(sub.id, 'evaluation', val)}
-                            className="flex flex-row space-x-4"
-                          >
-                            <RadioGroupItem value="nc" id={`nc-${sub.id}`} />
-                            <Label htmlFor={`nc-${sub.id}`}>NC</Label>
-                            <RadioGroupItem value="r" id={`r-${sub.id}`} />
-                            <Label htmlFor={`r-${sub.id}`}>R</Label>
-                            <RadioGroupItem value="na" id={`na-${sub.id}`} />
-                            <Label htmlFor={`na-${sub.id}`}>NA</Label>
-                          </RadioGroup>
-                          <Label>Situação atual</Label>
-                          <Textarea
-                            value={formState[sub.id]?.currentSituation || ''}
-                            onChange={e => handleChange(sub.id, 'currentSituation', e.target.value)}
-                            placeholder="Situação atual..."
-                          />
-                          <Label>Orientação para o cliente</Label>
-                          <Textarea
-                            value={formState[sub.id]?.clientGuidance || ''}
-                            onChange={e => handleChange(sub.id, 'clientGuidance', e.target.value)}
-                            placeholder="Orientação para o cliente..."
-                          />
-                          <Label>Foto (opcional)</Label>
-                          {formState[sub.id]?.photoData?.url ? (
+                        <div className="space-y-4">
+                          {/* Avaliação */}
+                          <div className="bg-gray-50 p-4 rounded-md space-y-2">
+                            <Label>Avaliação</Label>
+                            <RadioGroup
+                              value={formState[sub.id]?.evaluation || ''}
+                              onValueChange={val => handleChange(sub.id, 'evaluation', val)}
+                              className="flex flex-row space-x-4"
+                            >
+                              <RadioGroupItem value="nc" id={`nc-${sub.id}`} />
+                              <Label htmlFor={`nc-${sub.id}`}>NC</Label>
+                              <RadioGroupItem value="r" id={`r-${sub.id}`} />
+                              <Label htmlFor={`r-${sub.id}`}>R</Label>
+                              <RadioGroupItem value="na" id={`na-${sub.id}`} />
+                              <Label htmlFor={`na-${sub.id}`}>NA</Label>
+                            </RadioGroup>
+                          </div>
+                          
+                          {/* Situação Atual */}
+                          <div className="bg-gray-50 p-4 rounded-md space-y-2">
+                            <div className="flex items-center justify-between">
+                              <Label>Situação atual</Label>
+                              <Button
+                                type="button"
+                                variant="outline"
+                                size="sm"
+                                onClick={isRecording[sub.id] ? () => stopRecording(sub.id) : () => startRecording(sub.id)}
+                                disabled={isTranscribing[sub.id] || !speechRecognition}
+                                className={`flex items-center space-x-2 ${
+                                  isRecording[sub.id] ? 'bg-red-50 border-red-300 text-red-700' : 'hover:bg-blue-50'
+                                }`}
+                              >
+                                {isRecording[sub.id] ? (
+                                  <MicOff className="h-4 w-4" />
+                                ) : (
+                                  <Mic className="h-4 w-4" />
+                                )}
+                                <span className="text-xs">
+                                  {isTranscribing[sub.id] ? 'Transcrevendo...' : isRecording[sub.id] ? 'Parar' : 'Gravar'}
+                                </span>
+                              </Button>
+                            </div>
+                            <Textarea
+                              value={formState[sub.id]?.currentSituation || ''}
+                              onChange={e => handleChange(sub.id, 'currentSituation', e.target.value)}
+                              placeholder="Situação atual..."
+                            />
+                            {!speechRecognition && (
+                              <p className="text-xs text-gray-500">Inicializando reconhecimento de voz...</p>
+                            )}
+                          </div>
+                          
+                          {/* Orientação para o Cliente */}
+                          <div className="bg-gray-50 p-4 rounded-md space-y-2">
+                            <Label>Orientação para o cliente</Label>
+                            <Textarea
+                              value={formState[sub.id]?.clientGuidance || ''}
+                              onChange={e => handleChange(sub.id, 'clientGuidance', e.target.value)}
+                              placeholder="Orientação para o cliente..."
+                            />
+                          </div>
+                          
+                          {/* Foto */}
+                          <div className="bg-gray-50 p-4 rounded-md space-y-2">
+                            <Label>Foto (opcional)</Label>
+                            {formState[sub.id]?.photoData?.url ? (
                             <div className="border-2 border-dashed rounded-lg p-4 bg-gray-50 relative">
                               <img src={formState[sub.id].photoData.url} alt="Foto do subitem" className="max-h-40 rounded border mb-2 mx-auto block" />
                               <div className="flex gap-2 justify-center mt-2">
@@ -790,6 +972,7 @@ const ProjectWrite = () => {
                             </div>
                           )}
                         </div>
+                      </div>
                       )}
 
                       {/* Conteúdo da aba Adequação */}
