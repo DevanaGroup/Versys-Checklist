@@ -16,12 +16,13 @@ interface SubItem {
   evaluation: "nc" | "r" | "na" | "";
   currentSituation?: string;
   clientGuidance?: string;
-  photoData?: {
+  photos?: {
+    id: string;
     url: string;
     createdAt: string;
     latitude: number;
     longitude: number;
-  };
+  }[];
   completed?: boolean;
 }
 
@@ -101,7 +102,13 @@ const ProjectView = () => {
               evaluation: subItem.evaluation || '',
               currentSituation: subItem.currentSituation || '',
               clientGuidance: subItem.clientGuidance || subItem.adminFeedback || '',
-              photoData: subItem.photoData || undefined,
+              photos: subItem.photoData ? [{
+                id: `photo-${Date.now()}`,
+                url: subItem.photoData.url,
+                createdAt: subItem.photoData.createdAt,
+                latitude: subItem.photoData.latitude,
+                longitude: subItem.photoData.longitude
+              }] : (subItem.photos || []),
               completed: subItem.completed || false
             })) : [];
             
@@ -312,42 +319,42 @@ const ProjectView = () => {
                             </div>
                           )}
 
-                          {/* Foto */}
-                          {(() => {
-                            console.log('Verificando foto para subItem:', subItem.id, 'photoData:', subItem.photoData);
-                            return null;
-                          })()}
-                          {subItem.photoData && (
+                          {/* Fotos */}
+                          {subItem.photos && subItem.photos.length > 0 && (
                             <div>
-                              <h4 className="font-medium text-gray-900 mb-2">Foto</h4>
-                              <div className="bg-gray-50 p-3 rounded-lg">
-                                <img
-                                  src={subItem.photoData.url}
-                                  alt="Foto do local"
-                                  className="max-w-32 h-auto rounded-lg cursor-pointer hover:opacity-90 transition-opacity"
-                                  onClick={() => window.open(subItem.photoData!.url, '_blank')}
-                                />
-                                <div className="text-xs text-gray-500 mt-2 space-y-1">
-                                  <p>Capturada em: {new Date(subItem.photoData.createdAt).toLocaleString('pt-BR')}</p>
-                                  {subItem.photoData.latitude && subItem.photoData.longitude && 
-                                   subItem.photoData.latitude !== 0 && subItem.photoData.longitude !== 0 && (
-                                    <div>
-                                      <p>Localização: {subItem.photoData.latitude.toFixed(6)}, {subItem.photoData.longitude.toFixed(6)}</p>
-                                      <a 
-                                        href={`https://www.google.com/maps?q=${subItem.photoData.latitude},${subItem.photoData.longitude}`}
-                                        target="_blank"
-                                        rel="noopener noreferrer"
-                                        className="text-blue-600 hover:text-blue-800 underline"
-                                      >
-                                        📍 Ver no Google Maps
-                                      </a>
+                              <h4 className="font-medium text-gray-900 mb-2">📸 Fotos</h4>
+                              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                                {subItem.photos.map((photo) => (
+                                  <div key={photo.id} className="bg-gray-50 p-2 rounded-lg">
+                                    <img
+                                      src={photo.url}
+                                      alt="Foto do local"
+                                      className="w-full h-32 object-cover rounded-lg cursor-pointer hover:opacity-90 transition-opacity shadow-sm"
+                                      onClick={() => window.open(photo.url, '_blank')}
+                                    />
+                                    <div className="text-xs text-gray-500 mt-2 space-y-1">
+                                      <p>📅 Capturada em: {new Date(photo.createdAt).toLocaleString('pt-BR')}</p>
+                                      {photo.latitude && photo.longitude && 
+                                       photo.latitude !== 0 && photo.longitude !== 0 && (
+                                        <div>
+                                          <p>📍 Localização: {photo.latitude.toFixed(6)}, {photo.longitude.toFixed(6)}</p>
+                                          <a 
+                                            href={`https://www.google.com/maps?q=${photo.latitude},${photo.longitude}`}
+                                            target="_blank"
+                                            rel="noopener noreferrer"
+                                            className="text-blue-600 hover:text-blue-800 underline text-xs"
+                                          >
+                                            🗺️ Ver no Google Maps
+                                          </a>
+                                        </div>
+                                      )}
+                                      {(!photo.latitude || !photo.longitude || 
+                                        (photo.latitude === 0 && photo.longitude === 0)) && (
+                                          <p className="text-orange-600 text-xs">⚠️ Foto sem localização GPS</p>
+                                      )}
                                     </div>
-                                  )}
-                                  {(!subItem.photoData.latitude || !subItem.photoData.longitude || 
-                                    (subItem.photoData.latitude === 0 && subItem.photoData.longitude === 0)) && (
-                                    <p className="text-orange-600">Foto sem localização GPS</p>
-                                  )}
-                                </div>
+                                  </div>
+                                ))}
                               </div>
                             </div>
                           )}

@@ -28,6 +28,7 @@ import ProjectWrite from "./pages/ProjectWrite";
 import ProjectView from "./pages/ProjectView";
 import ProjectMap from "./pages/ProjectMap";
 import ProjectReports from "./pages/ProjectReports";
+import ClientRelatorioEdit from './pages/ClientRelatorioEdit';
 
 import { AuthProvider, useAuthContext } from "./contexts/AuthContext";
 
@@ -58,6 +59,12 @@ const ProtectedRoute = ({ children, requiredType }: { children: React.ReactNode,
   // Verifica tipo de usuário se necessário
   if (requiredType) {
     const allowedTypes = Array.isArray(requiredType) ? requiredType : [requiredType];
+    console.log('=== PROTECTED ROUTE DEBUG ===');
+    console.log('userData.type:', userData.type);
+    console.log('requiredType:', requiredType);
+    console.log('allowedTypes:', allowedTypes);
+    console.log('includes:', allowedTypes.includes(userData.type));
+    
     if (!allowedTypes.includes(userData.type)) {
       console.log('ProtectedRoute: Tipo de usuário não autorizado, redirecionando para dashboard apropriado');
       // Se o tipo não corresponde, redireciona para o dashboard apropriado
@@ -66,6 +73,8 @@ const ProtectedRoute = ({ children, requiredType }: { children: React.ReactNode,
       } else if (userData.type === "client") {
         return <Navigate to="/client-projects" replace />;
       }
+    } else {
+      console.log('ProtectedRoute: Tipo de usuário autorizado, permitindo acesso');
     }
   }
   
@@ -140,6 +149,14 @@ const App = () => (
               </ProtectedRoute>
             }>
               <Route index element={<ProjectReports />} />
+            </Route>
+
+            <Route path="/client-relatorio-edit/:projectId" element={
+              <ProtectedRoute requiredType={["client"]}>
+                <DashboardLayout />
+              </ProtectedRoute>
+            }>
+              <Route index element={<ClientRelatorioEdit />} />
             </Route>
             <Route path="/configuracoes" element={
               <ProtectedRoute requiredType="admin">

@@ -1,5 +1,5 @@
 // Import the functions you need from the SDKs you need
-import { initializeApp } from "firebase/app";
+import { initializeApp, getApps } from "firebase/app";
 import { getAnalytics } from "firebase/analytics";
 import { getAuth } from "firebase/auth";
 import { getFirestore } from "firebase/firestore";
@@ -11,14 +11,14 @@ const firebaseConfig = {
   apiKey: "AIzaSyBfqnHWfO5cTSrHSdPRU2BrPGFZ6X53qiA",
   authDomain: "versys-4529f.firebaseapp.com",
   projectId: "versys-4529f",
-  storageBucket: "versys-4529f.firebasestorage.app",
+  storageBucket: "versys-4529f.appspot.com",
   messagingSenderId: "293747502592",
   appId: "1:293747502592:web:3abe13ef202f170b7732e5",
   measurementId: "G-PH7Y1LRK46"
 };
 
-// Initialize Firebase
-const app = initializeApp(firebaseConfig);
+// Initialize Firebase only if no apps exist
+const app = getApps().length === 0 ? initializeApp(firebaseConfig) : getApps()[0];
 
 // Initialize Firebase services
 export const analytics = getAnalytics(app);

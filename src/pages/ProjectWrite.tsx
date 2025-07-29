@@ -25,6 +25,7 @@ interface SubItem {
   completed?: boolean;
   photoData?: {
     url: string;
+    firebaseUrl?: string; // Adicionado para fallback
     createdAt: string;
     latitude: number;
     longitude: number;
@@ -328,141 +329,104 @@ const ProjectWrite = () => {
     setPhotoUploading(prev => ({ ...prev, [subId]: true }));
     
     try {
-      console.log('🔄 Iniciando captura de foto e localização...');
+      console.log('=== INICIANDO CAPTURA DE FOTO (PROJECT WRITE) ===');
       
-      // Detectar se é mobile
-      const isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
-      console.log('📱 Dispositivo móvel detectado:', isMobile);
+      // 1. VALIDAR ARQUIVO
+      if (!file.type.startsWith('image/')) {
+        toast.error('Arquivo deve ser uma imagem');
+        return;
+      }
       
-      // Função otimizada para mobile
-      const getLocation = () => new Promise<{ latitude: number, longitude: number }>((resolve, reject) => {
-        console.log('📍 Verificando suporte à geolocalização...');
-        
-        if (!navigator.geolocation) {
-          console.error('❌ Geolocalização não suportada pelo navegador');
-          toast.error('Geolocalização não suportada');
-          return resolve({ latitude: 0, longitude: 0 });
-        }
-        
-        console.log('✅ Geolocalização suportada!');
-        
-        // Configurações otimizadas para mobile
-        const mobileOptions = {
-          enableHighAccuracy: isMobile, // Apenas em mobile
-          timeout: isMobile ? 20000 : 10000, // Mais tempo em mobile
-          maximumAge: 0 // Sempre nova leitura
+      if (file.size > 10 * 1024 * 1024) { // 10MB
+        toast.error('Arquivo muito grande. Máximo 10MB');
+        return;
+      }
+
+      // 2. CONVERTER PARA BASE64
+      const base64Data = await new Promise<string>((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = () => {
+          const result = reader.result as string;
+          if (result.startsWith('data:image/')) {
+            console.log('✅ Base64 gerado com sucesso');
+            resolve(result);
+          } else {
+            reject(new Error('Falha na conversão para base64'));
+          }
         };
-        
-        console.log('📡 Solicitando localização com opções mobile:', mobileOptions);
-        
-        // Forçar solicitação imediata
+        reader.onerror = () => reject(new Error('Erro ao ler arquivo'));
+        reader.readAsDataURL(file);
+      });
+
+      // 3. OBTER GEOLOCALIZAÇÃO
+      const location = await new Promise<{ latitude: number; longitude: number }>((resolve) => {
+        if (!navigator.geolocation) {
+          console.warn('Geolocalização não suportada');
+          resolve({ latitude: 0, longitude: 0 });
+          return;
+        }
+
         navigator.geolocation.getCurrentPosition(
-          (pos) => {
-            const lat = pos.coords.latitude;
-            const lng = pos.coords.longitude;
-            const accuracy = pos.coords.accuracy;
-            
-            console.log('🎯 SUCESSO! Localização capturada:');
-            console.log(`   📍 Latitude: ${lat}`);
-            console.log(`   📍 Longitude: ${lng}`);
-            console.log(`   🎯 Precisão: ${accuracy} metros`);
-            console.log(`   ⏰ Timestamp: ${new Date(pos.timestamp).toLocaleString()}`);
-            
-            // Toast diferenciado para mobile
-            if (isMobile) {
-              toast.success(`📱 Localização mobile capturada! ${Math.round(accuracy)}m`);
-            } else {
-              toast.success(`💻 Localização desktop capturada! ${Math.round(accuracy)}m`);
-            }
-            
-            resolve({ latitude: lat, longitude: lng });
+          (position) => {
+            console.log('✅ Localização capturada:', position.coords.latitude, position.coords.longitude);
+            resolve({
+              latitude: position.coords.latitude,
+              longitude: position.coords.longitude
+            });
           },
           (error) => {
-            console.error('❌ Erro na captura:', error.code, error.message);
-            
-            let errorMsg = '';
-            switch(error.code) {
-              case error.PERMISSION_DENIED:
-                errorMsg = 'Permissão negada';
-                if (isMobile) {
-                  toast.error('📱 Permissão de localização negada. Habilite o GPS e permita o acesso no navegador.');
-                } else {
-                  toast.error('Permissão de localização negada.');
-                }
-                break;
-              case error.POSITION_UNAVAILABLE:
-                errorMsg = 'GPS indisponível';
-                if (isMobile) {
-                  toast.warning('📱 GPS indisponível. Verifique se o GPS está ativado.');
-                } else {
-                  toast.warning('Localização indisponível.');
-                }
-                break;
-              case error.TIMEOUT:
-                errorMsg = 'Timeout';
-                if (isMobile) {
-                  toast.warning('📱 Timeout na localização. Tentando novamente...');
-                } else {
-                  toast.warning('Timeout na localização.');
-                }
-                break;
-              default:
-                errorMsg = 'Erro desconhecido';
-            }
-            
-            console.log(`🔄 Tentativa de fallback para ${isMobile ? 'mobile' : 'desktop'}...`);
-            
-            // Fallback com configurações mais simples
-            navigator.geolocation.getCurrentPosition(
-              (pos) => {
-                const lat = pos.coords.latitude;
-                const lng = pos.coords.longitude;
-                console.log('🎯 SUCESSO no fallback!');
-                console.log(`   📍 Latitude: ${lat}`);
-                console.log(`   📍 Longitude: ${lng}`);
-                
-                toast.success('✅ Localização capturada no fallback!');
-                resolve({ latitude: lat, longitude: lng });
-              },
-              (error2) => {
-                console.error('❌ Falha total:', error2.code, error2.message);
-                toast.warning(`Foto salva sem localização: ${errorMsg}`);
-                resolve({ latitude: 0, longitude: 0 });
-              },
-              { enableHighAccuracy: false, timeout: 8000, maximumAge: 60000 }
-            );
+            console.warn('❌ Erro na geolocalização:', error.message);
+            resolve({ latitude: 0, longitude: 0 });
           },
-          mobileOptions
+          { timeout: 10000, enableHighAccuracy: true, maximumAge: 60000 }
         );
       });
-      const { latitude, longitude } = await getLocation();
+
+      // 4. UPLOAD PARA FIREBASE STORAGE (BACKUP)
+      let firebaseUrl = '';
+      try {
+        const storage = getStorage();
+        const storageRef = ref(storage, `projetos/${projectDetails.id}/subitens/${subId}/${Date.now()}_${file.name}`);
+        await uploadBytes(storageRef, file);
+        firebaseUrl = await getDownloadURL(storageRef);
+        console.log('✅ Backup no Firebase Storage criado');
+      } catch (error) {
+        console.warn('⚠️ Erro no backup do Firebase:', error);
+      }
+
+      // 5. CRIAR DADOS DA FOTO
+      const photoData = {
+        url: base64Data,
+        firebaseUrl: firebaseUrl || undefined,
+        createdAt: new Date().toISOString(),
+        latitude: location.latitude,
+        longitude: location.longitude
+      };
       
-      console.log(`💾 Salvando foto com coordenadas: ${latitude}, ${longitude}`);
+      console.log('=== DADOS DA FOTO PREPARADOS (PROJECT WRITE) ===');
+      console.log('Base64 válido:', base64Data.substring(0, 50) + '...');
+      console.log('Firebase URL:', firebaseUrl);
+      console.log('Localização:', location);
       
-      // Upload para o Storage
-      const storage = getStorage();
-      const storageRef = ref(storage, `projetos/${projectDetails.id}/subitens/${subId}/${Date.now()}_${file.name}`);
-      await uploadBytes(storageRef, file);
-      const url = await getDownloadURL(storageRef);
-      const createdAt = new Date().toISOString();
       // Atualiza o estado local
       setFormState(prev => ({
         ...prev,
         [subId]: {
           ...prev[subId],
-          photoData: { url, createdAt, latitude, longitude }
+          photoData: photoData
         }
       }));
-      setPhotoPreview(prev => ({ ...prev, [subId]: url }));
+      setPhotoPreview(prev => ({ ...prev, [subId]: base64Data }));
       
-      // Mensagem final de sucesso
-      if (latitude !== 0 && longitude !== 0) {
-        toast.success(`✅ Foto salva com localização: ${latitude.toFixed(6)}, ${longitude.toFixed(6)}`);
+      // 6. FEEDBACK PARA O USUÁRIO
+      if (location.latitude !== 0 && location.longitude !== 0) {
+        toast.success('✅ Foto salva com localização GPS!');
       } else {
-        toast.success('✅ Foto salva (sem localização)');
+        toast.success('✅ Foto salva (sem localização GPS)');
       }
-    } catch (err) {
-      toast.error('Erro ao enviar foto');
+    } catch (error) {
+      console.error('❌ Erro no processamento da foto:', error);
+      toast.error('Erro ao processar foto');
     } finally {
       setPhotoUploading(prev => ({ ...prev, [subId]: false }));
     }
@@ -862,7 +826,24 @@ const ProjectWrite = () => {
                             <Label>Foto (opcional)</Label>
                             {formState[sub.id]?.photoData?.url ? (
                             <div className="border-2 border-dashed rounded-lg p-4 bg-gray-50 relative">
-                              <img src={formState[sub.id].photoData.url} alt="Foto do subitem" className="max-h-40 rounded border mb-2 mx-auto block" />
+                              <img 
+                                src={formState[sub.id].photoData.url} 
+                                alt="Foto do subitem" 
+                                className="max-h-40 rounded border mb-2 mx-auto block"
+                                onError={(e) => {
+                                  console.error('❌ Erro ao carregar imagem no ProjectWrite');
+                                  // Tentar URL do Firebase como fallback
+                                  if (formState[sub.id]?.photoData?.firebaseUrl) {
+                                    console.log('🔄 Tentando URL do Firebase como fallback');
+                                    (e.target as HTMLImageElement).src = formState[sub.id].photoData.firebaseUrl;
+                                  } else {
+                                    console.error('❌ Nenhum fallback disponível');
+                                  }
+                                }}
+                                onLoad={() => {
+                                  console.log('✅ Imagem carregada no ProjectWrite');
+                                }}
+                              />
                               <div className="flex gap-2 justify-center mt-2">
                                 <Button
                                   type="button"

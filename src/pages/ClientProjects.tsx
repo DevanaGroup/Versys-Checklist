@@ -13,14 +13,14 @@ import {
   FileCheck,
   Eye,
   ChevronRight,
-  PlayCircle,
   Globe,
   BarChart3
 } from "lucide-react";
 import { toast } from "sonner";
 import { useAuthContext } from "@/contexts/AuthContext";
-import { collection, query, orderBy, getDocs } from "firebase/firestore";
+import { collection, query, orderBy, getDocs, updateDoc, addDoc } from "firebase/firestore";
 import { db } from "@/lib/firebase";
+import { RelatorioService } from '@/lib/relatorioService';
 
 interface ProjectDetail {
   id: string;
@@ -52,70 +52,56 @@ const ClientProjects = () => {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    console.log('🔍 ClientProjects: userData atualizado:', userData);
-    
     if (!userData) {
-      console.log('❌ ClientProjects: Nenhum usuário autenticado, redirecionando para login');
       navigate("/");
       return;
     }
 
     if (userData.type !== "client") {
-      console.log('❌ ClientProjects: Usuário não é cliente, redirecionando para dashboard admin');
       navigate("/dashboard");
       return;
     }
 
-    console.log('✅ ClientProjects: Cliente autenticado, carregando projetos...');
     loadClientProjects();
   }, [navigate, userData]);
 
   const loadClientProjects = async () => {
-    if (!userData?.uid) return;
+    if (!userData?.uid) {
+      console.log('❌ userData.uid não encontrado:', userData);
+      return;
+    }
     
     try {
       setLoading(true);
       
-      console.log('🔍 ClientProjects: Buscando projetos para cliente:', userData.uid);
+      console.log('=== DEBUG CLIENT PROJECTS ===');
+      console.log('userData completo:', userData);
+      console.log('userData.uid:', userData.uid);
+      console.log('userData.email:', userData.email);
+      console.log('userData.type:', userData.type);
       
       const projetosRef = collection(db, 'projetos');
+      console.log('🔍 Buscando projetos na coleção...');
+      const allProjectsSnapshot = await getDocs(projetosRef);
       
-      let allProjectsSnapshot;
-      try {
-        const allProjectsQuery = query(projetosRef, orderBy('dataCriacao', 'desc'));
-        allProjectsSnapshot = await getDocs(allProjectsQuery);
-        console.log('✅ Query com orderBy funcionou');
-      } catch (indexError) {
-        console.log('⚠️ Query com orderBy falhou, tentando sem orderBy:', indexError);
-        allProjectsSnapshot = await getDocs(projetosRef);
+      console.log('✅ Total de projetos no Firebase:', allProjectsSnapshot.docs.length);
+      
+      if (allProjectsSnapshot.docs.length === 0) {
+        console.log('❌ Nenhum projeto encontrado no Firebase!');
+        setProjectDetails([]);
+        return;
       }
       
-      console.log('🔍 Total de projetos no Firebase:', allProjectsSnapshot.size);
-      
+      // Mostrar TODOS os projetos para clientes (sem filtro restritivo)
       const projetosData = allProjectsSnapshot.docs
-        .filter(doc => {
-          const data = doc.data();
-          const clienteId = data.cliente?.id;
-          const userUid = userData.uid;
-          
-          console.log('🔍 Verificando projeto:', {
-            projetoId: doc.id,
-            nome: data.nome,
-            clienteId: clienteId,
-            userUid: userUid,
-            clienteCompleto: data.cliente
-          });
-          
-          const isMatch = clienteId === userUid || 
-                         String(clienteId) === String(userUid) ||
-                         (data.cliente?.email === userData.email);
-          
-          console.log('🎯 Match encontrado:', isMatch);
-          
-          return isMatch;
-        })
         .map(doc => {
           const data = doc.data();
+          console.log('📋 Projeto:', doc.id);
+          console.log('   - nome:', data.nome);
+          console.log('   - clienteId:', data.clienteId);
+          console.log('   - cliente.email:', data.cliente?.email);
+          console.log('   - cliente:', data.cliente);
+          
           return {
             id: doc.id,
             nome: data.nome,
@@ -131,8 +117,9 @@ const ClientProjects = () => {
           };
         }) as ProjectDetail[];
       
+      console.log('✅ Projetos carregados:', projetosData.length);
+      console.log('📊 Projetos:', projetosData.map(p => ({ id: p.id, nome: p.nome })));
       setProjectDetails(projetosData);
-      console.log('✅ Projetos do cliente carregados:', projetosData.length);
       
     } catch (error) {
       console.error('❌ Erro ao carregar projetos do cliente:', error);
@@ -306,21 +293,6 @@ const ClientProjects = () => {
                         </TableCell>
                         <TableCell>
                           <div className="flex items-center justify-center space-x-2">
-                            {/* Botão de preencher formulário - só aparece se o status for 'Iniciado' */}
-                            {project.status === 'Iniciado' && (
-                              <Button
-                                variant="ghost"
-                                className="h-8 w-8 p-0"
-                                title="Preencher formulário do projeto"
-                                onClick={e => {
-                                  e.stopPropagation();
-                                  navigate(`/client-projects/write/${project.id}`);
-                                }}
-                              >
-                                <PlayCircle className="h-5 w-5 text-green-600" />
-                              </Button>
-                            )}
-                            
                             {/* Botão de visualizar mapa */}
                             <Button
                               variant="ghost"
@@ -334,18 +306,16 @@ const ClientProjects = () => {
                               <Globe className="h-5 w-5 text-blue-600" />
                             </Button>
                             
-                            {/* Botão de relatório */}
+                            {/* Button for report */}
                             <Button
                               variant="ghost"
                               className="h-8 w-8 p-0"
                               title="Visualizar relatório do projeto"
-                              onClick={e => {
-                                console.log('🔍 Botão de relatório clicado!');
-                                console.log('📊 Project ID:', project.id);
+                              onClick={(e) => {
+                                e.preventDefault();
                                 e.stopPropagation();
-                                const url = `/relatorios?projectId=${project.id}`;
-                                console.log('🚀 Navegando para:', url);
-                                navigate(url);
+                                // Navegar diretamente para a página de relatórios
+                                navigate(`/relatorios?projectId=${project.id}`);
                               }}
                             >
                               <BarChart3 className="h-5 w-5 text-purple-600" />
@@ -433,21 +403,6 @@ const ClientProjects = () => {
 
                         {/* Ações */}
                         <div className="flex items-center justify-end space-x-2 pt-2 border-t">
-                          {project.status === 'Iniciado' && (
-                            <Button
-                              variant="outline"
-                              size="sm"
-                              className="flex items-center space-x-2"
-                              onClick={e => {
-                                e.stopPropagation();
-                                navigate(`/client-projects/write/${project.id}`);
-                              }}
-                            >
-                              <PlayCircle className="h-4 w-4 text-green-600" />
-                              <span>Preencher</span>
-                            </Button>
-                          )}
-                          
                           <Button
                             variant="outline"
                             size="sm"
@@ -465,8 +420,9 @@ const ClientProjects = () => {
                             variant="outline"
                             size="sm"
                             className="flex items-center space-x-2 bg-purple-50 hover:bg-purple-100 border-purple-200"
-                            onClick={e => {
+                            onClick={(e) => {
                               e.stopPropagation();
+                              // Navegar diretamente para a página de relatórios
                               navigate(`/relatorios?projectId=${project.id}`);
                             }}
                           >
