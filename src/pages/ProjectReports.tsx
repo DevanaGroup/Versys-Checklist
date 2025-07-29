@@ -12,7 +12,8 @@ import { toast } from 'sonner';
 import { useAuthContext } from '@/contexts/AuthContext';
 import { RelatorioService } from '@/lib/relatorioService';
 import { RelatorioItem } from '@/lib/types';
-import { db } from '@/lib/firebase';
+import { db, storage } from '@/lib/firebase';
+import { ref, getBlob } from 'firebase/storage';
 
 const ProjectReports = () => {
   const { userData } = useAuthContext();
@@ -533,24 +534,62 @@ const ProjectReports = () => {
                                       console.log('📥 Tentando baixar foto:', photo);
                                       try {
                                         if (photo && typeof photo === 'string') {
-                                          const response = await fetch(photo);
-                                          const blob = await response.blob();
-                                          const url = window.URL.createObjectURL(blob);
-                                          const link = document.createElement('a');
-                                          link.href = url;
-                                          link.download = `foto-${item.subItemTitle.replace(/[^a-zA-Z0-9]/g, '-')}-${index + 1}.jpg`;
-                                          document.body.appendChild(link);
-                                          link.click();
-                                          document.body.removeChild(link);
-                                          window.URL.revokeObjectURL(url);
-                                          toast.success('Foto baixada com sucesso!');
+                                          // Método 1: Tentar download direto via link (sem CORS)
+                                          try {
+                                            console.log('🔗 Tentando download direto...');
+                                            const link = document.createElement('a');
+                                            link.href = photo;
+                                            link.download = `foto-${item.subItemTitle.replace(/[^a-zA-Z0-9]/g, '-')}-${index + 1}.jpg`;
+                                            link.target = '_blank';
+                                            link.rel = 'noopener noreferrer';
+                                            document.body.appendChild(link);
+                                            link.click();
+                                            document.body.removeChild(link);
+                                            toast.success('Foto baixada com sucesso!');
+                                            return;
+                                          } catch (directError) {
+                                            console.warn('⚠️ Download direto falhou, tentando via Firebase SDK...', directError);
+                                          }
+
+                                          // Método 2: Usar Firebase SDK como fallback
+                                          const urlObj = new URL(photo);
+                                          const pathMatch = urlObj.pathname.match(/\/o\/(.+)$/);
+                                          
+                                          if (pathMatch) {
+                                            const filePath = decodeURIComponent(pathMatch[1]);
+                                            console.log('📂 Tentando via Firebase SDK:', filePath);
+                                            
+                                            const fileRef = ref(storage, filePath);
+                                            const blob = await getBlob(fileRef);
+                                            
+                                            const blobUrl = window.URL.createObjectURL(blob);
+                                            const link = document.createElement('a');
+                                            link.href = blobUrl;
+                                            link.download = `foto-${item.subItemTitle.replace(/[^a-zA-Z0-9]/g, '-')}-${index + 1}.jpg`;
+                                            document.body.appendChild(link);
+                                            link.click();
+                                            document.body.removeChild(link);
+                                            window.URL.revokeObjectURL(blobUrl);
+                                            toast.success('Foto baixada com sucesso!');
+                                          } else {
+                                            // Método 3: Fallback final - abrir em nova aba
+                                            console.warn('⚠️ Não foi possível extrair caminho, abrindo em nova aba...');
+                                            window.open(photo, '_blank');
+                                            toast.info('Foto aberta em nova aba. Clique com o botão direito para salvar.');
+                                          }
                                         } else {
                                           toast.error('URL da foto inválida');
                                           console.error('URL inválida:', photo);
                                         }
                                       } catch (error) {
                                         console.error('Erro ao baixar foto:', error);
-                                        toast.error('Erro ao baixar foto');
+                                        // Fallback final: abrir em nova aba
+                                        try {
+                                          window.open(photo, '_blank');
+                                          toast.info('Erro no download automático. Foto aberta em nova aba.');
+                                        } catch (finalError) {
+                                          toast.error('Erro ao acessar foto. Verifique se ela existe.');
+                                        }
                                       }
                                     }}
                                     className="h-8 px-2 text-xs"
