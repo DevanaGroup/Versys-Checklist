@@ -297,25 +297,9 @@ const AdminProjectManagement = () => {
   };
 
   const calculateProgress = (accordions: any[]): number => {
-    if (!accordions || accordions.length === 0) return 0;
-    
-    let totalItems = 0;
-    let completedItems = 0;
-    
-    accordions.forEach(accordion => {
-      if (accordion.items) {
-        accordion.items.forEach((item: any) => {
-          if (item.subItems) {
-            totalItems += item.subItems.length;
-            completedItems += item.subItems.filter((subItem: any) => 
-              subItem.completed || subItem.evaluation === "na"
-            ).length;
-          }
-        });
-      }
-    });
-    
-    return totalItems > 0 ? Math.round((completedItems / totalItems) * 100) : 0;
+    // Durante fase administrativa, progresso sempre é 0%
+    // Progresso só deve avançar quando cliente fizer adequações
+    return 0;
   };
 
   const generateVerificationReport = (project: Projeto) => {

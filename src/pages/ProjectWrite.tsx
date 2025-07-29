@@ -505,21 +505,24 @@ const ProjectWrite = () => {
 
   // Função para calcular progresso do projeto
   const calculateProgress = (accordions: any[]): number => {
+    // Durante a fase administrativa, o progresso deve ser sempre 0%
+    // O progresso só deve avançar quando o cliente fizer adequações e elas forem aprovadas pelo admin
     let totalSubItems = 0;
-    let completedSubItems = 0;
+    let approvedAdequacies = 0;
     
     accordions.forEach(accordion => {
       accordion.items.forEach(item => {
         item.subItems.forEach(subItem => {
           totalSubItems++;
-          if (subItem.completed || subItem.adequacyStatus === 'approved') {
-            completedSubItems++;
+          // Só conta como progresso se a adequação foi reportada pelo cliente E aprovada pelo admin
+          if (subItem.adequacyReported && subItem.adequacyStatus === 'approved') {
+            approvedAdequacies++;
           }
         });
       });
     });
     
-    return totalSubItems > 0 ? Math.round((completedSubItems / totalSubItems) * 100) : 0;
+    return totalSubItems > 0 ? Math.round((approvedAdequacies / totalSubItems) * 100) : 0;
   };
 
   // Funções para adequação

@@ -25,14 +25,16 @@ import ColaboradorFirstLogin from "./pages/ColaboradorFirstLogin";
 import ClienteFirstLogin from "./pages/ClienteFirstLogin";
 import Presets from "./pages/Presets";
 import ProjectWrite from "./pages/ProjectWrite";
+import ProjectView from "./pages/ProjectView";
 import ProjectMap from "./pages/ProjectMap";
+import ProjectReports from "./pages/ProjectReports";
 
 import { AuthProvider, useAuthContext } from "./contexts/AuthContext";
 
 const queryClient = new QueryClient();
 
 // Componente para verificar autenticação
-const ProtectedRoute = ({ children, requiredType }: { children: React.ReactNode, requiredType?: string }) => {
+const ProtectedRoute = ({ children, requiredType }: { children: React.ReactNode, requiredType?: string | string[] }) => {
   const { userData, loading, isAuthenticated } = useAuthContext();
   
   if (loading) {
@@ -54,13 +56,16 @@ const ProtectedRoute = ({ children, requiredType }: { children: React.ReactNode,
   }
   
   // Verifica tipo de usuário se necessário
-  if (requiredType && userData.type !== requiredType) {
-    console.log('ProtectedRoute: Tipo de usuário não autorizado, redirecionando para dashboard apropriado');
-    // Se o tipo não corresponde, redireciona para o dashboard apropriado
-    if (userData.type === "admin") {
-      return <Navigate to="/dashboard" replace />;
-    } else if (userData.type === "client") {
-      return <Navigate to="/client-projects" replace />;
+  if (requiredType) {
+    const allowedTypes = Array.isArray(requiredType) ? requiredType : [requiredType];
+    if (!allowedTypes.includes(userData.type)) {
+      console.log('ProtectedRoute: Tipo de usuário não autorizado, redirecionando para dashboard apropriado');
+      // Se o tipo não corresponde, redireciona para o dashboard apropriado
+      if (userData.type === "admin") {
+        return <Navigate to="/dashboard" replace />;
+      } else if (userData.type === "client") {
+        return <Navigate to="/client-projects" replace />;
+      }
     }
   }
   
@@ -96,7 +101,8 @@ const App = () => (
               <Route index element={<Projetos />} />
               <Route path="new" element={<NewProject />} />
               <Route path="edit/:projectId" element={<EditProject />} />
-              <Route path="view/:projectId" element={<AdminProjectView />} />
+              <Route path="view/:id" element={<ProjectView />} />
+              <Route path="admin-view/:projectId" element={<AdminProjectView />} />
               <Route path="write/:id" element={<ProjectWrite />} />
               <Route path="map/:id" element={<ProjectMap />} />
             </Route>
@@ -129,11 +135,11 @@ const App = () => (
               <Route index element={<AdminAdequacyManagement />} />
             </Route>
             <Route path="/relatorios" element={
-              <ProtectedRoute requiredType="admin">
+              <ProtectedRoute requiredType={["admin", "client"]}>
                 <DashboardLayout />
               </ProtectedRoute>
             }>
-              <Route index element={<div className="text-center text-gray-500 mt-20">Página de Relatórios em desenvolvimento</div>} />
+              <Route index element={<ProjectReports />} />
             </Route>
             <Route path="/configuracoes" element={
               <ProtectedRoute requiredType="admin">

@@ -14,7 +14,8 @@ import {
   Eye,
   ChevronRight,
   PlayCircle,
-  Globe
+  Globe,
+  BarChart3
 } from "lucide-react";
 import { toast } from "sonner";
 import { useAuthContext } from "@/contexts/AuthContext";
@@ -144,21 +145,26 @@ const ClientProjects = () => {
   const calculateProgress = (accordions: any[]): number => {
     if (!accordions || accordions.length === 0) return 0;
     
+    // Durante a fase administrativa, o progresso deve ser sempre 0%
+    // O progresso só deve avançar quando o cliente fizer adequações e elas forem aprovadas pelo admin
     let totalItems = 0;
-    let completedItems = 0;
+    let approvedAdequacies = 0;
     
     accordions.forEach(accordion => {
       if (accordion.items) {
         accordion.items.forEach((item: any) => {
           if (item.subItems) {
             totalItems += item.subItems.length;
-            completedItems += item.subItems.filter((subItem: any) => subItem.completed).length;
+            // Só conta como progresso se a adequação foi reportada pelo cliente E aprovada pelo admin
+            approvedAdequacies += item.subItems.filter((subItem: any) => 
+              subItem.adequacyReported && subItem.adequacyStatus === 'approved'
+            ).length;
           }
         });
       }
     });
     
-    return totalItems > 0 ? Math.round((completedItems / totalItems) * 100) : 0;
+    return totalItems > 0 ? Math.round((approvedAdequacies / totalItems) * 100) : 0;
   };
 
   const getStatusColor = (status: string) => {
@@ -327,6 +333,23 @@ const ClientProjects = () => {
                             >
                               <Globe className="h-5 w-5 text-blue-600" />
                             </Button>
+                            
+                            {/* Botão de relatório */}
+                            <Button
+                              variant="ghost"
+                              className="h-8 w-8 p-0"
+                              title="Visualizar relatório do projeto"
+                              onClick={e => {
+                                console.log('🔍 Botão de relatório clicado!');
+                                console.log('📊 Project ID:', project.id);
+                                e.stopPropagation();
+                                const url = `/relatorios?projectId=${project.id}`;
+                                console.log('🚀 Navegando para:', url);
+                                navigate(url);
+                              }}
+                            >
+                              <BarChart3 className="h-5 w-5 text-purple-600" />
+                            </Button>
                           </div>
                         </TableCell>
                       </TableRow>
@@ -436,6 +459,19 @@ const ClientProjects = () => {
                           >
                             <Globe className="h-4 w-4 text-blue-600" />
                             <span>Mapa</span>
+                          </Button>
+                          
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            className="flex items-center space-x-2 bg-purple-50 hover:bg-purple-100 border-purple-200"
+                            onClick={e => {
+                              e.stopPropagation();
+                              navigate(`/relatorios?projectId=${project.id}`);
+                            }}
+                          >
+                            <BarChart3 className="h-4 w-4 text-purple-600" />
+                            <span className="text-purple-700">Relatório</span>
                           </Button>
                         </div>
                       </div>

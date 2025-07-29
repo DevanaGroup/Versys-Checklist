@@ -15,7 +15,7 @@ import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, 
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { Plus, Building, Calendar, User, FileText, CheckCircle, Clock, AlertCircle, ArrowLeft, Send, Download, CheckCircle2, XCircle, AlertTriangle, Eye, ClipboardCheck, Trash2, MoreVertical, Edit, Grid, List, ChevronRight, ChevronLeft, PlayCircle, PauseCircle, RotateCcw, FileTextIcon, MessageSquare, CheckSquare, X, Globe } from "lucide-react";
+import { Plus, Building, Calendar, User, FileText, CheckCircle, Clock, AlertCircle, ArrowLeft, Send, Download, CheckCircle2, XCircle, AlertTriangle, Eye, ClipboardCheck, Trash2, MoreVertical, Edit, Grid, List, ChevronRight, ChevronLeft, PauseCircle, RotateCcw, FileTextIcon, MessageSquare, CheckSquare, X, Globe, BarChart3 } from "lucide-react";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { collection, getDocs, query, orderBy, doc, updateDoc, deleteDoc, where } from "firebase/firestore";
 import { db } from "@/lib/firebase";
@@ -226,6 +226,16 @@ const Projetos = () => {
         const data = doc.data();
         console.log('Dados do projeto:', doc.id, data);
         
+        // Debug específico para o projeto Novo teste 00009
+        if (data.nome === 'Novo teste 00009') {
+          console.log('🔍 PROJETO NOVO TESTE 00009 ENCONTRADO:');
+          console.log('- ID do projeto:', doc.id);
+          console.log('- Nome:', data.nome);
+          console.log('- ClienteId:', data.clienteId);
+          console.log('- Cliente objeto:', data.cliente);
+          console.log('- Todos os dados:', JSON.stringify(data, null, 2));
+        }
+        
         // Compatibilidade com diferentes estruturas
         const projeto = {
           id: doc.id,
@@ -415,30 +425,14 @@ const Projetos = () => {
   };
 
   const calculateProgress = (accordions: any[]): number => {
-    if (!accordions || accordions.length === 0) return 0;
-    
-    let totalItems = 0;
-    let completedItems = 0;
-    
-    accordions.forEach(accordion => {
-      accordion.items.forEach((item: any) => {
-        item.subItems.forEach((subItem: any) => {
-          totalItems++;
-          if (subItem.evaluation === "na") {
-            completedItems++;
-          }
-        });
-      });
-    });
-    
-    return totalItems > 0 ? Math.round((completedItems / totalItems) * 100) : 0;
+    // Durante fase administrativa, progresso sempre é 0%
+    // Progresso só deve avançar quando cliente fizer adequações
+    return 0;
   };
 
   const handleViewDetails = (projeto: ProjectDetails) => {
-    navigate(`/projetos/write/${projeto.id}`);
+    navigate(`/projetos/view/${projeto.id}`);
   };
-
-  // Removed handleBackToList - no longer needed
 
   const handleDeleteProject = async (projectId: string) => {
     try {
@@ -1430,19 +1424,7 @@ const Projetos = () => {
                                 </TableCell>
                                 <TableCell className="text-center">
                                   <div className="flex items-center justify-center space-x-2">
-                                    {projeto.status === 'Iniciado' && (
-                                      <Button
-                                        variant="ghost"
-                                        className="h-8 w-8 p-0"
-                                        title="Preencher formulário do projeto"
-                                        onClick={e => {
-                                          e.stopPropagation();
-                                          navigate(`/projetos/write/${projeto.id}`);
-                                        }}
-                                      >
-                                        <PlayCircle className="h-5 w-5 text-green-600" />
-                                      </Button>
-                                    )}
+
                                     <Button
                                       variant="ghost"
                                       className="h-8 w-8 p-0"
@@ -1453,6 +1435,17 @@ const Projetos = () => {
                                       }}
                                     >
                                       <Globe className="h-5 w-5 text-blue-600" />
+                                    </Button>
+                                    <Button
+                                      variant="ghost"
+                                      className="h-8 w-8 p-0"
+                                      title="Ver relatório do projeto"
+                                      onClick={e => {
+                                        e.stopPropagation();
+                                        navigate(`/relatorios?projectId=${projeto.id}`);
+                                      }}
+                                    >
+                                      <BarChart3 className="h-5 w-5 text-purple-600" />
                                     </Button>
                                     <DropdownMenu>
                                       <DropdownMenuTrigger asChild>
@@ -1596,21 +1589,7 @@ const Projetos = () => {
                                 {/* Ações */}
                                 <div className="flex items-center justify-between pt-2 border-t">
                                   <div className="flex items-center space-x-1 flex-1">
-                                    {projeto.status === 'Iniciado' && (
-                                      <Button
-                                        variant="outline"
-                                        size="sm"
-                                        className="flex items-center space-x-1 text-xs px-2 py-1 h-7 flex-shrink-0"
-                                        onClick={e => {
-                                          e.stopPropagation();
-                                          navigate(`/projetos/write/${projeto.id}`);
-                                        }}
-                                      >
-                                        <PlayCircle className="h-3 w-3 text-green-600" />
-                                        <span className="hidden xs:inline">Preencher</span>
-                                        <span className="xs:hidden">Preench.</span>
-                                      </Button>
-                                    )}
+
                                     
                                     <Button
                                       variant="outline"
