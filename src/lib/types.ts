@@ -7,6 +7,7 @@ export interface RelatorioItem {
   clientName: string;
   clientEmail: string;
   category: string;
+  itemTitle: string;
   subItemId: string;
   subItemTitle: string;
   local: string;

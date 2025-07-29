@@ -1468,7 +1468,7 @@ const Projetos = () => {
                                         {isAdmin && (
                                           <DropdownMenuItem onClick={(e) => {
                                             e.stopPropagation();
-                                            navigate(`/projetos/new?editId=${projeto.id}`);
+                                            navigate(`/projetos/edit/${projeto.id}?clienteId=${projeto.clienteId}`);
                                           }}>
                                             <Edit className="h-4 w-4 mr-2" />
                                             Editar Projeto
@@ -1627,7 +1627,7 @@ const Projetos = () => {
                                       {isAdmin && (
                                         <DropdownMenuItem onClick={(e) => {
                                           e.stopPropagation();
-                                          navigate(`/projetos/new?editId=${projeto.id}`);
+                                          navigate(`/projetos/edit/${projeto.id}?clienteId=${projeto.clienteId}`);
                                         }}>
                                           <Edit className="h-4 w-4 mr-2" />
                                           Editar Projeto

@@ -7,7 +7,7 @@ import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Badge } from '@/components/ui/badge';
-import { Download, FileSpreadsheet, Filter, Search, ArrowLeft, FolderOpen, Building2, User, BarChart3, TrendingUp, Calendar } from 'lucide-react';
+import { Download, FileSpreadsheet, Filter, Search, ArrowLeft, FolderOpen, Building2, User, BarChart3, TrendingUp, Calendar, Image, Eye } from 'lucide-react';
 import { toast } from 'sonner';
 import { useAuthContext } from '@/contexts/AuthContext';
 import { RelatorioService } from '@/lib/relatorioService';
@@ -61,8 +61,8 @@ const ProjectReports = () => {
       console.log('🔍 DEBUG: loadRelatorioByProject iniciado para projeto:', projectId);
       console.log('👤 DEBUG: User data:', userData);
       
-      // Ir direto para os dados do projeto (evitar problema de permissões)
-      console.log('🚀 DEBUG: Indo direto para os dados do projeto...');
+      // Carregar dados diretamente do projeto
+      console.log('🚀 DEBUG: Carregando dados do projeto...');
       await loadProjectDataDirectly(projectId);
       
     } catch (error) {
@@ -91,6 +91,7 @@ const ProjectReports = () => {
       console.log('📊 DEBUG: Dados do projeto encontrados:', projectData);
       console.log('📊 DEBUG: customAccordions existe?', !!projectData.customAccordions);
       console.log('📊 DEBUG: customAccordions length:', projectData.customAccordions?.length);
+      console.log('📊 DEBUG: customAccordions completo:', JSON.stringify(projectData.customAccordions, null, 2));
       
       // Verificar permissões
       if (userData?.type === 'client') {
@@ -105,22 +106,27 @@ const ProjectReports = () => {
       // Converter dados do projeto para formato de relatório
       const relatoriosFromProject: RelatorioItem[] = [];
       
-      if (projectData.customAccordions) {
+      if (projectData.customAccordions && projectData.customAccordions.length > 0) {
         console.log('📁 DEBUG: Processando customAccordions...');
         projectData.customAccordions.forEach((accordion: any, accordionIndex: number) => {
           console.log(`📂 DEBUG: Accordion ${accordionIndex + 1}:`, accordion.title);
           console.log(`📂 DEBUG: Items no accordion:`, accordion.items?.length || 0);
+          console.log(`📂 DEBUG: Items completo:`, JSON.stringify(accordion.items, null, 2));
           
-          if (accordion.items) {
+          if (accordion.items && accordion.items.length > 0) {
             accordion.items.forEach((item: any, itemIndex: number) => {
               console.log(`📄 DEBUG: Item ${itemIndex + 1}:`, item.category || 'Sem categoria');
+              console.log(`📄 DEBUG: Item title:`, item.title || 'Sem título do item');
               console.log(`📄 DEBUG: SubItems no item:`, item.subItems?.length || 0);
+              console.log(`📄 DEBUG: SubItems completo:`, JSON.stringify(item.subItems, null, 2));
               
               const category = item.category || accordion.title || 'Categoria não informada';
               
-              if (item.subItems) {
+              if (item.subItems && item.subItems.length > 0) {
                 item.subItems.forEach((subItem: any, subItemIndex: number) => {
                   console.log(`🔹 DEBUG: SubItem ${subItemIndex + 1}:`, subItem.title || 'Sem título');
+                  console.log(`🔹 DEBUG: SubItem photos:`, subItem.photos);
+                  console.log(`🔹 DEBUG: SubItem completo:`, JSON.stringify(subItem, null, 2));
                   
                   const relatorioItem: RelatorioItem = {
                     id: `${projectId}-${subItem.id}`,
@@ -130,6 +136,7 @@ const ProjectReports = () => {
                     clientName: projectData.cliente?.nome || 'Cliente não informado',
                     clientEmail: projectData.cliente?.email || '',
                     category,
+                    itemTitle: item.title || 'Artigo não informado',
                     subItemId: subItem.id,
                     subItemTitle: subItem.title,
                     local: subItem.local || 'Local não informado',
@@ -141,7 +148,11 @@ const ProjectReports = () => {
                     endDate: subItem.endDate || '',
                     status: determineStatus(subItem),
                     evaluation: subItem.evaluation || '',
-                    photos: subItem.photos || [],
+                    photos: Array.isArray(subItem.photos) 
+                      ? subItem.photos.map((photo: any) => 
+                          typeof photo === 'string' ? photo : photo.url || photo
+                        ).filter(Boolean)
+                      : [],
                     adequacyReported: subItem.adequacyReported || false,
                     adequacyStatus: subItem.adequacyStatus || 'pending',
                     adequacyDetails: subItem.adequacyDetails || '',
@@ -155,22 +166,24 @@ const ProjectReports = () => {
                     updatedBy: userData?.uid || ''
                   };
 
+                  console.log(`✅ DEBUG: RelatorioItem criado:`, relatorioItem);
                   relatoriosFromProject.push(relatorioItem);
                 });
               } else {
-                console.log(`⚠️ DEBUG: Item ${itemIndex + 1} não possui subItems`);
+                console.log(`⚠️ DEBUG: Item ${itemIndex + 1} não possui subItems ou subItems está vazio`);
               }
             });
           } else {
-            console.log(`⚠️ DEBUG: Accordion ${accordionIndex + 1} não possui items`);
+            console.log(`⚠️ DEBUG: Accordion ${accordionIndex + 1} não possui items ou items está vazio`);
           }
         });
       } else {
-        console.log('⚠️ DEBUG: Projeto não possui customAccordions');
+        console.log('⚠️ DEBUG: Projeto não possui customAccordions ou está vazio');
         console.log('📋 DEBUG: Estrutura completa do projeto:', JSON.stringify(projectData, null, 2));
       }
       
       console.log('📊 DEBUG: Total de itens criados:', relatoriosFromProject.length);
+      console.log('📊 DEBUG: Itens criados:', relatoriosFromProject);
       setRelatorios(relatoriosFromProject);
       
       // Extrair categorias únicas
@@ -338,10 +351,12 @@ const ProjectReports = () => {
         </div>
         
         <div className="flex items-center space-x-2">
+
           <Button
             onClick={exportToCSV}
             variant="outline"
             className="flex items-center space-x-2"
+            disabled={relatorios.length === 0}
           >
             <Download size={16} />
             <span>Exportar CSV</span>
@@ -481,10 +496,12 @@ const ProjectReports = () => {
                 <TableHeader>
                   <TableRow>
                     <TableHead>Categoria</TableHead>
+                    <TableHead>Artigo</TableHead>
                     <TableHead>Item</TableHead>
                     <TableHead>Local</TableHead>
                     <TableHead>Situação Atual</TableHead>
                     <TableHead>Orientação</TableHead>
+                    <TableHead>Fotos</TableHead>
                     <TableHead>Responsável</TableHead>
                     <TableHead>Status</TableHead>
                     <TableHead>Avaliação</TableHead>
@@ -495,6 +512,7 @@ const ProjectReports = () => {
                   {filteredData.map((item) => (
                     <TableRow key={item.id}>
                       <TableCell className="font-medium">{item.category}</TableCell>
+                      <TableCell className="font-medium">{item.itemTitle}</TableCell>
                       <TableCell>{item.subItemTitle}</TableCell>
                       <TableCell>{item.local}</TableCell>
                       <TableCell className="max-w-xs truncate" title={item.currentSituation}>
@@ -503,6 +521,54 @@ const ProjectReports = () => {
                       <TableCell className="max-w-xs truncate" title={item.clientGuidance}>
                         {item.clientGuidance || '-'}
                       </TableCell>
+                      <TableCell>
+                        {item.photos && item.photos.length > 0 ? (
+                          <div className="flex flex-wrap gap-1">
+                            {item.photos.map((photo, index) => (
+                                <div key={index} className="flex items-center gap-1">
+                                  <Button
+                                    variant="outline"
+                                    size="sm"
+                                    onClick={async () => {
+                                      console.log('📥 Tentando baixar foto:', photo);
+                                      try {
+                                        if (photo && typeof photo === 'string') {
+                                          const response = await fetch(photo);
+                                          const blob = await response.blob();
+                                          const url = window.URL.createObjectURL(blob);
+                                          const link = document.createElement('a');
+                                          link.href = url;
+                                          link.download = `foto-${item.subItemTitle.replace(/[^a-zA-Z0-9]/g, '-')}-${index + 1}.jpg`;
+                                          document.body.appendChild(link);
+                                          link.click();
+                                          document.body.removeChild(link);
+                                          window.URL.revokeObjectURL(url);
+                                          toast.success('Foto baixada com sucesso!');
+                                        } else {
+                                          toast.error('URL da foto inválida');
+                                          console.error('URL inválida:', photo);
+                                        }
+                                      } catch (error) {
+                                        console.error('Erro ao baixar foto:', error);
+                                        toast.error('Erro ao baixar foto');
+                                      }
+                                    }}
+                                    className="h-8 px-2 text-xs"
+                                    title="Baixar foto"
+                                  >
+                                    <Download className="h-3 w-3 mr-1" />
+                                    Foto {index + 1}
+                                  </Button>
+                                </div>
+                              ))}
+                          </div>
+                          ) : (
+                            <div className="flex items-center gap-1 text-gray-500">
+                              <Image className="h-4 w-4" />
+                              <span className="text-xs">Sem fotos</span>
+                            </div>
+                          )}
+                        </TableCell>
                       <TableCell>{item.responsible || '-'}</TableCell>
                       <TableCell>{getStatusBadge(item.status)}</TableCell>
                       <TableCell>{getEvaluationBadge(item.evaluation)}</TableCell>

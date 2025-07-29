@@ -1,20 +1,12 @@
 rules_version = '2';
 service firebase.storage {
   match /b/{bucket}/o {
-    // Regras para imagens de projetos - acesso público para leitura
-    match /projetos/{allPaths=**} {
-      allow read: if true;  // Acesso público para leitura
-      allow write: if request.auth != null;  // Apenas usuários autenticados podem fazer upload
-    }
-    
-    // Regras para imagens de adequação - apenas usuários autenticados podem fazer upload
-    match /adequacy-images/{allPaths=**} {
-      allow read, write: if request.auth != null;
-    }
-    
-    // Regras gerais para outros arquivos
+    // Regras simplificadas:
+    // Permite que qualquer pessoa leia todos os arquivos.
+    // Permite que apenas usuários autenticados escrevam (façam upload, editem, excluam) arquivos.
     match /{allPaths=**} {
-      allow read, write: if request.auth != null;
+      allow read: if true;
+      allow write: if request.auth != null;
     }
   }
 } 

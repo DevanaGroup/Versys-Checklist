@@ -109,7 +109,7 @@ const App = () => (
             }>
               <Route index element={<Projetos />} />
               <Route path="new" element={<NewProject />} />
-              <Route path="edit/:projectId" element={<EditProject />} />
+              <Route path="edit/:projectId" element={<NewProject />} />
               <Route path="view/:id" element={<ProjectView />} />
               <Route path="admin-view/:projectId" element={<AdminProjectView />} />
               <Route path="write/:id" element={<ProjectWrite />} />
