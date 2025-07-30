@@ -10,7 +10,7 @@ import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, D
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from '@/components/ui/alert-dialog';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { toast } from 'sonner';
-import { collection, addDoc, getDocs, doc, updateDoc, deleteDoc, query, orderBy, where } from 'firebase/firestore';
+import { collection, addDoc, getDocs, doc, updateDoc, deleteDoc, query, orderBy, where, setDoc } from 'firebase/firestore';
 import { db } from '@/lib/firebase';
 
 interface Cliente {
@@ -24,8 +24,6 @@ interface Cliente {
   dataCriacao: string;
   projetos: number;
   firebaseUid?: string;
-  senhaTemporaria?: string;
-  precisaCriarConta?: boolean;
 }
 
 const Clientes = () => {
@@ -75,9 +73,7 @@ const Clientes = () => {
             status: data.status || 'ativo' as const,
             dataCriacao: data.createdAt?.toDate?.()?.toISOString() || new Date().toISOString(),
             projetos: 0,
-            firebaseUid: data.uid || doc.id,
-            senhaTemporaria: data.senhaTemporaria,
-            precisaCriarConta: data.precisaCriarConta || false
+            firebaseUid: data.uid || doc.id
           };
         }) as Cliente[];
         
@@ -107,9 +103,7 @@ const Clientes = () => {
             status: data.status || 'ativo' as const,
             dataCriacao: data.createdAt?.toDate?.()?.toISOString() || new Date().toISOString(),
             projetos: 0,
-            firebaseUid: data.uid || doc.id,
-            senhaTemporaria: data.senhaTemporaria,
-            precisaCriarConta: data.precisaCriarConta || false
+            firebaseUid: data.uid || doc.id
           };
         }) as Cliente[];
         
@@ -173,33 +167,65 @@ const Clientes = () => {
   };
 
   const handleCriarCliente = async () => {
-    if (!novoCliente.nome || !novoCliente.email || !novoCliente.empresa) {
+    if (!novoCliente.nome || !novoCliente.email || !novoCliente.empresa || !novoCliente.senha) {
       toast.error('Por favor, preencha todos os campos obrigatórios');
+      return;
+    }
+
+    if (novoCliente.senha.length < 6) {
+      toast.error('A senha deve ter pelo menos 6 caracteres');
       return;
     }
 
     setCriandoCliente(true);
     try {
-      const senhaTemporaria = novoCliente.senha || generateRandomPassword();
+      // CRIAR USUÁRIO NO FIREBASE AUTHENTICATION
+      const firebaseApiKey = "AIzaSyBfqnHWfO5cTSrHSdPRU2BrPGFZ6X53qiA";
       
+      const response = await fetch(`https://identitytoolkit.googleapis.com/v1/accounts:signUp?key=${firebaseApiKey}`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          email: novoCliente.email,
+          password: novoCliente.senha,
+          returnSecureToken: true
+        })
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.error?.message || 'Erro ao criar usuário no Firebase Auth');
+      }
+
+      const authData = await response.json();
+      const firebaseUid = authData.localId;
+      
+      // CRIAR DOCUMENTO NO FIRESTORE COM TODOS OS CAMPOS NECESSÁRIOS
       const clienteData = {
+        uid: firebaseUid,
         displayName: novoCliente.nome,
         email: novoCliente.email,
         company: novoCliente.empresa,
-        telefone: novoCliente.telefone,
-        endereco: novoCliente.endereco,
+        telefone: novoCliente.telefone || '',
+        endereco: novoCliente.endereco || '',
         type: 'client',
-        status: 'ativo' as const,
+        status: 'ativo',
         createdAt: new Date(),
-        uid: '', // Será preenchido quando o usuário criar a conta
-        senhaTemporaria: senhaTemporaria,
-        precisaCriarConta: true
+        lastLogin: new Date(),
+        lastLocation: '',
+        latitude: null,
+        longitude: null,
+        timestamp: new Date(),
+        projects: []
       };
 
-      const docRef = await addDoc(collection(db, 'users'), clienteData);
+      // Salvar na coleção users com UID do Firebase
+      await setDoc(doc(db, 'users', firebaseUid), clienteData);
       
       const novoClienteCompleto: Cliente = {
-        id: docRef.id,
+        id: firebaseUid,
         nome: novoCliente.nome,
         email: novoCliente.email,
         empresa: novoCliente.empresa,
@@ -208,9 +234,7 @@ const Clientes = () => {
         status: 'ativo' as const,
         dataCriacao: new Date().toISOString(),
         projetos: 0,
-        firebaseUid: docRef.id,
-        senhaTemporaria: senhaTemporaria,
-        precisaCriarConta: true
+        firebaseUid: firebaseUid
       };
 
       setClientes([novoClienteCompleto, ...clientes]);
@@ -227,13 +251,21 @@ const Clientes = () => {
       setDialogAberto(false);
       
       toast.success(
-        `Cliente criado com sucesso! 
-         Senha temporária: ${senhaTemporaria}
-         Link de primeiro acesso: ${window.location.origin}/cliente/primeiro-acesso`
+        `✅ Cliente criado com sucesso!\n\n🔑 Credenciais:\nEmail: ${novoCliente.email}\nSenha: ${novoCliente.senha}\n\n📝 Conta criada no Firebase Authentication\n📄 Dados salvos no Firestore\n\n🎉 Cliente pode fazer login imediatamente!`
       );
-    } catch (error) {
+    } catch (error: any) {
       console.error('Erro ao criar cliente:', error);
-      toast.error('Erro ao criar cliente');
+      let errorMessage = "Erro ao criar cliente";
+      
+      if (error.message?.includes('EMAIL_EXISTS')) {
+        errorMessage = "Este email já possui uma conta no sistema";
+      } else if (error.message?.includes('WEAK_PASSWORD')) {
+        errorMessage = "A senha é muito fraca. Use pelo menos 6 caracteres";
+      } else if (error.message?.includes('INVALID_EMAIL')) {
+        errorMessage = "Email inválido";
+      }
+      
+      toast.error(errorMessage);
     } finally {
       setCriandoCliente(false);
     }
@@ -417,7 +449,7 @@ const Clientes = () => {
                   />
                 </div>
                 <div className="grid gap-2">
-                  <Label htmlFor="senha">Senha Temporária (Opcional)</Label>
+                  <Label htmlFor="senha">Senha do Cliente *</Label>
                   <div className="flex gap-2">
                     <div className="relative flex-1">
                       <Input
@@ -425,8 +457,9 @@ const Clientes = () => {
                         type={mostrarSenha ? "text" : "password"}
                         value={novoCliente.senha}
                         onChange={(e) => setNovoCliente({...novoCliente, senha: e.target.value})}
-                        placeholder="Deixe em branco para gerar automaticamente"
+                        placeholder="Defina uma senha para o cliente"
                         className="pr-10"
+                        required
                       />
                       <Button
                         type="button"
@@ -452,7 +485,7 @@ const Clientes = () => {
                     </Button>
                   </div>
                   <p className="text-xs text-gray-500">
-                    Uma senha temporária será fornecida ao cliente. Ele deverá criar uma nova senha no primeiro acesso.
+                    O cliente poderá alterar esta senha posteriormente usando "Esqueci minha senha".
                   </p>
                 </div>
               </div>

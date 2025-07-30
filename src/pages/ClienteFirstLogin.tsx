@@ -46,14 +46,14 @@ const ClienteFirstLogin = () => {
 
     try {
       await signInAsCliente(formData.email, formData.senhaTemporaria, formData.novaSenha);
-      toast.success("Conta criada com sucesso! Bem-vindo ao sistema.");
-      navigate("/client-dashboard");
+      toast.success("Senha alterada com sucesso! Bem-vindo ao sistema.");
+      navigate("/client-projects");
     } catch (error: any) {
       console.error("Erro no primeiro login:", error);
-      let errorMessage = "Erro ao criar conta";
+      let errorMessage = "Erro ao alterar senha";
       
       if (error.message.includes('Credenciais inválidas')) {
-        errorMessage = "Email ou senha temporária incorretos";
+        errorMessage = "Email ou nova senha fornecida incorreta";
       } else if (error.code === 'auth/email-already-in-use') {
         errorMessage = "Este email já possui uma conta ativa";
       } else if (error.code === 'auth/weak-password') {
@@ -75,9 +75,9 @@ const ClienteFirstLogin = () => {
           <div className="mx-auto mb-4 flex h-12 w-12 items-center justify-center rounded-full bg-green-100">
             <Building2 className="h-6 w-6 text-green-600" />
           </div>
-          <CardTitle className="text-2xl">Primeiro Acesso - Cliente</CardTitle>
+          <CardTitle className="text-2xl">Esqueci Minha Senha - Cliente</CardTitle>
           <p className="text-gray-600">
-            Crie sua senha para acessar seus projetos
+            Entre em contato com o administrador para redefinir sua senha
           </p>
         </CardHeader>
         <CardContent>
@@ -95,14 +95,14 @@ const ClienteFirstLogin = () => {
             </div>
 
             <div className="space-y-2">
-              <Label htmlFor="senhaTemporaria">Senha Temporária</Label>
+              <Label htmlFor="senhaTemporaria">Nova Senha Fornecida pelo Admin</Label>
               <div className="relative">
                 <Input
                   id="senhaTemporaria"
                   type={mostrarSenhas.temporaria ? "text" : "password"}
                   value={formData.senhaTemporaria}
                   onChange={(e) => setFormData({...formData, senhaTemporaria: e.target.value})}
-                  placeholder="Senha fornecida pelo administrador"
+                  placeholder="Nova senha fornecida pelo administrador"
                   className="pr-10"
                   required
                 />
@@ -183,7 +183,7 @@ const ClienteFirstLogin = () => {
               className="w-full bg-versys-primary hover:bg-versys-secondary"
               disabled={loading}
             >
-              {loading ? "Criando conta..." : "Criar Conta"}
+              {loading ? "Alterando senha..." : "Alterar Senha"}
             </Button>
           </form>
 

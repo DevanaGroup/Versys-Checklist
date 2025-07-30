@@ -92,7 +92,7 @@ const App = () => (
           <Routes>
             <Route path="/" element={<Login />} />
             <Route path="/colaborador/primeiro-acesso" element={<ColaboradorFirstLogin />} />
-            <Route path="/cliente/primeiro-acesso" element={<ClienteFirstLogin />} />
+            <Route path="/cliente/esqueci-senha" element={<ClienteFirstLogin />} />
             
             {/* Rotas para Administradores */}
             <Route path="/dashboard" element={
