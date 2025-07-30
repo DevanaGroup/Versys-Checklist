@@ -17,7 +17,7 @@ export interface RelatorioItem {
   whatWasDone?: string;
   startDate?: string;
   endDate?: string;
-  status: 'pending' | 'in_progress' | 'completed' | 'approved' | 'rejected';
+  status: 'pending' | 'in_progress' | 'completed';
   evaluation: 'nc' | 'r' | 'na' | '';
   photos?: string[];
   adequacyReported: boolean;
@@ -27,6 +27,8 @@ export interface RelatorioItem {
   adequacyDate?: string;
   adminFeedback?: string;
   adminRejectionReason?: string;
+  changesDescription?: string; // O que foi alterado
+  treatmentDeadline?: string; // Prazo para tratar
   createdAt: string;
   updatedAt: string;
   createdBy: string; // ID do usuário que criou

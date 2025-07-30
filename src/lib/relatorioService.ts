@@ -40,6 +40,7 @@ export class RelatorioService {
                     clientName,
                     clientEmail,
                     category,
+                    itemTitle: item.title,
                     subItemId: subItem.id,
                     subItemTitle: subItem.title,
                     local: subItem.local || 'Local não informado',
@@ -59,6 +60,8 @@ export class RelatorioService {
                     adequacyDate: subItem.adequacyDate || '',
                     adminFeedback: subItem.adminFeedback || '',
                     adminRejectionReason: subItem.adminRejectionReason || '',
+                    changesDescription: subItem.changesDescription || '',
+                    treatmentDeadline: subItem.treatmentDeadline || '',
                     createdAt: new Date().toISOString(),
                     updatedAt: new Date().toISOString(),
                     createdBy: userId,
@@ -176,11 +179,9 @@ export class RelatorioService {
   }
 
   // Determinar status baseado nos dados do item
-  private static determineStatus(subItem: any): 'pending' | 'in_progress' | 'completed' | 'approved' | 'rejected' {
-    if (subItem.adequacyStatus === 'approved') return 'approved';
-    if (subItem.adequacyStatus === 'rejected') return 'rejected';
-    if (subItem.adequacyReported) return 'in_progress';
-    if (subItem.evaluation && subItem.currentSituation && subItem.clientGuidance) return 'completed';
-    return 'pending';
+  private static determineStatus(subItem: any): 'pending' | 'in_progress' | 'completed' {
+    // Status inicial sempre é 'pending'
+    // O cliente só pode alterar manualmente para 'in_progress' ou 'completed'
+    return subItem.status || 'pending';
   }
 }

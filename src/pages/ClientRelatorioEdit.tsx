@@ -6,7 +6,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Badge } from '@/components/ui/badge';
-import { ArrowLeft, Save, Calendar, User, MapPin, FileText, CheckCircle, AlertCircle } from 'lucide-react';
+import { ArrowLeft, Save, Calendar, User, MapPin, FileText, CheckCircle, AlertCircle, Clock, Edit } from 'lucide-react';
 import { toast } from 'sonner';
 import { useAuthContext } from '@/contexts/AuthContext';
 import { RelatorioService } from '@/lib/relatorioService';
@@ -227,6 +227,37 @@ const ClientRelatorioEdit = () => {
                   onChange={(e) => handleFieldChange(item.id, 'whatWasDone', e.target.value)}
                   className="mt-2"
                   rows={4}
+                />
+              </div>
+
+              {/* O que foi alterado */}
+              <div>
+                <Label htmlFor={`changesDescription-${item.id}`} className="flex items-center space-x-2">
+                  <Edit className="h-4 w-4 text-orange-600" />
+                  <span>O que foi alterado?</span>
+                </Label>
+                <Textarea
+                  id={`changesDescription-${item.id}`}
+                  placeholder="Descreva as alterações realizadas..."
+                  value={item.changesDescription || ''}
+                  onChange={(e) => handleFieldChange(item.id, 'changesDescription', e.target.value)}
+                  className="mt-2"
+                  rows={3}
+                />
+              </div>
+
+              {/* Prazo para tratar */}
+              <div>
+                <Label htmlFor={`treatmentDeadline-${item.id}`} className="flex items-center space-x-2">
+                  <Clock className="h-4 w-4 text-red-600" />
+                  <span>Prazo para tratar</span>
+                </Label>
+                <Input
+                  id={`treatmentDeadline-${item.id}`}
+                  type="date"
+                  value={item.treatmentDeadline || ''}
+                  onChange={(e) => handleFieldChange(item.id, 'treatmentDeadline', e.target.value)}
+                  className="mt-2"
                 />
               </div>
 

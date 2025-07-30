@@ -24,6 +24,8 @@ interface SubItem {
     longitude: number;
   }[];
   completed?: boolean;
+  changesDescription?: string; // O que foi alterado pelo cliente
+  treatmentDeadline?: string; // Prazo para tratar
 }
 
 interface ProjectItem {

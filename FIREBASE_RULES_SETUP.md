@@ -17,35 +17,7 @@ O erro **"Missing or insufficient permissions"** indica que as regras do Firesto
 ### 3. **Aplique as Regras**
 **Copie e cole o conteúdo do arquivo `firestore.rules`** na janela de edição.
 
-Ou copie diretamente este código:
-
-```javascript
-rules_version = '2';
-service cloud.firestore {
-  match /databases/{database}/documents {
-    // Regras para coleção users
-    match /users/{userId} {
-      allow read, write: if request.auth != null && request.auth.uid == userId;
-      allow create: if request.auth != null;
-    }
-    
-    // Regras para coleção projects
-    match /projects/{projectId} {
-      allow read, write: if request.auth != null;
-    }
-    
-    // Regras para coleção documents
-    match /documents/{documentId} {
-      allow read, write: if request.auth != null;
-    }
-    
-    // Regras para testes
-    match /test/{document} {
-      allow read, write: if request.auth != null;
-    }
-  }
-}
-```
+⚠️ **IMPORTANTE**: As regras foram atualizadas para suportar a nova coleção `relatorios`. Certifique-se de aplicar a versão mais recente!
 
 ### 4. **Publique as Regras**
 - Clique no botão **"Publish"** (Publicar)

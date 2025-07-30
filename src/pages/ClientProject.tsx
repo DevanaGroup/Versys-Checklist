@@ -52,6 +52,8 @@ interface SubItem {
   description?: string;
   adminRejectionReason?: string; // Motivo da rejeição pelo admin
   adequacyRevisionCount?: number; // Contador de revisões
+  changesDescription?: string; // O que foi alterado pelo cliente
+  treatmentDeadline?: string; // Prazo para tratar
 }
 
 interface ProjectItem {
