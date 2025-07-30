@@ -215,9 +215,10 @@ const ProjectView = () => {
   }
 
   return (
-    <div className="container mx-auto px-4 py-6 max-w-4xl">
+    <div className="space-y-6">
       {/* Header */}
-      <div className="flex items-center justify-between mb-6">
+      {/* Layout Desktop */}
+      <div className="hidden md:flex items-center justify-between">
         <div className="flex items-center space-x-4">
           <Button
             variant="ghost"
@@ -237,7 +238,7 @@ const ProjectView = () => {
         </div>
         
         <Button
-          onClick={() => navigate(`/projetos/new?editId=${id}`)}
+          onClick={() => navigate(`/projetos/edit/${id}?clienteId=${projectDetails.cliente?.id || ''}`)}
           className="flex items-center space-x-2"
         >
           <Edit size={16} />
@@ -245,18 +246,66 @@ const ProjectView = () => {
         </Button>
       </div>
 
+      {/* Layout Mobile */}
+      <div className="md:hidden space-y-4">
+        {/* Título Centralizado */}
+        <div className="text-center">
+          <h1 className="text-xl font-bold text-gray-900 break-words">{projectDetails.nome}</h1>
+          <Badge className={`mt-2 ${getStatusColor(projectDetails.status)}`}>
+            {projectDetails.status}
+          </Badge>
+        </div>
+
+        {/* Botões na mesma linha */}
+        <div className="flex items-center justify-between">
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={() => navigate("/projetos")}
+            className="flex items-center space-x-2"
+          >
+            <ArrowLeft size={16} />
+            <span>Voltar</span>
+          </Button>
+          
+          <Button
+            onClick={() => navigate(`/projetos/edit/${id}?clienteId=${projectDetails.cliente?.id || ''}`)}
+            className="flex items-center space-x-2"
+          >
+            <Edit size={16} />
+          </Button>
+        </div>
+      </div>
+
       {/* Progresso do Projeto */}
-      <Card className="mb-6">
-        <CardContent className="p-6">
-          <div>
-            <p className="text-sm text-gray-500 mb-2">Progresso Geral</p>
-            <div className="flex items-center space-x-3">
-              <Progress value={projectDetails.progresso} className="flex-1" />
-              <span className="text-sm font-medium">{projectDetails.progresso}% concluído</span>
+      {/* Desktop */}
+      <div className="hidden md:block">
+        <Card className="mb-6">
+          <CardContent className="p-6">
+            <div>
+              <p className="text-sm text-gray-500 mb-2">Progresso Geral</p>
+              <div className="flex items-center space-x-3">
+                <Progress value={projectDetails.progresso} className="flex-1" />
+                <span className="text-sm font-medium">{projectDetails.progresso}% concluído</span>
+              </div>
             </div>
-          </div>
-        </CardContent>
-      </Card>
+          </CardContent>
+        </Card>
+      </div>
+
+      {/* Mobile - Progresso Simplificado */}
+      <div className="md:hidden">
+        <div className="flex items-center justify-between mb-4">
+          <span className="text-sm text-gray-600">Progresso Geral</span>
+          <span className="text-sm font-medium text-gray-900">{projectDetails.progresso}% concluído</span>
+        </div>
+        <div className="w-full bg-gray-200 rounded-full h-2 mb-6">
+          <div 
+            className="bg-blue-600 h-2 rounded-full transition-all duration-500"
+            style={{ width: `${projectDetails.progresso}%` }}
+          />
+        </div>
+      </div>
 
       {/* Navegação por Steps */}
       {totalSteps > 0 && (

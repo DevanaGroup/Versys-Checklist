@@ -198,6 +198,9 @@ const categoriesData = {
   ]
 };
 
+const OPENAI_ASSISTANT_ID = "asst_9dvrBEsSkU33QT9HwrzAYnT1";
+const OPENAI_API_KEY = "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"; // Chave fornecida pelo usuário
+
 const EditProject = () => {
   const navigate = useNavigate();
   const { projectId } = useParams<{ projectId: string }>();
@@ -654,6 +657,117 @@ const EditProject = () => {
     setCurrentStep(prev => Math.max(prev - 1, 1));
   };
 
+  // Função para chamar o assistente da OpenAI
+  async function gerarOrientacaoOpenAI(situacaoAtual: string): Promise<string> {
+    try {
+      // 1. Criar um thread vazio
+      const threadRes = await fetch("https://api.openai.com/v1/threads", {
+        method: "POST",
+        headers: {
+          "Authorization": `Bearer ${OPENAI_API_KEY}`,
+          "Content-Type": "application/json"
+        }
+      });
+      
+      if (!threadRes.ok) {
+        throw new Error(`Erro ao criar thread: ${threadRes.status}`);
+      }
+      
+      const threadData = await threadRes.json();
+      const threadId = threadData.id;
+
+      // 2. Adicionar mensagem do usuário ao thread
+      const messageRes = await fetch(`https://api.openai.com/v1/threads/${threadId}/messages`, {
+        method: "POST",
+        headers: {
+          "Authorization": `Bearer ${OPENAI_API_KEY}`,
+          "Content-Type": "application/json"
+        },
+        body: JSON.stringify({
+          role: "user",
+          content: situacaoAtual
+        })
+      });
+
+      if (!messageRes.ok) {
+        throw new Error(`Erro ao adicionar mensagem: ${messageRes.status}`);
+      }
+
+      // 3. Executar o run com o assistant (que aplica automaticamente as instruções do assistente)
+      const runRes = await fetch(`https://api.openai.com/v1/threads/${threadId}/runs`, {
+        method: "POST",
+        headers: {
+          "Authorization": `Bearer ${OPENAI_API_KEY}`,
+          "Content-Type": "application/json"
+        },
+        body: JSON.stringify({
+          assistant_id: OPENAI_ASSISTANT_ID
+        })
+      });
+
+      if (!runRes.ok) {
+        throw new Error(`Erro ao executar run: ${runRes.status}`);
+      }
+
+      const runData = await runRes.json();
+      const runId = runData.id;
+
+      // 4. Polling para aguardar a conclusão
+      let status = runData.status;
+      let attempts = 0;
+      const maxAttempts = 30; // 60 segundos máximo
+
+      while (status !== "completed" && status !== "failed" && attempts < maxAttempts) {
+        await new Promise((resolve) => setTimeout(resolve, 2000));
+        attempts++;
+        
+        const checkRes = await fetch(`https://api.openai.com/v1/threads/${threadId}/runs/${runId}`, {
+          headers: { "Authorization": `Bearer ${OPENAI_API_KEY}` }
+        });
+        
+        if (!checkRes.ok) {
+          throw new Error(`Erro ao verificar status: ${checkRes.status}`);
+        }
+        
+        const checkData = await checkRes.json();
+        status = checkData.status;
+        
+        console.log(`Status do run: ${status} (tentativa ${attempts})`);
+      }
+
+      if (status === "failed") {
+        throw new Error("Run falhou");
+      }
+
+      if (status !== "completed") {
+        throw new Error("Timeout aguardando resposta");
+      }
+
+      // 5. Buscar mensagens do thread (a resposta do assistant)
+      const messagesRes = await fetch(`https://api.openai.com/v1/threads/${threadId}/messages`, {
+        headers: { "Authorization": `Bearer ${OPENAI_API_KEY}` }
+      });
+
+      if (!messagesRes.ok) {
+        throw new Error(`Erro ao buscar mensagens: ${messagesRes.status}`);
+      }
+
+      const messagesData = await messagesRes.json();
+      
+      // A primeira mensagem (index 0) é a resposta do assistant
+      const respostaMsg = messagesData.data[0];
+      if (respostaMsg && respostaMsg.role === "assistant" && respostaMsg.content && respostaMsg.content.length > 0) {
+        return respostaMsg.content[0].text.value;
+      }
+      
+      throw new Error("Resposta do assistant não encontrada");
+      
+    } catch (error) {
+      console.error("Erro na função gerarOrientacaoOpenAI:", error);
+      throw error;
+    }
+  }
+
   const renderStep1 = () => (
     <div className="h-full flex items-center justify-center">
       <Card className="w-full max-w-2xl">
@@ -945,13 +1059,33 @@ const EditProject = () => {
                                                   
                                                   <div>
                                                     <Label className="text-xs text-gray-600">Descrição/Orientação para o cliente:</Label>
-                                                    <Textarea
-                                                      value={subItem.description || ''}
-                                                      onChange={(e) => updateSubItemDescription(accordion.id, item.id, subItem.id, e.target.value)}
-                                                      placeholder="Descreva o que o cliente precisa fazer para este item..."
-                                                      className="text-xs mt-1"
-                                                      rows={2}
-                                                    />
+                                                    <div style={{ display: 'flex', gap: 8 }}>
+                                                      <Textarea
+                                                        value={subItem.description || ''}
+                                                        onChange={(e) => updateSubItemDescription(accordion.id, item.id, subItem.id, e.target.value)}
+                                                        placeholder="Descreva o que o cliente precisa fazer para este item..."
+                                                        className="text-xs mt-1"
+                                                        rows={2}
+                                                        style={{ flex: 1 }}
+                                                      />
+                                                      <Button
+                                                        variant="outline"
+                                                        size="sm"
+                                                        style={{ height: 32, alignSelf: 'flex-start' }}
+                                                        onClick={async () => {
+                                                          if (!subItem.currentSituation) {
+                                                            toast.error('Preencha a situação atual antes de gerar a orientação!');
+                                                            return;
+                                                          }
+                                                          updateSubItemDescription(accordion.id, item.id, subItem.id, 'Gerando orientação...');
+                                                          const orientacao = await gerarOrientacaoOpenAI(subItem.currentSituation);
+                                                          updateSubItemDescription(accordion.id, item.id, subItem.id, orientacao);
+                                                          toast.success('Orientação gerada com sucesso!');
+                                                        }}
+                                                      >
+                                                        Gerar
+                                                      </Button>
+                                                    </div>
                                                   </div>
                                                   
                                                   <div className="flex items-center space-x-4">

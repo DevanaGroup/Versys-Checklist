@@ -20,6 +20,7 @@ import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip
 import { collection, getDocs, query, orderBy, doc, updateDoc, deleteDoc, where } from "firebase/firestore";
 import { db } from "@/lib/firebase";
 import { useAuthContext } from "@/contexts/AuthContext";
+import { useIsMobile } from "@/hooks/use-mobile";
 import { toast } from "sonner";
 
 interface SubItem {
@@ -110,6 +111,7 @@ interface Cliente {
 const Projetos = () => {
   const navigate = useNavigate();
   const { userData } = useAuthContext();
+  const isMobile = useIsMobile();
   const [projetos, setProjetos] = useState<ProjectDetails[]>([]);
   const [clientes, setClientes] = useState<Cliente[]>([]);
   const [loading, setLoading] = useState(true);
@@ -138,6 +140,13 @@ const Projetos = () => {
     loadProjetos();
     loadPresets();
   }, []);
+
+  // Força visualização de cards no mobile
+  useEffect(() => {
+    if (isMobile) {
+      setListView('cards');
+    }
+  }, [isMobile]);
 
   const loadClientes = async () => {
     try {
@@ -990,7 +999,7 @@ const Projetos = () => {
   return (
     <div className="space-y-6">
       {/* Botão Voltar - Minimalista */}
-      {viewMode === 'project-list' && selectedClient && (
+      {viewMode === 'project-list' && (
         <div className="flex items-center">
           <Tooltip>
             <TooltipTrigger asChild>
@@ -1010,42 +1019,43 @@ const Projetos = () => {
         </div>
       )}
 
-      <div className="flex items-center justify-between">
-        <div>
+      <div className="flex items-start justify-between">
+        <div className="min-w-0 flex-1 pr-4">
           {viewMode === 'client-selection' && (
             <>
-              <h2 className="text-3xl font-bold text-versys-primary">Projetos</h2>
-              <p className="text-gray-600 mt-2">
+              <h2 className="hidden md:block text-3xl font-bold text-versys-primary">Projetos</h2>
+              <p className="hidden md:block text-gray-600 mt-2">
                 Selecione um cliente para ver seus projetos ou visualize projetos sem clientes
               </p>
             </>
           )}
           
           {viewMode === 'project-list' && selectedClient && (
-            <div>
-              <h2 className="text-3xl font-bold text-versys-primary">
+            <div className="min-w-0 flex-1">
+              <h2 className="text-3xl font-bold text-versys-primary break-words">
                 Projetos de {selectedClient.nome}
               </h2>
-              <p className="text-gray-600 mt-2">
+              <p className="text-gray-600 mt-2 break-words">
                 {selectedClient.empresa} - {getProjetosDoCliente().length} projeto(s)
               </p>
             </div>
           )}
           
           {viewMode === 'project-list' && !selectedClient && (
-            <div>
-              <h2 className="text-3xl font-bold text-versys-primary">
+            <div className="min-w-0 flex-1">
+              <h2 className="text-3xl font-bold text-versys-primary break-words">
                 Projetos Sem Cliente
               </h2>
-              <p className="text-gray-600 mt-2">
+              <p className="text-gray-600 mt-2 break-words">
                 {getProjetosDoCliente().length} projeto(s) sem cliente associado
               </p>
             </div>
           )}
         </div>
         
+        {/* Botões de visualização - ocultos no mobile */}
         {(viewMode === 'client-selection' || viewMode === 'project-list') && (
-          <div className="flex items-center space-x-2">
+          <div className="hidden md:flex items-center space-x-2">
             <Button
               variant={listView === 'cards' ? 'default' : 'outline'}
               size="sm"
@@ -1067,6 +1077,25 @@ const Projetos = () => {
           </div>
         )}
       </div>
+
+      {/* Layout Mobile - Título fixo abaixo do header */}
+      {viewMode === 'client-selection' && (
+        <div className="md:hidden fixed top-6 left-0 right-0 z-50 bg-white border-b border-gray-200 px-4 py-3 flex items-center justify-between">
+          <h2 className="text-xl font-bold text-versys-primary">Projetos</h2>
+          <Button
+            onClick={() => setShowNewProjectModal(true)}
+            size="sm"
+            className="bg-versys-primary hover:bg-versys-secondary text-white p-2 h-9 w-9 rounded-full"
+          >
+            <Plus className="h-4 w-4" />
+          </Button>
+        </div>
+      )}
+
+      {/* Espaçamento para compensar o título fixo no mobile */}
+      {viewMode === 'client-selection' && (
+        <div className="md:hidden h-6"></div>
+      )}
 
       {viewMode === 'client-selection' && (
         <>
@@ -1109,16 +1138,16 @@ const Projetos = () => {
                     onClick={() => handleSelectClient(cliente)}
                   >
                     <CardHeader>
-                      <div className="flex items-center justify-between">
-                        <div className="flex items-center space-x-2">
-                          <CardTitle className="flex items-center space-x-2">
-                            <User className="h-5 w-5 text-versys-primary" />
-                            <span className="text-versys-primary">{cliente.nome}</span>
+                      <div className="flex items-start justify-between">
+                        <div className="flex items-center space-x-2 flex-1 min-w-0">
+                          <User className="h-5 w-5 text-versys-primary flex-shrink-0" />
+                          <CardTitle className="text-versys-primary truncate">
+                            {cliente.nome}
                           </CardTitle>
-                          <Badge className={getClientStatusColor(cliente.status)}>
-                            {cliente.status}
-                          </Badge>
                         </div>
+                        <Badge className={`ml-2 flex-shrink-0 ${getClientStatusColor(cliente.status)}`}>
+                          {cliente.status}
+                        </Badge>
                       </div>
                     </CardHeader>
                     <CardContent>
@@ -1145,8 +1174,8 @@ const Projetos = () => {
             </div>
           ) : (
             <div className="space-y-4">
-              {/* Botão Novo Projeto */}
-              <div className="flex justify-start">
+              {/* Botão Novo Projeto - oculto no mobile */}
+              <div className="hidden md:flex justify-start">
                 <Button
                   onClick={() => setShowNewProjectModal(true)}
                   className="flex items-center space-x-2 bg-versys-primary hover:bg-versys-secondary"
@@ -1312,7 +1341,7 @@ const Projetos = () => {
                              {isAdmin && (
                                <DropdownMenuItem onClick={(e) => {
                                  e.stopPropagation();
-                                 navigate(`/projetos/new?editId=${projeto.id}`);
+                                 navigate(`/projetos/edit/${projeto.id}?clienteId=${projeto.clienteId}`);
                                }}>
                                  <Edit className="h-4 w-4 mr-2" />
                                  Editar Projeto
