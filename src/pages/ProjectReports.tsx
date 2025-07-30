@@ -7,7 +7,7 @@ import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Badge } from '@/components/ui/badge';
-import { Download, FileSpreadsheet, Filter, Search, ArrowLeft, FolderOpen, Building2, User, BarChart3, TrendingUp, Calendar, Image, Eye, Save, Upload, X } from 'lucide-react';
+import { Download, FileSpreadsheet, Filter, Search, ArrowLeft, FolderOpen, Building2, User, BarChart3, TrendingUp, Calendar, Image, Eye, Save, Upload, X, RefreshCw } from 'lucide-react';
 import { toast } from 'sonner';
 import { useAuthContext } from '@/contexts/AuthContext';
 import { RelatorioService } from '@/lib/relatorioService';
@@ -22,6 +22,11 @@ const ProjectReports = () => {
   const navigate = useNavigate();
   const [relatorios, setRelatorios] = useState<RelatorioItem[]>([]);
   const [filteredData, setFilteredData] = useState<RelatorioItem[]>([]);
+  
+  // Log essencial apenas
+  if (relatorios.length > 0) {
+    console.log('📊 Relatórios carregados:', relatorios.length);
+  }
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
   const [categoryFilter, setCategoryFilter] = useState('all');
@@ -30,48 +35,62 @@ const ProjectReports = () => {
 
   // Estados para filtros únicos
   const [categories, setCategories] = useState<string[]>([]);
-  const [statuses] = useState(['pending', 'in_progress', 'completed', 'approved', 'rejected']);
+  const [statuses] = useState(['pending', 'in_progress', 'completed']);
+  
+  // Estado para controlar execuções simultâneas e evitar duplicação
+  const [isCreatingRelatorios, setIsCreatingRelatorios] = useState(false);
 
-  // Efeito para carregar relatórios
+  // Efeito para carregar relatórios - CORRIGIDO para evitar duplicação
   useEffect(() => {
     const projectIdFromUrl = searchParams.get('projectId');
     setProjectId(projectIdFromUrl);
     
-    if (projectIdFromUrl && userData?.uid) {
-      loadRelatorioByProject(projectIdFromUrl);
-    } else if (!projectIdFromUrl) {
+    if (!projectIdFromUrl) {
       // Se não há projectId, redirecionar para projetos
       navigate('/client-projects');
+      return;
     }
-  }, [searchParams]); // REMOVIDO userData da dependência
 
-  // Efeito separado para quando userData estiver pronto
-  useEffect(() => {
-    if (userData?.uid && projectId && relatorios.length === 0) {
-      loadRelatorioByProject(projectId);
+    // Só executa se tiver projectId E userData, evitando execuções múltiplas
+    if (projectIdFromUrl && userData?.uid && !isCreatingRelatorios) {
+      // Debounce para evitar execuções muito próximas
+      const timeoutId = setTimeout(() => {
+        loadRelatorioByProject(projectIdFromUrl);
+      }, 100);
+      
+      return () => clearTimeout(timeoutId);
     }
-  }, [userData?.uid]);
+  }, [searchParams, userData?.uid]); // Dependência unificada para evitar múltiplas execuções
 
   useEffect(() => {
     applyFilters();
   }, [relatorios, searchTerm, categoryFilter, statusFilter]);
 
-
-
-    // Carregar relatórios da coleção 'relatorios'
+  // Carregar relatórios da coleção 'relatorios'
   const loadFromRelatoriosCollection = async (projectId: string): Promise<RelatorioItem[] | null> => {
     try {
       if (!userData?.uid) return null;
       
-      const { collection, query, where, getDocs } = await import('firebase/firestore');
+      const { collection, query, where, getDocs, deleteDoc, doc } = await import('firebase/firestore');
       const relatoriosRef = collection(db, 'relatorios');
       
-      // Buscar relatórios do cliente para este projeto específico
-      const q = query(
-        relatoriosRef, 
-        where('projectId', '==', projectId),
-        where('clientId', '==', userData.uid)
-      );
+      // Construir query baseada no tipo de usuário
+      let q;
+      if (userData?.type === 'admin') {
+        // Admin vê TODOS os relatórios do projeto
+        q = query(
+          relatoriosRef, 
+          where('projectId', '==', projectId)
+        );
+      } else {
+        // Cliente vê apenas seus próprios relatórios
+        q = query(
+          relatoriosRef, 
+          where('projectId', '==', projectId),
+          where('clientId', '==', userData.uid)
+        );
+      }
+      
       const snapshot = await getDocs(q);
       
       if (snapshot.empty) {
@@ -79,21 +98,44 @@ const ProjectReports = () => {
       }
       
       const relatorios: RelatorioItem[] = [];
-      snapshot.forEach(doc => {
-        const documentId = doc.id;
-        const docData = doc.data();
+      const documentsToDelete: string[] = [];
+      
+      snapshot.forEach(docSnapshot => {
+        const documentId = docSnapshot.id;
+        const docData = docSnapshot.data() as any;
         
         // FILTRAR documentos marcados como deletados (no código JS)
         if (docData._deleted === true) {
+          documentsToDelete.push(documentId);
           return; // Ignorar documentos deletados
+        }
+        
+        // VERIFICAR permissões baseado no tipo de usuário
+        if (userData?.type !== 'admin') {
+          // Cliente só pode ver seus próprios documentos
+          if (docData.clientId !== userData.uid) {
+            console.warn(`⚠️ Documento ${documentId} com clientId incorreto: ${docData.clientId} (usuário: ${userData.uid})`);
+            documentsToDelete.push(documentId);
+            return;
+          }
         }
         
         // GARANTIR que o ID do Firestore seja preservado
         relatorios.push({ 
           ...docData,
-          id: documentId // ID REAL do documento Firestore
+          id: documentId
         } as RelatorioItem);
       });
+      
+      // Limpar documentos problemáticos
+      if (documentsToDelete.length > 0) {
+        console.log(`🧹 Limpando ${documentsToDelete.length} documentos problemáticos...`);
+        const deletePromises = documentsToDelete.map(docId => 
+          deleteDoc(doc(db, 'relatorios', docId))
+        );
+        await Promise.all(deletePromises);
+        console.log('✅ Documentos problemáticos removidos');
+      }
       
       return relatorios;
     } catch (error) {
@@ -102,17 +144,18 @@ const ProjectReports = () => {
     }
   };
 
-
-
-
-
-  // Criar relatórios iniciais na coleção baseados no projeto
+  // Criar ou atualizar relatórios baseados no projeto (evita duplicação)
   const createRelatoriosFromProject = async (projectId: string) => {
+    // Evitar execuções simultâneas que causam duplicação
+    if (isCreatingRelatorios) {
+      console.log('Criação de relatórios já em andamento, ignorando chamada duplicada');
+      return;
+    }
+    
+    setIsCreatingRelatorios(true);
     try {
-
-      
       // Buscar dados do projeto
-      const { doc, getDoc, collection, addDoc } = await import('firebase/firestore');
+      const { doc, getDoc, collection, addDoc, query, where, getDocs, updateDoc } = await import('firebase/firestore');
       const projectDoc = await getDoc(doc(db, 'projetos', projectId));
       
       if (!projectDoc.exists()) {
@@ -121,16 +164,46 @@ const ProjectReports = () => {
       
       const projectData = projectDoc.data();
 
-      
       // Verificar permissões
       if (userData?.type === 'client' && projectData.clienteId !== userData.uid) {
         toast.error('Você não tem permissão para acessar este projeto');
         navigate('/client-projects');
         return;
       }
-      
+
+      // Primeiro, buscar relatórios existentes para este projeto
       const relatoriosCollection = collection(db, 'relatorios');
-      const newRelatorios: RelatorioItem[] = [];
+      let existingQuery;
+      
+      if (userData?.type === 'admin') {
+        // Admin busca todos os relatórios do projeto
+        existingQuery = query(
+          relatoriosCollection,
+          where('projectId', '==', projectId)
+        );
+      } else {
+        // Cliente busca apenas seus próprios relatórios
+        existingQuery = query(
+          relatoriosCollection,
+          where('projectId', '==', projectId),
+          where('clientId', '==', userData?.uid)
+        );
+      }
+      
+      const existingSnapshot = await getDocs(existingQuery);
+      
+      // Criar um mapa dos relatórios existentes por subItemId
+      const existingRelatorios = new Map<string, {id: string, data: any}>();
+      existingSnapshot.forEach(doc => {
+        const data = doc.data() as any;
+        if (!data._deleted) { // Ignorar documentos deletados
+          existingRelatorios.set(data.subItemId, { id: doc.id, data });
+        }
+      });
+
+      const allRelatorios: RelatorioItem[] = [];
+      let newItemsCount = 0;
+      let updatedItemsCount = 0;
       
       // Processar customAccordions
       if (projectData.customAccordions) {
@@ -139,8 +212,8 @@ const ProjectReports = () => {
             for (const item of accordion.items) {
               if (item.subItems) {
                 for (const subItem of item.subItems) {
-                  const relatorioItem: RelatorioItem = {
-                    id: '', // Será preenchido pelo Firebase
+                  let relatorioItem: RelatorioItem = {
+                    id: '', // Será preenchido conforme necessário
                     projectId,
                     projectName: projectData.nome,
                     clientId: projectData.clienteId || '',
@@ -159,14 +232,14 @@ const ProjectReports = () => {
                     endDate: subItem.endDate || '',
                     status: subItem.status || 'pending',
                     evaluation: subItem.evaluation || '',
-                    photos: subItem.photos || [],
+                    photos: Array.isArray(subItem.photos) 
+                      ? subItem.photos.map(photo => typeof photo === 'string' ? photo : (photo as any)?.url || '')
+                      : [],
                     adequacyReported: subItem.adequacyReported || false,
                     adequacyStatus: subItem.adequacyStatus || 'pending',
                     adequacyDetails: subItem.adequacyDetails || '',
                     adequacyImages: subItem.adequacyImages || [],
                     adequacyDate: subItem.adequacyDate || '',
-                    adminFeedback: subItem.adminFeedback || '',
-                    adminRejectionReason: subItem.adminRejectionReason || '',
                     changesDescription: subItem.changesDescription || '',
                     treatmentDeadline: subItem.treatmentDeadline || '',
                     createdAt: new Date().toISOString(),
@@ -174,13 +247,129 @@ const ProjectReports = () => {
                     createdBy: userData?.uid || '',
                     updatedBy: userData?.uid || ''
                   };
-                  
-                  // Adicionar no Firebase
-                  const docRef = await addDoc(relatoriosCollection, relatorioItem);
-                  relatorioItem.id = docRef.id;
-                  newRelatorios.push(relatorioItem);
-                  
 
+                  // Verificar se já existe um relatório para este subItemId
+                  const existingItem = existingRelatorios.get(subItem.id);
+                  
+                  if (existingItem) {
+                    // PRESERVAR dados salvos pelo usuário e apenas atualizar campos básicos
+                    const preservedData = {
+                      // Campos que devem ser preservados (dados do usuário)
+                      responsible: existingItem.data.responsible || relatorioItem.responsible,
+                      whatWasDone: existingItem.data.whatWasDone || relatorioItem.whatWasDone,
+                      startDate: existingItem.data.startDate || relatorioItem.startDate,
+                      endDate: existingItem.data.endDate || relatorioItem.endDate,
+                      status: existingItem.data.status || relatorioItem.status,
+                      evaluation: existingItem.data.evaluation || relatorioItem.evaluation,
+                      photos: existingItem.data.photos || relatorioItem.photos,
+                      adequacyReported: existingItem.data.adequacyReported || relatorioItem.adequacyReported,
+                      adequacyStatus: existingItem.data.adequacyStatus || relatorioItem.adequacyStatus,
+                      adequacyDetails: existingItem.data.adequacyDetails || relatorioItem.adequacyDetails,
+                      adequacyImages: existingItem.data.adequacyImages || relatorioItem.adequacyImages,
+                      adequacyDate: existingItem.data.adequacyDate || relatorioItem.adequacyDate,
+                      changesDescription: existingItem.data.changesDescription || relatorioItem.changesDescription,
+                      treatmentDeadline: existingItem.data.treatmentDeadline || relatorioItem.treatmentDeadline,
+                      
+                      // Campos que podem ser atualizados do projeto
+                      projectName: relatorioItem.projectName,
+                      clientName: relatorioItem.clientName,
+                      clientEmail: relatorioItem.clientEmail,
+                      category: relatorioItem.category,
+                      itemTitle: relatorioItem.itemTitle,
+                      subItemTitle: relatorioItem.subItemTitle,
+                      local: relatorioItem.local,
+                      currentSituation: relatorioItem.currentSituation,
+                      clientGuidance: relatorioItem.clientGuidance,
+                      
+                      // Metadados
+                      id: existingItem.id,
+                      projectId: relatorioItem.projectId,
+                      clientId: relatorioItem.clientId,
+                      subItemId: relatorioItem.subItemId,
+                      createdAt: existingItem.data.createdAt,
+                      updatedAt: new Date().toISOString(),
+                      createdBy: existingItem.data.createdBy || relatorioItem.createdBy,
+                      updatedBy: userData?.uid || ''
+                    };
+                    
+                    // Atualizar no Firebase
+                    const docRef = doc(db, 'relatorios', existingItem.id);
+                    await updateDoc(docRef, preservedData);
+                    
+                    // Usar dados preservados para o estado local
+                    relatorioItem = { ...relatorioItem, ...preservedData };
+                    updatedItemsCount++;
+                  } else {
+                    // Verificação dupla para evitar duplicação por condição de corrida
+                    // Buscar novamente especificamente por este subItemId antes de criar
+                    const doubleCheckQuery = query(
+                      relatoriosCollection,
+                      where('projectId', '==', projectId),
+                      where('subItemId', '==', subItem.id),
+                      where('clientId', '==', userData?.uid)
+                    );
+                    const doubleCheckSnapshot = await getDocs(doubleCheckQuery);
+                    
+                    if (!doubleCheckSnapshot.empty) {
+                      // Item foi criado por outro processo, preservar dados existentes
+                      const existingDoc = doubleCheckSnapshot.docs[0];
+                      const existingData = existingDoc.data();
+                      
+                      // Preservar dados do usuário
+                      const preservedData = {
+                        // Campos que devem ser preservados (dados do usuário)
+                        responsible: existingData.responsible || relatorioItem.responsible,
+                        whatWasDone: existingData.whatWasDone || relatorioItem.whatWasDone,
+                        startDate: existingData.startDate || relatorioItem.startDate,
+                        endDate: existingData.endDate || relatorioItem.endDate,
+                        status: existingData.status || relatorioItem.status,
+                        evaluation: existingData.evaluation || relatorioItem.evaluation,
+                        photos: existingData.photos || relatorioItem.photos,
+                        adequacyReported: existingData.adequacyReported || relatorioItem.adequacyReported,
+                        adequacyStatus: existingData.adequacyStatus || relatorioItem.adequacyStatus,
+                        adequacyDetails: existingData.adequacyDetails || relatorioItem.adequacyDetails,
+                        adequacyImages: existingData.adequacyImages || relatorioItem.adequacyImages,
+                        adequacyDate: existingData.adequacyDate || relatorioItem.adequacyDate,
+                        changesDescription: existingData.changesDescription || relatorioItem.changesDescription,
+                        treatmentDeadline: existingData.treatmentDeadline || relatorioItem.treatmentDeadline,
+                        
+                        // Campos que podem ser atualizados do projeto
+                        projectName: relatorioItem.projectName,
+                        clientName: relatorioItem.clientName,
+                        clientEmail: relatorioItem.clientEmail,
+                        category: relatorioItem.category,
+                        itemTitle: relatorioItem.itemTitle,
+                        subItemTitle: relatorioItem.subItemTitle,
+                        local: relatorioItem.local,
+                        currentSituation: relatorioItem.currentSituation,
+                        clientGuidance: relatorioItem.clientGuidance,
+                        
+                        // Metadados
+                        id: existingDoc.id,
+                        projectId: relatorioItem.projectId,
+                        clientId: relatorioItem.clientId,
+                        subItemId: relatorioItem.subItemId,
+                        createdAt: existingData.createdAt,
+                        updatedAt: new Date().toISOString(),
+                        createdBy: existingData.createdBy || relatorioItem.createdBy,
+                        updatedBy: userData?.uid || ''
+                      };
+                      
+                      const docRef = doc(db, 'relatorios', existingDoc.id);
+                      await updateDoc(docRef, preservedData);
+                      
+                      relatorioItem = { ...relatorioItem, ...preservedData };
+                      updatedItemsCount++;
+                      console.log(`⚠️ Duplicação evitada para subItemId: ${subItem.id}`);
+                    } else {
+                      // Realmente criar novo item
+                      const docRef = await addDoc(relatoriosCollection, relatorioItem);
+                      relatorioItem.id = docRef.id;
+                      newItemsCount++;
+                    }
+                  }
+                  
+                  allRelatorios.push(relatorioItem);
                 }
               }
             }
@@ -188,21 +377,30 @@ const ProjectReports = () => {
         }
       }
       
-
-      
       // Atualizar estado
-      setRelatorios(newRelatorios);
-      setFilteredData(newRelatorios);
+      setRelatorios(allRelatorios);
+      setFilteredData(allRelatorios);
       
       // Extrair categorias
-      const uniqueCategories = Array.from(new Set(newRelatorios.map(item => item.category)));
+      const uniqueCategories = Array.from(new Set(allRelatorios.map(item => item.category)));
       setCategories(uniqueCategories);
       
-      toast.success(`${newRelatorios.length} relatórios criados com sucesso!`);
+      // Mostrar mensagem de sucesso com detalhes
+      if (newItemsCount > 0 && updatedItemsCount > 0) {
+        toast.success(`${newItemsCount} novos itens criados e ${updatedItemsCount} itens atualizados!`);
+      } else if (newItemsCount > 0) {
+        toast.success(`${newItemsCount} relatórios criados com sucesso!`);
+      } else if (updatedItemsCount > 0) {
+        toast.success(`${updatedItemsCount} relatórios atualizados com sucesso!`);
+      } else {
+        toast.info('Todos os relatórios já estão atualizados.');
+      }
       
     } catch (error) {
-      console.error('Erro ao criar relatórios:', error);
-      toast.error('Erro ao criar relatórios: ' + (error as Error).message);
+      console.error('Erro ao criar/atualizar relatórios:', error);
+      toast.error('Erro ao processar relatórios: ' + (error as Error).message);
+    } finally {
+      setIsCreatingRelatorios(false);
     }
   };
 
@@ -224,25 +422,27 @@ const ProjectReports = () => {
       
       const projectData = projectSnap.data();
       
-      // 2. Extrair subItemIds existentes no relatório
-      const existingSubItemIds = new Set(existingRelatorios.map(item => item.subItemId));
-      console.log('📊 SYNC: SubItemIds existentes:', existingSubItemIds.size);
+      // 2. Criar mapa dos relatórios existentes por subItemId
+      const existingRelatoriosMap = new Map<string, RelatorioItem>();
+      existingRelatorios.forEach(relatorio => {
+        existingRelatoriosMap.set(relatorio.subItemId, relatorio);
+      });
       
-      // 3. Processar customAccordions do projeto para encontrar novos
-      const newItemsToAdd: RelatorioItem[] = [];
+      // 3. Verificar se há novos itens no projeto
+      const newItems: RelatorioItem[] = [];
       
-      if (projectData.customAccordions && projectData.customAccordions.length > 0) {
+      if (projectData.customAccordions) {
         for (const accordion of projectData.customAccordions) {
-          if (accordion.items && accordion.items.length > 0) {
+          if (accordion.items) {
             for (const item of accordion.items) {
-              if (item.subItems && item.subItems.length > 0) {
+              if (item.subItems) {
                 for (const subItem of item.subItems) {
-                  // Verificar se este subItem é novo
-                  if (!existingSubItemIds.has(subItem.id)) {
-                    console.log(`🆕 SYNC: Novo item encontrado: ${subItem.title}`);
+                  // Verificar se já existe relatório para este subItem
+                  if (!existingRelatoriosMap.has(subItem.id)) {
+                    console.log(`🆕 SYNC: Novo item encontrado: ${subItem.id}`);
                     
                     const newRelatorioItem: RelatorioItem = {
-                      id: '', // Será preenchido após criar no Firebase
+                      id: '', // Será preenchido ao salvar
                       projectId,
                       projectName: projectData.nome,
                       clientId: projectData.clienteId || '',
@@ -255,29 +455,29 @@ const ProjectReports = () => {
                       local: subItem.local || 'Local não informado',
                       currentSituation: subItem.currentSituation || '',
                       clientGuidance: subItem.clientGuidance || '',
-                      responsible: '',
-                      status: 'pending',
+                      responsible: subItem.responsible || '',
+                      whatWasDone: subItem.whatWasDone || '',
+                      startDate: subItem.startDate || '',
+                      endDate: subItem.endDate || '',
+                      status: subItem.status || 'pending',
                       evaluation: subItem.evaluation || '',
-                      photos: subItem.photos || [],
-                      adequacyReported: false,
-                      adequacyStatus: 'pending',
-                      adequacyDetails: '',
-                      adequacyImages: [],
-                      adequacyDate: '',
-                      changesDescription: '',
-                      treatmentDeadline: '',
-                      whatWasDone: '',
-                      startDate: '',
-                      endDate: '',
-                      adminFeedback: '',
-                      adminRejectionReason: '',
+                      photos: Array.isArray(subItem.photos) 
+                        ? subItem.photos.map(photo => typeof photo === 'string' ? photo : (photo as any)?.url || '')
+                        : [],
+                      adequacyReported: subItem.adequacyReported || false,
+                      adequacyStatus: subItem.adequacyStatus || 'pending',
+                      adequacyDetails: subItem.adequacyDetails || '',
+                      adequacyImages: subItem.adequacyImages || [],
+                      adequacyDate: subItem.adequacyDate || '',
+                      changesDescription: subItem.changesDescription || '',
+                      treatmentDeadline: subItem.treatmentDeadline || '',
                       createdAt: new Date().toISOString(),
                       updatedAt: new Date().toISOString(),
                       createdBy: userData?.uid || '',
                       updatedBy: userData?.uid || ''
                     };
                     
-                    newItemsToAdd.push(newRelatorioItem);
+                    newItems.push(newRelatorioItem);
                   }
                 }
               }
@@ -286,30 +486,25 @@ const ProjectReports = () => {
         }
       }
       
-      // 4. Adicionar novos itens no Firebase
-      if (newItemsToAdd.length > 0) {
-        console.log(`🔄 SYNC: Adicionando ${newItemsToAdd.length} novo(s) item(s)...`);
+      // 4. Salvar novos itens
+      if (newItems.length > 0) {
+        console.log(`💾 SYNC: Salvando ${newItems.length} novos itens...`);
+        const relatoriosRef = collection(db, 'relatorios');
         
-        const relatoriosCollection = collection(db, 'relatorios');
-        
-        for (const newItem of newItemsToAdd) {
-          const docRef = await addDoc(relatoriosCollection, newItem);
+        for (const newItem of newItems) {
+          const docRef = await addDoc(relatoriosRef, newItem);
           newItem.id = docRef.id;
-          console.log(`✅ SYNC: Novo relatório criado: ${newItem.subItemTitle}`);
         }
         
-        // 5. Atualizar estado local com novos itens
-        const updatedRelatorios = [...existingRelatorios, ...newItemsToAdd];
+        // 5. Atualizar estado local
+        const updatedRelatorios = [...existingRelatorios, ...newItems];
         setRelatorios(updatedRelatorios);
         setFilteredData(updatedRelatorios);
         
-        // Atualizar categorias
-        const uniqueCategories = Array.from(new Set(updatedRelatorios.map(item => item.category)));
-        setCategories(uniqueCategories);
-        
-        toast.success(`🆕 ${newItemsToAdd.length} novo(s) item(s) sincronizado(s)!`);
+        console.log(`✅ SYNC: ${newItems.length} novos itens sincronizados`);
+        toast.success(`${newItems.length} novos itens sincronizados do projeto!`);
       } else {
-        console.log('✅ SYNC: Nenhum item novo encontrado');
+        console.log('✅ SYNC: Nenhum novo item encontrado');
       }
       
     } catch (error) {
@@ -318,42 +513,117 @@ const ProjectReports = () => {
     }
   };
 
-  const loadRelatorioByProject = async (projectId: string) => {
+  // Remover relatórios duplicados
+  const removeDuplicateRelatorios = async (projectId: string) => {
     try {
-      setLoading(true);
+      console.log('🧹 Verificando duplicatas...');
       
-      // Primeiro, verificar se já existem documentos na coleção (independente de estarem deletados)
-      const { collection, query, where, getDocs } = await import('firebase/firestore');
+      const { collection, query, where, getDocs, deleteDoc } = await import('firebase/firestore');
       const relatoriosRef = collection(db, 'relatorios');
+      
+      // Buscar todos os relatórios do projeto
       const q = query(
-        relatoriosRef, 
+        relatoriosRef,
         where('projectId', '==', projectId),
         where('clientId', '==', userData?.uid)
       );
       const snapshot = await getDocs(q);
       
-      // Se não há NENHUM documento na coleção, criar
-      if (snapshot.empty) {
-        await createRelatoriosFromProject(projectId);
+      // Agrupar por subItemId para identificar duplicatas
+      const groupedBySubItemId = new Map<string, any[]>();
+      
+      snapshot.forEach(doc => {
+        const data = doc.data();
+        if (!data._deleted) {
+          const subItemId = data.subItemId;
+          if (!groupedBySubItemId.has(subItemId)) {
+            groupedBySubItemId.set(subItemId, []);
+          }
+          groupedBySubItemId.get(subItemId)!.push({ id: doc.id, data });
+        }
+      });
+      
+      // Identificar e remover duplicatas
+      const duplicatesToRemove: string[] = [];
+      
+      groupedBySubItemId.forEach((items, subItemId) => {
+        if (items.length > 1) {
+          console.log(`⚠️ Duplicatas encontradas para subItemId ${subItemId}:`, items.length);
+          
+          // Manter o mais recente (maior updatedAt) e remover os outros
+          items.sort((a, b) => {
+            const dateA = new Date(a.data.updatedAt || a.data.createdAt);
+            const dateB = new Date(b.data.updatedAt || b.data.createdAt);
+            return dateB.getTime() - dateA.getTime();
+          });
+          
+          // Remover todos exceto o primeiro (mais recente)
+          for (let i = 1; i < items.length; i++) {
+            duplicatesToRemove.push(items[i].id);
+          }
+        }
+      });
+      
+      // Remover duplicatas
+      if (duplicatesToRemove.length > 0) {
+        console.log(`🗑️ Removendo ${duplicatesToRemove.length} duplicatas...`);
+        
+        const deletePromises = duplicatesToRemove.map(docId => 
+          deleteDoc(doc(db, 'relatorios', docId))
+        );
+        await Promise.all(deletePromises);
+        
+        console.log(`✅ ${duplicatesToRemove.length} duplicatas removidas`);
+        toast.success(`${duplicatesToRemove.length} itens duplicados removidos!`);
+        
+        // Recarregar dados
+        await loadRelatorioByProject(projectId);
+      } else {
+        console.log('✅ Nenhuma duplicata encontrada');
+      }
+      
+    } catch (error) {
+      console.error('❌ Erro ao remover duplicatas:', error);
+      toast.error('Erro ao remover duplicatas');
+    }
+  };
+
+  const loadRelatorioByProject = async (projectId: string) => {
+    try {
+      setLoading(true);
+      
+      // Primeiro, verificar se há duplicatas
+      try {
+        const duplicatesCount = await RelatorioService.removeDuplicateRelatorios(projectId);
+        if (duplicatesCount > 0) {
+          toast.warning(`${duplicatesCount} itens duplicados foram removidos automaticamente!`);
+        }
+      } catch (error) {
+        console.error('Erro ao verificar duplicatas:', error);
+      }
+      
+      // Primeiro, tentar carregar dados existentes do Firebase
+      const existingRelatorios = await loadFromRelatoriosCollection(projectId);
+      
+      if (existingRelatorios && existingRelatorios.length > 0) {
+        console.log('📊 Carregando dados existentes do Firebase:', existingRelatorios.length, 'itens');
+        
+        const sortedData = sortRelatorios(existingRelatorios);
+        setRelatorios(sortedData);
+        setFilteredData(sortedData);
+        
+        // Extrair categorias
+        const uniqueCategories = Array.from(new Set(sortedData.map(item => item.category)));
+        setCategories(uniqueCategories);
+        
+        // Sincronizar novos itens do projeto
+        await syncNewItemsFromProject(projectId, sortedData);
         return;
       }
       
-      // Se existem documentos, carregar apenas os não deletados
-      const relatoriosExistentes = await loadFromRelatoriosCollection(projectId);
-      
-      if (relatoriosExistentes && relatoriosExistentes.length > 0) {
-        setRelatorios(relatoriosExistentes);
-        setFilteredData(relatoriosExistentes);
-        
-        // Extrair categorias
-        const uniqueCategories = Array.from(new Set(relatoriosExistentes.map(item => item.category)));
-        setCategories(uniqueCategories);
-      } else {
-        // Existem documentos mas todos estão deletados - não criar novos!
-        setRelatorios([]);
-        setFilteredData([]);
-        setCategories([]);
-      }
+      // Se não há dados existentes, criar novos
+      console.log('📊 Nenhum dado existente encontrado, criando novos relatórios...');
+      await createRelatoriosFromProject(projectId);
       
     } catch (error) {
       console.error('Erro ao carregar relatório do projeto:', error);
@@ -362,8 +632,6 @@ const ProjectReports = () => {
       setLoading(false);
     }
   };
-
-
 
   // Função para ordenar os dados na ordem correta
   const sortRelatorios = (data: RelatorioItem[]) => {
@@ -433,11 +701,24 @@ const ProjectReports = () => {
   // Estado para mudanças locais (como Excel)
   const [localChanges, setLocalChanges] = useState<{[key: string]: Partial<RelatorioItem>}>({});
   const [saving, setSaving] = useState(false);
+  
+  // Log mudanças importantes apenas
+  React.useEffect(() => {
+    const changeCount = Object.keys(localChanges).length;
+    if (changeCount > 0) {
+      console.log('📊 Mudanças pendentes:', changeCount);
+    }
+  }, [localChanges]);
+  
 
-  // Função para atualizar valores localmente (como Excel)
+
+  // Função para atualizar valores localmente
   const updateLocalValue = async (itemId: string, field: string, value: any) => {
     const item = relatorios.find(i => i.id === itemId);
-    if (!item) return;
+    if (!item) {
+      console.error(`❌ Item não encontrado: ${itemId}`);
+      return;
+    }
 
     // Validação especial para status "completed"
     if (field === 'status' && value === 'completed') {
@@ -481,7 +762,19 @@ const ProjectReports = () => {
 
   // Função para obter valor (local ou original)
   const getValue = (item: RelatorioItem, field: keyof RelatorioItem) => {
-    return localChanges[item.id]?.[field] ?? item[field] ?? '';
+    const localValue = localChanges[item.id]?.[field];
+    const originalValue = item[field];
+    const finalValue = localValue ?? originalValue ?? '';
+    
+    return finalValue;
+  };
+
+  // Função para validar se cliente pode alterar adequacyStatus
+  const canChangeAdequacyStatus = (item: RelatorioItem) => {
+    const responsible = getValue(item, 'responsible') as string;
+    const changesDescription = getValue(item, 'changesDescription') as string;
+    
+    return item.adequacyReported && responsible.trim() !== '' && changesDescription.trim() !== '';
   };
 
   // Função para validar se item pode ser marcado como concluído
@@ -599,61 +892,230 @@ const ProjectReports = () => {
     }
   };
 
-  // Função para salvar alterações diretamente na coleção 'relatorios'
+  // Função para salvar alterações diretamente na coleção 'relatorios' - COM LOGS DETALHADOS
   const saveAllChanges = async () => {
-    if (Object.keys(localChanges).length === 0) {
-      toast.info('Nenhuma alteração para salvar');
-      return;
-    }
+    console.log('🚀 INICIANDO SALVAMENTO...');
+                  console.log('📋 Local changes:', localChanges);
+              console.log('👤 User data:', { uid: userData?.uid, type: userData?.type });
+              
+              if (Object.keys(localChanges).length === 0) {
+                console.log('❌ Nenhuma alteração para salvar');
+                toast.info('Nenhuma alteração para salvar');
+                return;
+              }
+
+              // Filtrar documentos problemáticos antes de salvar
+              const { collection, query, where, getDocs, getDoc, doc } = await import('firebase/firestore');
+              const validChanges: typeof localChanges = {};
+              const invalidItems: string[] = [];
+              
+              for (const [itemId, changes] of Object.entries(localChanges)) {
+                try {
+                  const docRef = doc(db, 'relatorios', itemId);
+                  const docSnap = await getDoc(docRef);
+                  
+                  if (!docSnap.exists()) {
+                    console.warn(`⚠️ Documento ${itemId} não existe, removendo do localChanges`);
+                    invalidItems.push(itemId);
+                    continue;
+                  }
+                  
+                  const docData = docSnap.data();
+                  if (docData.clientId !== userData?.uid && userData?.type !== 'admin') {
+                    console.warn(`⚠️ Documento ${itemId} com clientId incorreto (${docData.clientId}), removendo do localChanges`);
+                    invalidItems.push(itemId);
+                    continue;
+                  }
+                  
+                  validChanges[itemId] = changes;
+                } catch (error) {
+                  console.warn(`⚠️ Erro ao verificar documento ${itemId}:`, error);
+                  invalidItems.push(itemId);
+                }
+              }
+              
+              // Remover itens inválidos do estado local
+              if (invalidItems.length > 0) {
+                console.log(`🧹 Removendo ${invalidItems.length} itens inválidos do localChanges`);
+                setRelatorios(prev => prev.filter(item => !invalidItems.includes(item.id)));
+                
+                const newLocalChanges = { ...localChanges };
+                invalidItems.forEach(itemId => delete newLocalChanges[itemId]);
+                setLocalChanges(newLocalChanges);
+              }
+              
+              if (Object.keys(validChanges).length === 0) {
+                console.log('❌ Nenhuma alteração válida para salvar após filtro');
+                toast.info('Nenhuma alteração válida para salvar');
+                return;
+              }
 
     setSaving(true);
     try {
-      const { doc, updateDoc } = await import('firebase/firestore');
+                      const { doc, updateDoc, getDoc } = await import('firebase/firestore');
       
-      
-      
-      // Salvar cada item alterado
-      const promises = Object.entries(localChanges).map(async ([itemId, changes]) => {
-        const docRef = doc(db, 'relatorios', itemId);
-        const updateData = {
-          ...changes,
-          updatedAt: new Date().toISOString(),
-          updatedBy: userData?.uid || ''
-        };
-        
+                      console.log(`💾 Salvando ${Object.keys(validChanges).length} item(s)...`);
+                
+                // Salvar cada item alterado
+                const promises = Object.entries(validChanges).map(async ([itemId, changes]) => {
+                  console.log(`📝 Salvando item ${itemId}:`, changes);
+                  
+                  const docRef = doc(db, 'relatorios', itemId);
+                  const updateData = {
+                    ...changes,
+                    updatedAt: new Date().toISOString(),
+                    updatedBy: userData?.uid || ''
+                  };
+                  
+                  console.log(`🔄 Update data para ${itemId}:`, updateData);
 
-        await updateDoc(docRef, updateData);
+                  try {
+                    // Verificar se o documento existe e se o usuário tem permissão
+                    const docSnap = await getDoc(docRef);
+                    if (!docSnap.exists()) {
+                      console.error(`❌ Documento ${itemId} não existe!`);
+                      return { itemId, changes, success: false, error: new Error('Documento não existe') };
+                    }
+                    
+                    const docData = docSnap.data();
+                    if (docData.clientId !== userData?.uid && userData?.type !== 'admin') {
+                      console.error(`❌ Usuário ${userData?.uid} não tem permissão para documento ${itemId} (clientId: ${docData.clientId})`);
+                      
+                      // Tentar corrigir o clientId do documento problemático
+                      try {
+                        console.log(`🔄 Tentando corrigir clientId do documento ${itemId}...`);
+                        await updateDoc(docRef, { 
+                          clientId: userData?.uid,
+                          updatedAt: new Date().toISOString(),
+                          updatedBy: userData?.uid || ''
+                        });
+                        console.log(`✅ ClientId corrigido para documento ${itemId}`);
+                        
+                        // Agora tentar salvar novamente
+                        await updateDoc(docRef, updateData);
+                        console.log(`✅ Item ${itemId} salvo com sucesso após correção!`);
+                        return { itemId, changes, success: true };
+                      } catch (correctionError) {
+                        console.error(`❌ Falha ao corrigir documento ${itemId}:`, correctionError);
+                        return { itemId, changes, success: false, error: new Error('Permissão negada') };
+                      }
+                    }
+                    
+                    await updateDoc(docRef, updateData);
+                    console.log(`✅ Item ${itemId} salvo com sucesso!`);
+                    return { itemId, changes, success: true };
+                  } catch (itemError) {
+                    console.error(`❌ Erro ao salvar item ${itemId}:`, itemError);
+                    return { itemId, changes, success: false, error: itemError };
+                  }
+                });
+      
+      const results = await Promise.all(promises);
+      console.log('📊 Resultados do salvamento:', results);
+      
+                      // Verificar se houve erros
+                const failedSaves = results.filter(r => !r.success);
+                if (failedSaves.length > 0) {
+                  console.error('❌ Itens que falharam ao salvar:', failedSaves);
+                  
+                                     // Tentar corrigir documentos com problemas de permissão
+                   for (const failedSave of failedSaves) {
+                     if (failedSave.error?.message === 'Permissão negada' || failedSave.error?.message === 'Documento não existe') {
+                       console.log(`🔄 Tentando corrigir documento problemático: ${failedSave.itemId}`);
+                       
+                       // Tentar forçar a remoção do documento problemático
+                       try {
+                         const { deleteDoc, doc } = await import('firebase/firestore');
+                         const docRef = doc(db, 'relatorios', failedSave.itemId);
+                         await deleteDoc(docRef);
+                         console.log(`🗑️ Documento problemático ${failedSave.itemId} removido com sucesso`);
+                       } catch (deleteError) {
+                         console.warn(`⚠️ Não foi possível remover documento ${failedSave.itemId}:`, deleteError);
+                       }
+                       
+                       // Remover do localChanges para evitar tentativas futuras
+                       const newLocalChanges = { ...localChanges };
+                       delete newLocalChanges[failedSave.itemId];
+                       setLocalChanges(newLocalChanges);
+                       
+                       // Remover do estado local se existir
+                       setRelatorios(prev => prev.filter(item => item.id !== failedSave.itemId));
+                     }
+                   }
+                  
+                  // Se ainda há erros após correção, mostrar erro
+                  const remainingErrors = failedSaves.filter(r => 
+                    r.error?.message !== 'Permissão negada' && 
+                    r.error?.message !== 'Documento não existe'
+                  );
+                  
+                  if (remainingErrors.length > 0) {
+                    throw new Error(`Falha ao salvar ${remainingErrors.length} item(s)`);
+                  }
+                }
+
+                      const successfulSaves = results.filter(r => r.success).length;
+                const totalItems = results.length;
+                console.log(`✅ ${successfulSaves}/${totalItems} itens salvos com sucesso!`);
+      
+                      // Atualizar dados locais
+                const updatedRelatorios = relatorios.map(item => 
+                  validChanges[item.id] ? { ...item, ...validChanges[item.id] } : item
+                );
+      
+                      console.log('🔄 Atualizando estado local após salvamento:', {
+                  relatoriosAntigos: relatorios.length,
+                  relatoriosNovos: updatedRelatorios.length,
+                  mudancasSalvas: Object.keys(validChanges),
+                  exemploAtualizacao: updatedRelatorios.find(r => validChanges[r.id])
+                });
+      
+      setRelatorios(updatedRelatorios);
+      
+      // Aplicar filtros novamente
+      const filtered = updatedRelatorios.filter(item => {
+        const matchesSearch = searchTerm === '' || 
+          item.projectName.toLowerCase().includes(searchTerm.toLowerCase()) ||
+          item.category.toLowerCase().includes(searchTerm.toLowerCase()) ||
+          item.subItemTitle.toLowerCase().includes(searchTerm.toLowerCase());
         
-        return { itemId, changes };
+        const matchesCategory = categoryFilter === 'all' || item.category === categoryFilter;
+        const matchesStatus = statusFilter === 'all' || item.status === statusFilter;
+        
+        return matchesSearch && matchesCategory && matchesStatus;
       });
       
-      await Promise.all(promises);
-
-      
-      // Atualizar dados locais
-      const updatedRelatorios = relatorios.map(item => 
-        localChanges[item.id] ? { ...item, ...localChanges[item.id] } : item
-      );
-      setRelatorios(updatedRelatorios);
-      setFilteredData(updatedRelatorios.filter(item => 
-        item.projectName.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        item.category.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        item.subItemTitle.toLowerCase().includes(searchTerm.toLowerCase())
-      ));
+      setFilteredData(filtered);
+      console.log('✅ Interface atualizada com dados salvos');
       
       // Atualizar progresso do projeto
       await updateProjectProgress(updatedRelatorios);
       
-      // Limpar mudanças locais
-      setLocalChanges({});
+                      // Limpar mudanças locais (apenas as válidas foram salvas)
+                setLocalChanges({});
+      console.log('🧹 Local changes limpo, salvamento concluído!');
       
-      toast.success('✅ Alterações salvas com sucesso!');
+                      // Dados já estão sincronizados localmente, não precisa recarregar
+                console.log('✅ Dados salvos e sincronizados localmente');
+      
+                      if (successfulSaves === totalItems) {
+                  toast.success('✅ Alterações salvas com sucesso!');
+                } else {
+                  toast.success(`✅ ${successfulSaves}/${totalItems} itens salvos com sucesso!`);
+                }
       
     } catch (error) {
-      console.error('Erro ao salvar alterações:', error);
+      console.error('💥 ERRO CRÍTICO no salvamento:', error);
+      console.error('Error details:', {
+        message: (error as Error).message,
+        stack: (error as Error).stack,
+        localChanges,
+        userData: userData?.uid
+      });
       toast.error('Erro ao salvar alterações: ' + (error as Error).message);
     } finally {
       setSaving(false);
+      console.log('🏁 Processo de salvamento finalizado');
     }
   };
 
@@ -715,9 +1177,7 @@ const ProjectReports = () => {
     const statusConfig = {
       pending: { label: 'Pendente', className: 'bg-yellow-100 text-yellow-800' },
       in_progress: { label: 'Em Andamento', className: 'bg-blue-100 text-blue-800' },
-      completed: { label: 'Concluído', className: 'bg-green-100 text-green-800' },
-      approved: { label: 'Aprovado', className: 'bg-green-100 text-green-800' },
-      rejected: { label: 'Rejeitado', className: 'bg-red-100 text-red-800' }
+      completed: { label: 'Concluído', className: 'bg-green-100 text-green-800' }
     };
 
     const config = statusConfig[status as keyof typeof statusConfig] || { label: status, className: 'bg-gray-100 text-gray-800' };
@@ -739,13 +1199,72 @@ const ProjectReports = () => {
 
   const getProjectSummary = () => {
     const totalItems = relatorios.length;
-    const completedItems = relatorios.filter(r => r.status === 'completed').length;
-    const pendingItems = relatorios.filter(r => r.status === 'pending').length;
-    const inProgressItems = relatorios.filter(r => r.status === 'in_progress').length;
+    const completedItems = relatorios.filter(item => {
+      const status = localChanges[item.id]?.status ?? item.status;
+      return status === 'completed';
+    }).length;
+    const pendingItems = relatorios.filter(item => {
+      const status = localChanges[item.id]?.status ?? item.status;
+      return status === 'pending';
+    }).length;
+    const inProgressItems = relatorios.filter(item => {
+      const status = localChanges[item.id]?.status ?? item.status;
+      return status === 'in_progress';
+    }).length;
 
     return { totalItems, completedItems, pendingItems, inProgressItems };
   };
 
+  // Função para calcular o progresso real do projeto
+  const calculateRealProgress = () => {
+    const totalItems = relatorios.length;
+    const completedItems = relatorios.filter(item => {
+      // Considerar mudanças locais se existirem
+      const status = localChanges[item.id]?.status ?? item.status;
+      return status === 'completed';
+    }).length;
+    
+    return totalItems > 0 ? Math.round((completedItems / totalItems) * 100) : 0;
+  };
+
+  // Função para recarregar dados manualmente
+  const handleRefreshData = async () => {
+    if (!projectId) return;
+    
+    try {
+      setLoading(true);
+      await loadRelatorioByProject(projectId);
+      toast.success('Dados atualizados!');
+    } catch (error) {
+      console.error('Erro ao atualizar dados:', error);
+      toast.error('Erro ao atualizar dados');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // Botão para remover duplicatas manualmente
+  const handleRemoveDuplicates = async () => {
+    if (!projectId) return;
+    
+    try {
+      setLoading(true);
+      const duplicatesRemoved = await RelatorioService.removeDuplicateRelatorios(projectId);
+      
+      if (duplicatesRemoved > 0) {
+        toast.success(`${duplicatesRemoved} itens duplicados removidos!`);
+        // Recarregar dados após remoção
+        await loadRelatorioByProject(projectId);
+      } else {
+        toast.info('Nenhuma duplicata encontrada!');
+      }
+    } catch (error) {
+      console.error('Erro ao remover duplicatas:', error);
+      toast.error('Erro ao remover duplicatas');
+    } finally {
+      setLoading(false);
+    }
+  };
 
 
   if (loading) {
@@ -757,31 +1276,42 @@ const ProjectReports = () => {
   }
 
   const summary = getProjectSummary();
+  const realProgress = calculateRealProgress();
 
   return (
-    <div className="space-y-6">
+    <div className="p-4 space-y-6">
       {/* Header */}
-      <div className="flex items-center justify-between">
-        <div className="flex items-center space-x-4">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+        <div className="flex items-center gap-3">
           <Button
             variant="ghost"
             onClick={() => navigate(-1)}
-            className="flex items-center space-x-2"
+            className="flex items-center gap-2"
           >
-            <ArrowLeft size={16} />
-            <span>Voltar</span>
+            <ArrowLeft className="h-4 w-4" />
+            Voltar
           </Button>
           <div>
-            <h2 className="text-3xl font-bold text-versys-primary">
-              {projectId ? 'Relatório do Projeto' : 'Meus Relatórios'}
-            </h2>
-            <p className="text-gray-600 mt-2">
-              {projectId ? 'Visualize e gerencie o relatório deste projeto' : 'Visualize e gerencie seus relatórios'}
+            <h1 className="text-2xl font-bold">Relatório do Projeto</h1>
+            <p className="text-muted-foreground">
+              Visualize e gerencie o relatório deste projeto
             </p>
+
           </div>
         </div>
         
-        {/* Botões movidos para a seção "Dados do Relatório" */}
+        <div className="flex items-center gap-2">
+          {/* Botão para atualizar dados */}
+          <Button
+            variant="outline"
+            onClick={handleRefreshData}
+            disabled={loading}
+            className="flex items-center gap-2"
+          >
+            <RefreshCw className="h-4 w-4" />
+            Atualizar
+          </Button>
+        </div>
       </div>
 
       {/* Resumo */}
@@ -835,6 +1365,28 @@ const ProjectReports = () => {
         </Card>
       </div>
 
+      {/* Barra de Progresso */}
+      <Card>
+        <CardContent className="p-6">
+          <div className="space-y-3">
+            <div className="flex items-center justify-between">
+              <h3 className="text-lg font-semibold text-gray-900">Progresso Geral do Projeto</h3>
+              <span className="text-2xl font-bold text-versys-primary">{realProgress}%</span>
+            </div>
+            <div className="w-full bg-gray-200 rounded-full h-3">
+              <div 
+                className="bg-gradient-to-r from-versys-primary to-versys-secondary h-3 rounded-full transition-all duration-500 ease-out"
+                style={{ width: `${realProgress}%` }}
+              />
+            </div>
+            <div className="flex justify-between text-sm text-gray-600">
+              <span>{summary.completedItems} de {summary.totalItems} itens concluídos</span>
+              <span>{summary.pendingItems} pendentes</span>
+            </div>
+          </div>
+        </CardContent>
+      </Card>
+
       {/* Filtros */}
       <Card>
         <CardHeader>
@@ -879,9 +1431,7 @@ const ProjectReports = () => {
                     <SelectItem key={status} value={status}>
                       {status === 'pending' ? 'Pendente' :
                        status === 'in_progress' ? 'Em Andamento' :
-                       status === 'completed' ? 'Concluído' :
-                       status === 'approved' ? 'Aprovado' :
-                       status === 'rejected' ? 'Rejeitado' : status}
+                       status === 'completed' ? 'Concluído' : status}
                     </SelectItem>
                   ))}
                 </SelectContent>
@@ -911,9 +1461,17 @@ const ProjectReports = () => {
                     {totalItems} itens encontrados ({uniqueItems} únicos)
                     {duplicates > 0 && (
                       <div className="mt-2 p-2 bg-red-50 border border-red-200 rounded">
-                        <span className="text-red-600 font-semibold text-sm">
-                          ⚠️ ATENÇÃO: {duplicates} itens duplicados detectados!
-                        </span>
+                        <div className="flex items-center justify-between">
+                          <span className="text-red-600 font-semibold text-sm">
+                            ⚠️ ATENÇÃO: {duplicates} itens duplicados detectados!
+                          </span>
+                          <button
+                            onClick={() => removeDuplicateRelatorios(projectId)}
+                            className="ml-2 px-3 py-1 bg-red-600 text-white text-xs rounded hover:bg-red-700 transition-colors"
+                          >
+                            Remover Duplicatas
+                          </button>
+                        </div>
                       </div>
                     )}
                   </>
@@ -923,6 +1481,8 @@ const ProjectReports = () => {
               </div>
               
                             <div className="flex items-center space-x-2">
+
+              
               {userData?.type === 'client' && Object.keys(localChanges).length > 0 && (
                 <Button
                   onClick={saveAllChanges}
@@ -1012,28 +1572,58 @@ const ProjectReports = () => {
                                     size="sm"
                                     onClick={async () => {
                                       console.log('📥 Tentando baixar foto:', photo);
+                                      console.log('📥 Tipo da foto:', typeof photo);
+                                      console.log('📥 Estrutura da foto:', photo);
+                                      
+                                      // Extrair URL da foto (pode ser string ou objeto)
+                                      let photoUrl = '';
+                                      if (typeof photo === 'string') {
+                                        photoUrl = photo;
+                                      } else if (photo && typeof photo === 'object') {
+                                        // Se for objeto, tentar diferentes propriedades comuns
+                                        const photoObj = photo as any;
+                                        photoUrl = photoObj.url || photoObj.downloadURL || photoObj.src || photoObj.path || '';
+                                        console.log('📥 URL extraída do objeto:', photoUrl);
+                                      }
+                                      
+                                      if (!photoUrl) {
+                                        toast.error('URL da foto inválida');
+                                        console.error('URL inválida:', photo);
+                                        return;
+                                      }
+                                      
                                       try {
-                                        if (photo && typeof photo === 'string') {
-                                          // Método 1: Tentar download direto via link (sem CORS)
-                                          try {
-                                            console.log('🔗 Tentando download direto...');
-                                            const link = document.createElement('a');
-                                            link.href = photo;
-                                            link.download = `foto-${item.subItemTitle.replace(/[^a-zA-Z0-9]/g, '-')}-${index + 1}.jpg`;
-                                            link.target = '_blank';
-                                            link.rel = 'noopener noreferrer';
-                                            document.body.appendChild(link);
-                                            link.click();
-                                            document.body.removeChild(link);
-                                            toast.success('Foto baixada com sucesso!');
-                                            return;
-                                          } catch (directError) {
-                                            console.warn('⚠️ Download direto falhou, tentando via Firebase SDK...', directError);
+                                        // Método 1: Tentar download direto (evita problemas de CORS)
+                                        console.log('🔗 Tentando download direto...');
+                                        const link = document.createElement('a');
+                                        link.href = photoUrl;
+                                        link.download = `foto-${item.subItemTitle.replace(/[^a-zA-Z0-9]/g, '-')}-${index + 1}.jpg`;
+                                        link.target = '_blank';
+                                        link.rel = 'noopener noreferrer';
+                                        document.body.appendChild(link);
+                                        link.click();
+                                        document.body.removeChild(link);
+                                        toast.success('Foto baixada com sucesso!');
+                                        return;
+                                      } catch (directError) {
+                                        console.error('❌ Erro no download direto:', directError);
+                                        
+                                        // Método 2: Tentar via Firebase SDK
+                                        try {
+                                          const urlObj = new URL(photoUrl);
+                                          console.log('🔗 URL objeto:', urlObj);
+                                          console.log('🔗 Pathname:', urlObj.pathname);
+                                          
+                                          // Tentar diferentes padrões de URL do Firebase Storage
+                                          let pathMatch = urlObj.pathname.match(/\/o\/(.+)$/);
+                                          if (!pathMatch) {
+                                            pathMatch = urlObj.pathname.match(/\/v0\/b\/[^\/]+\/o\/(.+)$/);
                                           }
-
-                                          // Método 2: Usar Firebase SDK como fallback
-                                          const urlObj = new URL(photo);
-                                          const pathMatch = urlObj.pathname.match(/\/o\/(.+)$/);
+                                          if (!pathMatch) {
+                                            pathMatch = urlObj.pathname.match(/\/o\/(.+?)(\?|$)/);
+                                          }
+                                          
+                                          console.log('🔗 Path match:', pathMatch);
                                           
                                           if (pathMatch) {
                                             const filePath = decodeURIComponent(pathMatch[1]);
@@ -1051,25 +1641,16 @@ const ProjectReports = () => {
                                             document.body.removeChild(link);
                                             window.URL.revokeObjectURL(blobUrl);
                                             toast.success('Foto baixada com sucesso!');
-                                          } else {
-                                            // Método 3: Fallback final - abrir em nova aba
-                                            console.warn('⚠️ Não foi possível extrair caminho, abrindo em nova aba...');
-                                            window.open(photo, '_blank');
-                                            toast.info('Foto aberta em nova aba. Clique com o botão direito para salvar.');
+                                            return;
                                           }
-                                        } else {
-                                          toast.error('URL da foto inválida');
-                                          console.error('URL inválida:', photo);
+                                        } catch (firebaseError) {
+                                          console.error('❌ Erro no Firebase SDK:', firebaseError);
                                         }
-                                      } catch (error) {
-                                        console.error('Erro ao baixar foto:', error);
-                                        // Fallback final: abrir em nova aba
-                                        try {
-                                          window.open(photo, '_blank');
-                                          toast.info('Erro no download automático. Foto aberta em nova aba.');
-                                        } catch (finalError) {
-                                          toast.error('Erro ao acessar foto. Verifique se ela existe.');
-                                        }
+                                        
+                                        // Método 3: Fallback final - abrir em nova aba
+                                        console.warn('⚠️ Todos os métodos falharam, abrindo em nova aba...');
+                                        window.open(photoUrl, '_blank');
+                                        toast.info('Erro no download automático. Foto aberta em nova aba.');
                                       }
                                     }}
                                     className="h-8 px-2 text-xs"
@@ -1226,9 +1807,34 @@ const ProjectReports = () => {
                                 ))}
                               </div>
                             ) : null}
-                            <Badge variant={item.adequacyReported ? 'default' : 'secondary'}>
-                              {item.adequacyReported ? 'Reportada' : 'Não Reportada'}
-                            </Badge>
+                            {userData && (userData.type as string) === 'client' ? (
+                              <div className="space-y-1">
+                                <Badge variant={item.adequacyReported ? 'default' : 'secondary'}>
+                                  {item.adequacyReported ? 'Reportada' : 'Não Reportada'}
+                                </Badge>
+                                {/* Seletor de Status de Adequação para Cliente */}
+                                <Select 
+                                  value={getValue(item, 'adequacyStatus') as string || 'pending'} 
+                                  onValueChange={(value) => updateLocalValue(item.id, 'adequacyStatus', value)}
+                                  disabled={!canChangeAdequacyStatus(item)}
+                                >
+                                  <SelectTrigger className="w-full h-7 text-xs border-gray-200 focus:border-blue-400">
+                                    <SelectValue />
+                                  </SelectTrigger>
+                                  <SelectContent>
+                                    <SelectItem value="pending">Pendente</SelectItem>
+                                    <SelectItem value="completed">Concluída</SelectItem>
+                                    <SelectItem value="not_applicable">Não se Aplica</SelectItem>
+                                  </SelectContent>
+                                </Select>
+                              </div>
+                            ) : (
+                              <div className="space-y-1">
+                                <Badge variant={item.adequacyReported ? 'default' : 'secondary'}>
+                                  {item.adequacyReported ? 'Reportada' : 'Não Reportada'}
+                                </Badge>
+                              </div>
+                            )}
                           </div>
                         )}
                       </TableCell>

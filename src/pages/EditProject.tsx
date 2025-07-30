@@ -16,6 +16,8 @@ import { collection, getDocs, query, orderBy, where, doc, getDoc, updateDoc } fr
 import { db } from "@/lib/firebase";
 import { Badge } from "@/components/ui/badge";
 import { Textarea } from "@/components/ui/textarea";
+import { RelatorioService } from '@/lib/relatorioService';
+import { useAuthContext } from '@/contexts/AuthContext';
 
 interface SubItem {
   id: string;
@@ -199,6 +201,7 @@ const categoriesData = {
 const EditProject = () => {
   const navigate = useNavigate();
   const { projectId } = useParams<{ projectId: string }>();
+  const { userData } = useAuthContext();
   
   const [currentStep, setCurrentStep] = useState(1);
   const [projectName, setProjectName] = useState("");
@@ -610,6 +613,15 @@ const EditProject = () => {
       });
 
       await updateDoc(doc(db, "projetos", projectId!), updateData);
+      
+      // Sincronizar relatórios após atualizar o projeto
+      try {
+        await RelatorioService.syncRelatoriosFromProject(projectId!, userData?.uid || '');
+        console.log('✅ Relatórios sincronizados após atualização do projeto');
+      } catch (syncError) {
+        console.error('⚠️ Erro ao sincronizar relatórios:', syncError);
+        // Não falhar a operação principal por causa da sincronização
+      }
       
       toast.success("Projeto atualizado com sucesso!");
       navigate("/projetos");

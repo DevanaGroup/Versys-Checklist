@@ -222,6 +222,11 @@ const Projetos = () => {
       const projetosRef = collection(db, 'projetos');
       const querySnapshot = await getDocs(projetosRef);
       
+      // Buscar relatórios para calcular o progresso real
+      const relatoriosRef = collection(db, 'relatorios');
+      const relatoriosSnapshot = await getDocs(relatoriosRef);
+      const relatoriosData = relatoriosSnapshot.docs.map(doc => doc.data());
+      
       const projetosData = querySnapshot.docs.map(doc => {
         const data = doc.data();
         console.log('Dados do projeto:', doc.id, data);
@@ -236,12 +241,24 @@ const Projetos = () => {
           console.log('- Todos os dados:', JSON.stringify(data, null, 2));
         }
         
+        // Calcular progresso baseado nos relatórios deste projeto
+        const projectRelatorios = relatoriosData.filter((relatorio: any) => 
+          relatorio.projectId === doc.id
+        );
+        
+        const totalItems = projectRelatorios.length;
+        const completedItems = projectRelatorios.filter((relatorio: any) => 
+          relatorio.status === 'completed'
+        ).length;
+        
+        const progresso = totalItems > 0 ? Math.round((completedItems / totalItems) * 100) : 0;
+        
         // Compatibilidade com diferentes estruturas
         const projeto = {
           id: doc.id,
           nome: data.nome || 'Projeto sem nome',
           status: data.status || 'Iniciado',
-          progresso: data.progresso || 0,
+          progresso: progresso,
           cliente: data.cliente || null,
           clienteId: data.clienteId || data.cliente?.id || null,
           consultor: data.consultor || 'Não definido',
@@ -425,9 +442,29 @@ const Projetos = () => {
   };
 
   const calculateProgress = (accordions: any[]): number => {
-    // Durante fase administrativa, progresso sempre é 0%
-    // Progresso só deve avançar quando cliente fizer adequações
-    return 0;
+    // Agora o progresso é calculado baseado nos itens concluídos pelo cliente
+    if (!accordions || accordions.length === 0) return 0;
+    
+    let totalItems = 0;
+    let completedItems = 0;
+    
+    accordions.forEach(accordion => {
+      if (accordion.items) {
+        accordion.items.forEach((item: any) => {
+          if (item.subItems) {
+            item.subItems.forEach((subItem: any) => {
+              totalItems++;
+              // Conta como progresso se o item foi marcado como concluído
+              if (subItem.status === 'completed' || subItem.completed === true) {
+                completedItems++;
+              }
+            });
+          }
+        });
+      }
+    });
+    
+    return totalItems > 0 ? Math.round((completedItems / totalItems) * 100) : 0;
   };
 
   const handleViewDetails = (projeto: ProjectDetails) => {
@@ -437,10 +474,25 @@ const Projetos = () => {
   const handleDeleteProject = async (projectId: string) => {
     try {
       setDeletingProject(projectId);
+      
+      // Importar o RelatorioService
+      const { RelatorioService } = await import('@/lib/relatorioService');
+      
+      // Excluir relatórios relacionados ao projeto
+      const deletedRelatoriosCount = await RelatorioService.deleteRelatoriosByProject(projectId);
+      
+      // Excluir o projeto
       const projectRef = doc(db, 'projetos', projectId);
       await deleteDoc(projectRef);
+      
       setProjetos(prev => prev.filter(p => p.id !== projectId));
-      toast.success('Projeto deletado com sucesso!');
+      
+      // Mensagem de sucesso informando sobre os relatórios excluídos
+      if (deletedRelatoriosCount > 0) {
+        toast.success(`Projeto deletado com sucesso! ${deletedRelatoriosCount} relatórios relacionados também foram excluídos.`);
+      } else {
+        toast.success('Projeto deletado com sucesso!');
+      }
     } catch (error) {
       console.error('Erro ao deletar projeto:', error);
       toast.error('Erro ao deletar projeto');
@@ -659,8 +711,8 @@ const Projetos = () => {
 
   const calculateOverallProgress = () => {
     if (steps.length === 0) return 0;
-    const approved = steps.filter(step => step.status === 'na').length;
-    return Math.round((approved / steps.length) * 100);
+    const completed = steps.filter(step => step.status === 'completed' || step.status === 'na').length;
+    return Math.round((completed / steps.length) * 100);
   };
 
   const renderStepByStep = () => {
@@ -721,7 +773,7 @@ const Projetos = () => {
                 />
               </div>
               <div className="flex justify-between text-xs text-gray-500">
-                <span>{steps.filter(s => s.status === 'na').length} de {steps.length} itens concluídos</span>
+                <span>{steps.filter(s => s.status === 'completed' || s.status === 'na').length} de {steps.length} itens concluídos</span>
                 <span>Etapa {currentStepData.stepNumber} de {steps.length}</span>
               </div>
             </div>

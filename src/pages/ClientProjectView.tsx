@@ -100,7 +100,9 @@ const ClientProjectView = () => {
                 evaluation: subItem.evaluation || '',
                 currentSituation: subItem.currentSituation || '',
                 clientGuidance: subItem.clientGuidance || subItem.adminFeedback || '', // Buscar ambos os campos
-                photos: subItem.photos || [],
+                photos: Array.isArray(subItem.photos) 
+                  ? subItem.photos.map(photo => typeof photo === 'string' ? photo : (photo as any)?.url || '')
+                  : [],
                 completed: subItem.completed || false
               };
               
@@ -121,7 +123,8 @@ const ClientProjectView = () => {
       
       setProjectSteps(steps);
       
-      const calculatedProgress = calculateProgress(accordions);
+      // Usar o progresso salvo no projeto ou calcular baseado nos accordions
+      const calculatedProgress = projectData.progresso || calculateProgress(accordions);
       
       const projectDetail: ProjectDetail = {
         id: projectDoc.id,
@@ -150,10 +153,9 @@ const ClientProjectView = () => {
   const calculateProgress = (accordions: any[]): number => {
     if (!accordions || accordions.length === 0) return 0;
     
-    // Durante a fase administrativa, o progresso deve ser sempre 0%
-    // O progresso só deve avançar quando o cliente fizer adequações e elas forem aprovadas pelo admin
+    // Agora o progresso é calculado baseado nos itens concluídos pelo cliente
     let totalItems = 0;
-    let approvedAdequacies = 0;
+    let completedItems = 0;
     
     accordions.forEach((accordion, accordionIndex) => {
       if (accordion.items) {
@@ -161,9 +163,9 @@ const ClientProjectView = () => {
           if (item.subItems) {
             item.subItems.forEach((subItem: any, subIndex: number) => {
               totalItems++;
-              // Só conta como progresso se a adequação foi reportada pelo cliente E aprovada pelo admin
-              if (subItem.adequacyReported && subItem.adequacyStatus === 'approved') {
-                approvedAdequacies++;
+              // Conta como progresso se o item foi marcado como concluído
+              if (subItem.status === 'completed' || subItem.completed === true) {
+                completedItems++;
               }
             });
           }
@@ -171,7 +173,7 @@ const ClientProjectView = () => {
       }
     });
     
-    const progress = totalItems > 0 ? Math.round((approvedAdequacies / totalItems) * 100) : 0;
+    const progress = totalItems > 0 ? Math.round((completedItems / totalItems) * 100) : 0;
     
     return progress;
   };

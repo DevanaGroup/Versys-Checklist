@@ -34,6 +34,7 @@ import { toast } from "sonner";
 import { useAuthContext } from "@/contexts/AuthContext";
 import { doc, getDoc, updateDoc } from "firebase/firestore";
 import { db } from "@/lib/firebase";
+import { RelatorioService } from '@/lib/relatorioService';
 
 interface SubItem {
   id: string;
@@ -169,7 +170,7 @@ const ClientProject = () => {
         id: projectDoc.id,
         nome: projectData.nome,
         status: projectData.status || 'Iniciado',
-        progresso: calculateProgress(projectData.customAccordions || projectData.itens || []),
+        progresso: projectData.progresso || calculateProgress(projectData.customAccordions || projectData.itens || []),
         dataInicio: projectData.dataInicio,
         previsaoConclusao: projectData.previsaoConclusao,
         consultor: projectData.consultor || 'Não definido',
@@ -349,6 +350,15 @@ const ClientProject = () => {
         customAccordions: updatedAccordions
       });
 
+      // Sincronizar relatórios após atualizar o projeto
+      try {
+        await RelatorioService.syncRelatoriosFromProject(projectDetails.id, userData?.uid || '');
+        console.log('✅ Relatórios sincronizados após adequação do cliente');
+      } catch (syncError) {
+        console.error('⚠️ Erro ao sincronizar relatórios:', syncError);
+        // Não falhar a operação principal por causa da sincronização
+      }
+
       // Atualizar estado local
       setProjectDetails(prev => {
         if (!prev) return null;
@@ -393,9 +403,9 @@ const ClientProject = () => {
 
   const calculateOverallProgress = () => {
     if (steps.length === 0) return projectDetails?.progresso || 0;
-    // Só conta como concluído se foi aprovado pelo admin
-    const approvedSteps = steps.filter(step => step.adequacyStatus === 'approved').length;
-    return Math.round((approvedSteps / steps.length) * 100);
+    // Agora conta como concluído se o item foi marcado como concluído pelo cliente
+    const completedSteps = steps.filter(step => step.status === 'completed' || step.adequacyStatus === 'approved').length;
+    return Math.round((completedSteps / steps.length) * 100);
   };
 
   if (loading) {
@@ -525,7 +535,7 @@ const ClientProject = () => {
         </div>
         <Progress value={progressPercentage} className="h-2" />
         <div className="flex justify-between items-center mt-2 text-xs text-gray-500">
-          <span>{steps.filter(s => s.adequacyStatus === 'approved').length} de {steps.length} itens aprovados</span>
+                          <span>{steps.filter(s => s.status === 'completed' || s.adequacyStatus === 'approved').length} de {steps.length} itens concluídos</span>
           <span>{steps.filter(s => s.adequacyStatus === 'pending').length} aguardando análise</span>
         </div>
       </div>

@@ -184,9 +184,29 @@ const AdminProjectView = () => {
   };
 
   const calculateProgress = (accordions: any[]): number => {
-    // Durante fase administrativa, progresso sempre é 0%
-    // Progresso só deve avançar quando cliente fizer adequações
-    return 0;
+    // Agora o progresso é calculado baseado nos itens concluídos pelo cliente
+    if (!accordions || accordions.length === 0) return 0;
+    
+    let totalItems = 0;
+    let completedItems = 0;
+    
+    accordions.forEach(accordion => {
+      if (accordion.items) {
+        accordion.items.forEach((item: any) => {
+          if (item.subItems) {
+            item.subItems.forEach((subItem: any) => {
+              totalItems++;
+              // Conta como progresso se o item foi marcado como concluído
+              if (subItem.status === 'completed' || subItem.completed === true) {
+                completedItems++;
+              }
+            });
+          }
+        });
+      }
+    });
+    
+    return totalItems > 0 ? Math.round((completedItems / totalItems) * 100) : 0;
   };
 
   const getStatusColor = (status: string) => {

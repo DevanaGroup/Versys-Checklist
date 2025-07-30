@@ -18,7 +18,7 @@ import {
 } from "lucide-react";
 import { toast } from "sonner";
 import { useAuthContext } from "@/contexts/AuthContext";
-import { collection, query, orderBy, getDocs, updateDoc, addDoc } from "firebase/firestore";
+import { collection, query, orderBy, getDocs } from "firebase/firestore";
 import { db } from "@/lib/firebase";
 import { RelatorioService } from '@/lib/relatorioService';
 
@@ -92,21 +92,39 @@ const ClientProjects = () => {
         return;
       }
       
-      // Mostrar TODOS os projetos para clientes (sem filtro restritivo)
+      // Filtrar apenas projetos do cliente logado
       const projetosData = allProjectsSnapshot.docs
-        .map(doc => {
+        .filter(doc => {
           const data = doc.data();
+          const clienteId = data.clienteId || data.cliente?.id;
+          const clienteEmail = data.cliente?.email;
+          
+          // Verificar se o projeto pertence ao cliente logado
+          const belongsToClient = clienteId === userData.uid || 
+                                 String(clienteId) === String(userData.uid) ||
+                                 clienteEmail === userData.email;
+          
           console.log('📋 Projeto:', doc.id);
           console.log('   - nome:', data.nome);
-          console.log('   - clienteId:', data.clienteId);
-          console.log('   - cliente.email:', data.cliente?.email);
-          console.log('   - cliente:', data.cliente);
+          console.log('   - clienteId:', clienteId);
+          console.log('   - cliente.email:', clienteEmail);
+          console.log('   - userData.uid:', userData.uid);
+          console.log('   - userData.email:', userData.email);
+          console.log('   - belongsToClient:', belongsToClient);
+          
+          return belongsToClient;
+        })
+        .map(doc => {
+          const data = doc.data();
+          
+          // Usar o progresso salvo no projeto ou calcular baseado nos accordions
+          const progresso = data.progresso || calculateProgress(data.customAccordions || data.itens || []);
           
           return {
             id: doc.id,
             nome: data.nome,
             status: data.status || 'Iniciado',
-            progresso: calculateProgress(data.customAccordions || data.itens || []),
+            progresso: progresso,
             dataInicio: data.dataInicio,
             previsaoConclusao: data.previsaoConclusao,
             consultor: data.consultor || 'Não definido',
@@ -132,26 +150,25 @@ const ClientProjects = () => {
   const calculateProgress = (accordions: any[]): number => {
     if (!accordions || accordions.length === 0) return 0;
     
-    // Durante a fase administrativa, o progresso deve ser sempre 0%
-    // O progresso só deve avançar quando o cliente fizer adequações e elas forem aprovadas pelo admin
+    // Agora o progresso é calculado baseado nos itens concluídos pelo cliente
     let totalItems = 0;
-    let approvedAdequacies = 0;
+    let completedItems = 0;
     
     accordions.forEach(accordion => {
       if (accordion.items) {
         accordion.items.forEach((item: any) => {
           if (item.subItems) {
             totalItems += item.subItems.length;
-            // Só conta como progresso se a adequação foi reportada pelo cliente E aprovada pelo admin
-            approvedAdequacies += item.subItems.filter((subItem: any) => 
-              subItem.adequacyReported && subItem.adequacyStatus === 'approved'
+            // Conta como progresso se o item foi marcado como concluído
+            completedItems += item.subItems.filter((subItem: any) => 
+              subItem.status === 'completed' || subItem.completed === true
             ).length;
           }
         });
       }
     });
     
-    return totalItems > 0 ? Math.round((approvedAdequacies / totalItems) * 100) : 0;
+    return totalItems > 0 ? Math.round((completedItems / totalItems) * 100) : 0;
   };
 
   const getStatusColor = (status: string) => {

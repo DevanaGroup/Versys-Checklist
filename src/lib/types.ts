@@ -21,12 +21,10 @@ export interface RelatorioItem {
   evaluation: 'nc' | 'r' | 'na' | '';
   photos?: string[];
   adequacyReported: boolean;
-  adequacyStatus?: 'pending' | 'approved' | 'rejected';
+  adequacyStatus?: 'pending' | 'completed' | 'not_applicable';
   adequacyDetails?: string;
   adequacyImages?: string[];
   adequacyDate?: string;
-  adminFeedback?: string;
-  adminRejectionReason?: string;
   changesDescription?: string; // O que foi alterado
   treatmentDeadline?: string; // Prazo para tratar
   createdAt: string;

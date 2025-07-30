@@ -15,6 +15,8 @@ import { doc, getDoc, updateDoc } from "firebase/firestore";
 import { ArrowLeft, ArrowRight, CheckCircle, Camera, ThumbsUp, ThumbsDown, Clock, XCircle, AlertTriangle, Eye, ZoomIn, X, Mic, MicOff } from "lucide-react";
 // Removido import do Transformers.js - usando Web Speech API nativa
 import { getStorage, ref, uploadBytes, getDownloadURL } from "firebase/storage";
+import { RelatorioService } from '@/lib/relatorioService';
+import { useAuthContext } from '@/contexts/AuthContext';
 
 interface SubItem {
   id: string;
@@ -75,6 +77,7 @@ interface ProjectDetail {
 const ProjectWrite = () => {
   const navigate = useNavigate();
   const { id } = useParams<{ id: string }>();
+  const { userData } = useAuthContext();
   const [projectDetails, setProjectDetails] = useState<ProjectDetail | null>(null);
   const [loading, setLoading] = useState(true);
   const [currentStep, setCurrentStep] = useState(0);
@@ -453,6 +456,16 @@ const ProjectWrite = () => {
       await updateDoc(doc(db, 'projetos', projectDetails.id), {
         customAccordions: updatedAccordions
       });
+      
+      // Sincronizar relatórios após atualizar o projeto
+      try {
+        await RelatorioService.syncRelatoriosFromProject(projectDetails.id, userData?.uid || '');
+        console.log('✅ Relatórios sincronizados após atualização do projeto');
+      } catch (syncError) {
+        console.error('⚠️ Erro ao sincronizar relatórios:', syncError);
+        // Não falhar a operação principal por causa da sincronização
+      }
+      
       toast.success('Formulário salvo com sucesso!');
       // Fechar o diálogo de confirmação
       setShowSaveConfirmation(false);
@@ -469,24 +482,23 @@ const ProjectWrite = () => {
 
   // Função para calcular progresso do projeto
   const calculateProgress = (accordions: any[]): number => {
-    // Durante a fase administrativa, o progresso deve ser sempre 0%
-    // O progresso só deve avançar quando o cliente fizer adequações e elas forem aprovadas pelo admin
+    // Agora o progresso é calculado baseado nos itens concluídos pelo cliente
     let totalSubItems = 0;
-    let approvedAdequacies = 0;
+    let completedItems = 0;
     
     accordions.forEach(accordion => {
       accordion.items.forEach(item => {
         item.subItems.forEach(subItem => {
           totalSubItems++;
-          // Só conta como progresso se a adequação foi reportada pelo cliente E aprovada pelo admin
-          if (subItem.adequacyReported && subItem.adequacyStatus === 'approved') {
-            approvedAdequacies++;
+          // Conta como progresso se o item foi marcado como concluído
+          if (subItem.status === 'completed' || subItem.completed === true) {
+            completedItems++;
           }
         });
       });
     });
     
-    return totalSubItems > 0 ? Math.round((approvedAdequacies / totalSubItems) * 100) : 0;
+    return totalSubItems > 0 ? Math.round((completedItems / totalSubItems) * 100) : 0;
   };
 
   // Funções para adequação
