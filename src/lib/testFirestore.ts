@@ -120,7 +120,7 @@ export const testProjetosCollection = async () => {
   try {
     console.log('🔍 Testando coleção projetos...');
     const projetosRef = collection(db, 'projetos');
-    const q = query(projetosRef, orderBy('dataCriacao', 'desc'));
+    const q = query(projetosRef, orderBy('createdAt', 'desc'));
     const querySnapshot = await getDocs(q);
     
     console.log('📊 Número de documentos na coleção projetos:', querySnapshot.size);
