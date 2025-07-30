@@ -45,14 +45,28 @@ export default function ProjectMap() {
           accordion.items.forEach((item: any) => {
             if (item.subItems && Array.isArray(item.subItems)) {
               item.subItems.forEach((sub: any) => {
-                if (sub.photoData && sub.photoData.latitude && sub.photoData.longitude) {
-                  pts.push({
-                    lat: sub.photoData.latitude,
-                    lng: sub.photoData.longitude,
-                    url: sub.photoData.url,
-                    createdAt: sub.photoData.createdAt,
-                    title: sub.title,
-                    itemTitle: item.title // novo campo para subtítulo
+                // Verificar se há fotos com localização
+                if (sub.photos && Array.isArray(sub.photos)) {
+                  sub.photos.forEach((photo: any) => {
+                    if (photo.latitude && photo.longitude && 
+                        photo.latitude !== 0 && photo.longitude !== 0) {
+                      // Verificar se já existe um ponto com essas coordenadas
+                      const existingPoint = pts.find(p => 
+                        p.lat === photo.latitude && p.lng === photo.longitude
+                      );
+                      
+                      if (!existingPoint) {
+                        pts.push({
+                          lat: photo.latitude,
+                          lng: photo.longitude,
+                          url: photo.url,
+                          createdAt: photo.createdAt,
+                          title: sub.title,
+                          itemTitle: item.title,
+                          photoIndex: pts.length + 1
+                        });
+                      }
+                    }
                   });
                 }
               });
@@ -79,15 +93,43 @@ export default function ProjectMap() {
             position: point,
             map,
             title: point.title,
+            label: {
+              text: point.photoIndex.toString(),
+              color: 'white',
+              fontWeight: 'bold'
+            },
+            icon: {
+              url: 'data:image/svg+xml;charset=UTF-8,' + encodeURIComponent(`
+                <svg width="32" height="32" viewBox="0 0 32 32" xmlns="http://www.w3.org/2000/svg">
+                  <circle cx="16" cy="16" r="16" fill="#3B82F6"/>
+                  <text x="16" y="20" text-anchor="middle" fill="white" font-size="12" font-weight="bold">${point.photoIndex}</text>
+                </svg>
+              `),
+              scaledSize: new w.google.maps.Size(32, 32),
+              anchor: new w.google.maps.Point(16, 16)
+            }
           });
+          
           const info = new w.google.maps.InfoWindow({
-            content: `<div style='min-width:160px'>
-              <strong>${point.title}</strong><br/>
-              <span style='color:#666;font-size:13px;'>${point.itemTitle || ''}</span><br/>
-              <img src='${point.url}' style='max-width:120px;max-height:80px;border-radius:8px;margin:4px 0'/><br/>
-              ${new Date(point.createdAt).toLocaleString('pt-BR')}
-            </div>`
+            content: `
+              <div style='min-width:200px; padding: 8px;'>
+                <div style='font-weight: bold; color: #1F2937; margin-bottom: 4px;'>
+                  📸 ${point.title}
+                </div>
+                <div style='color: #6B7280; font-size: 12px; margin-bottom: 8px;'>
+                  ${point.itemTitle || ''}
+                </div>
+                <img src='${point.url}' style='width: 100%; max-width: 180px; height: 120px; object-fit: cover; border-radius: 8px; margin: 8px 0;'/>
+                <div style='color: #6B7280; font-size: 11px; margin-top: 8px;'>
+                  📅 ${new Date(point.createdAt).toLocaleString('pt-BR')}
+                </div>
+                <div style='color: #6B7280; font-size: 11px;'>
+                  📍 ${point.lat.toFixed(6)}, ${point.lng.toFixed(6)}
+                </div>
+              </div>
+            `
           });
+          
           marker.addListener("click", () => info.open(map, marker));
         });
       });
@@ -103,22 +145,46 @@ export default function ProjectMap() {
       }} className="flex items-center space-x-1 mb-4">
         Voltar
       </Button>
+      
       <Card>
         <CardHeader>
-          <CardTitle>Locais das fotos - {projectName}</CardTitle>
+          <CardTitle>🗺️ Mapa de Localizações - {projectName}</CardTitle>
         </CardHeader>
         <CardContent>
           {loading ? (
             <div className="flex flex-col items-center justify-center h-64">
-              <Loader className="animate-spin w-8 h-8 text-purple-500 mb-2" />
+              <Loader className="animate-spin w-8 h-8 text-blue-500 mb-2" />
               <span className="text-gray-500">Carregando mapa...</span>
             </div>
           ) : points.length === 0 ? (
             <div className="flex flex-col items-center justify-center h-64">
-              <span className="text-gray-500">Nenhum ponto com foto encontrado neste projeto.</span>
+              <span className="text-gray-500">Nenhuma foto com localização GPS encontrada neste projeto.</span>
+              <span className="text-gray-400 text-sm mt-2">As fotos precisam ter coordenadas GPS para aparecerem no mapa.</span>
             </div>
           ) : (
-            <div id="map" style={{ width: "100%", height: 400, borderRadius: 12 }} />
+            <>
+              {/* Estatísticas */}
+              <div className="mb-4 p-4 bg-blue-50 rounded-lg">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <p className="text-sm font-medium text-blue-900">
+                      📸 {points.length} foto{points.length > 1 ? 's' : ''} com localização
+                    </p>
+                    <p className="text-xs text-blue-700">
+                      Clique nos marcadores para ver os detalhes
+                    </p>
+                  </div>
+                  <div className="text-right">
+                    <p className="text-xs text-blue-600">
+                      Última atualização: {new Date().toLocaleString('pt-BR')}
+                    </p>
+                  </div>
+                </div>
+              </div>
+              
+              {/* Mapa */}
+              <div id="map" style={{ width: "100%", height: 500, borderRadius: 12 }} />
+            </>
           )}
         </CardContent>
       </Card>
