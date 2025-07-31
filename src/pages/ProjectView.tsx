@@ -215,215 +215,234 @@ const ProjectView = () => {
   }
 
   return (
-    <div className="space-y-6">
-      {/* Header */}
-      {/* Layout Desktop */}
-      <div className="hidden md:flex items-center justify-between">
-        <div className="flex items-center space-x-4">
-          <Button
-            variant="ghost"
-            size="sm"
-            onClick={() => navigate("/projetos")}
-            className="flex items-center space-x-2"
-          >
-            <ArrowLeft size={16} />
-            <span>Voltar</span>
-          </Button>
-          <div>
-            <h1 className="text-2xl font-bold text-gray-900">{projectDetails.nome}</h1>
-            <Badge className={getStatusColor(projectDetails.status)}>
-              {projectDetails.status}
-            </Badge>
+    <div className="relative min-h-screen">
+      {/* Conteúdo Principal */}
+      <div className="space-y-6 pb-24">
+        {/* Header */}
+        {/* Layout Desktop */}
+        <div className="hidden md:flex items-center justify-between">
+          <div className="flex items-center space-x-4">
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => navigate("/projetos")}
+              className="flex items-center space-x-2"
+            >
+              <ArrowLeft size={16} />
+              <span>Voltar</span>
+            </Button>
+            <div>
+              <h1 className="text-2xl font-bold text-gray-900">{projectDetails.nome}</h1>
+              <Badge className={getStatusColor(projectDetails.status)}>
+                {projectDetails.status}
+              </Badge>
+            </div>
           </div>
-        </div>
-        
-        <Button
-          onClick={() => navigate(`/projetos/edit/${id}?clienteId=${projectDetails.cliente?.id || ''}`)}
-          className="flex items-center space-x-2"
-        >
-          <Edit size={16} />
-          <span>Editar Projeto</span>
-        </Button>
-      </div>
-
-      {/* Layout Mobile */}
-      <div className="md:hidden space-y-4">
-        {/* Título Centralizado */}
-        <div className="text-center">
-          <h1 className="text-xl font-bold text-gray-900 break-words">{projectDetails.nome}</h1>
-          <Badge className={`mt-2 ${getStatusColor(projectDetails.status)}`}>
-            {projectDetails.status}
-          </Badge>
-        </div>
-
-        {/* Botões na mesma linha */}
-        <div className="flex items-center justify-between">
-          <Button
-            variant="ghost"
-            size="sm"
-            onClick={() => navigate("/projetos")}
-            className="flex items-center space-x-2"
-          >
-            <ArrowLeft size={16} />
-            <span>Voltar</span>
-          </Button>
           
           <Button
             onClick={() => navigate(`/projetos/edit/${id}?clienteId=${projectDetails.cliente?.id || ''}`)}
             className="flex items-center space-x-2"
           >
             <Edit size={16} />
+            <span>Editar Projeto</span>
           </Button>
         </div>
-      </div>
 
-      {/* Progresso do Projeto */}
-      {/* Desktop */}
-      <div className="hidden md:block">
-        <Card className="mb-6">
-          <CardContent className="p-6">
-            <div>
-              <p className="text-sm text-gray-500 mb-2">Progresso Geral</p>
-              <div className="flex items-center space-x-3">
-                <Progress value={projectDetails.progresso} className="flex-1" />
-                <span className="text-sm font-medium">{projectDetails.progresso}% concluído</span>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-      </div>
-
-      {/* Mobile - Progresso Simplificado */}
-      <div className="md:hidden">
-        <div className="flex items-center justify-between mb-4">
-          <span className="text-sm text-gray-600">Progresso Geral</span>
-          <span className="text-sm font-medium text-gray-900">{projectDetails.progresso}% concluído</span>
-        </div>
-        <div className="w-full bg-gray-200 rounded-full h-2 mb-6">
-          <div 
-            className="bg-blue-600 h-2 rounded-full transition-all duration-500"
-            style={{ width: `${projectDetails.progresso}%` }}
-          />
-        </div>
-      </div>
-
-      {/* Navegação por Steps */}
-      {totalSteps > 0 && (
-        <>
-          {/* Indicador de Progresso */}
-          <div className="flex items-center justify-center mb-6">
-            <div className="flex items-center space-x-2">
-              <div className="bg-purple-600 text-white rounded-full w-8 h-8 flex items-center justify-center text-sm font-medium">
-                {currentStep + 1}
-              </div>
-              <div className="text-sm text-gray-600">
-                Passo {currentStep + 1} de {totalSteps}
-              </div>
-            </div>
-          </div>
-
-          {/* Título do Step Atual */}
-          <div className="text-center mb-6">
-            <h2 className="text-lg font-semibold text-gray-900 mb-2">
-              {currentStepData.title}
-            </h2>
-            <Badge variant="outline" className="text-xs">
-              {currentStepData.category}
+        {/* Layout Mobile */}
+        <div className="md:hidden space-y-4">
+          {/* Título Centralizado */}
+          <div className="text-center">
+            <h1 className="text-xl font-bold text-gray-900 break-words">{projectDetails.nome}</h1>
+            <Badge className={`mt-2 ${getStatusColor(projectDetails.status)}`}>
+              {projectDetails.status}
             </Badge>
           </div>
 
-          {/* Conteúdo do Step */}
+          {/* Botões na mesma linha */}
+          <div className="flex items-center justify-between">
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => navigate("/projetos")}
+              className="flex items-center space-x-2"
+            >
+              <ArrowLeft size={16} />
+              <span>Voltar</span>
+            </Button>
+            
+            <Button
+              onClick={() => navigate(`/projetos/edit/${id}?clienteId=${projectDetails.cliente?.id || ''}`)}
+              className="flex items-center space-x-2"
+            >
+              <Edit size={16} />
+            </Button>
+          </div>
+        </div>
+
+        {/* Progresso do Projeto */}
+        {/* Desktop */}
+        <div className="hidden md:block">
           <Card className="mb-6">
             <CardContent className="p-6">
-              {currentStepData.subItems && currentStepData.subItems.length > 0 ? (
-                <Accordion type="single" collapsible className="w-full">
-                  {currentStepData.subItems.map((subItem, index) => (
-                    <AccordionItem key={subItem.id} value={`item-${index}`}>
-                      <AccordionTrigger className="text-left">
-                        <div className="flex items-center space-x-3">
-                          {getEvaluationIcon(subItem.evaluation)}
-                          <span className="font-medium">{subItem.title}</span>
-                          <Badge variant="outline" className="text-xs">
-                            {getEvaluationText(subItem.evaluation)}
-                          </Badge>
-                        </div>
-                      </AccordionTrigger>
-                      <AccordionContent>
-                        <div className="space-y-4 pt-4">
-                          {/* Situação Atual */}
-                          {subItem.currentSituation && (
-                            <div>
-                              <h4 className="font-medium text-gray-900 mb-2">Situação Atual</h4>
-                              <div className="bg-gray-50 p-3 rounded-lg">
-                                <p className="text-sm text-gray-700">{subItem.currentSituation}</p>
-                              </div>
-                            </div>
-                          )}
-
-                          {/* Orientação para o Cliente */}
-                          {subItem.clientGuidance && (
-                            <div>
-                              <h4 className="font-medium text-gray-900 mb-2">Orientação para o Cliente</h4>
-                              <div className="bg-blue-50 p-3 rounded-lg">
-                                <p className="text-sm text-gray-700">{subItem.clientGuidance}</p>
-                              </div>
-                            </div>
-                          )}
-
-                          {/* Fotos */}
-                          {subItem.photos && subItem.photos.length > 0 && (
-                            <div>
-                              <h4 className="font-medium text-gray-900 mb-2">📸 Fotos</h4>
-                              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                                {subItem.photos.map((photo) => (
-                                  <div key={photo.id} className="bg-gray-50 p-2 rounded-lg">
-                                    <img
-                                      src={photo.url}
-                                      alt="Foto do local"
-                                      className="w-full h-32 object-cover rounded-lg cursor-pointer hover:opacity-90 transition-opacity shadow-sm"
-                                      onClick={() => window.open(photo.url, '_blank')}
-                                    />
-                                    <div className="text-xs text-gray-500 mt-2 space-y-1">
-                                      <p>📅 Capturada em: {new Date(photo.createdAt).toLocaleString('pt-BR')}</p>
-                                      {photo.latitude && photo.longitude && 
-                                       photo.latitude !== 0 && photo.longitude !== 0 && (
-                                        <div>
-                                          <p>📍 Localização: {photo.latitude.toFixed(6)}, {photo.longitude.toFixed(6)}</p>
-                                          <a 
-                                            href={`https://www.google.com/maps?q=${photo.latitude},${photo.longitude}`}
-                                            target="_blank"
-                                            rel="noopener noreferrer"
-                                            className="text-blue-600 hover:text-blue-800 underline text-xs"
-                                          >
-                                            🗺️ Ver no Google Maps
-                                          </a>
-                                        </div>
-                                      )}
-                                      {(!photo.latitude || !photo.longitude || 
-                                        (photo.latitude === 0 && photo.longitude === 0)) && (
-                                          <p className="text-orange-600 text-xs">⚠️ Foto sem localização GPS</p>
-                                      )}
-                                    </div>
-                                  </div>
-                                ))}
-                              </div>
-                            </div>
-                          )}
-                        </div>
-                      </AccordionContent>
-                    </AccordionItem>
-                  ))}
-                </Accordion>
-              ) : (
-                <div className="text-center py-8">
-                  <p className="text-gray-500">Nenhum item encontrado para este passo.</p>
+              <div>
+                <p className="text-sm text-gray-500 mb-2">Progresso Geral</p>
+                <div className="flex items-center space-x-3">
+                  <Progress value={projectDetails.progresso} className="flex-1" />
+                  <span className="text-sm font-medium">{projectDetails.progresso}% concluído</span>
                 </div>
-              )}
+              </div>
             </CardContent>
           </Card>
+        </div>
 
-          {/* Navegação */}
-          <div className="flex items-center justify-between">
+        {/* Mobile - Progresso Simplificado */}
+        <div className="md:hidden">
+          <div className="flex items-center justify-between mb-4">
+            <span className="text-sm text-gray-600">Progresso Geral</span>
+            <span className="text-sm font-medium text-gray-900">{projectDetails.progresso}% concluído</span>
+          </div>
+          <div className="w-full bg-gray-200 rounded-full h-2 mb-6">
+            <div 
+              className="bg-blue-600 h-2 rounded-full transition-all duration-500"
+              style={{ width: `${projectDetails.progresso}%` }}
+            />
+          </div>
+        </div>
+
+        {/* Navegação por Steps */}
+        {totalSteps > 0 && (
+          <>
+            {/* Indicador de Progresso */}
+            <div className="flex items-center justify-center mb-6">
+              <div className="flex items-center space-x-2">
+                <div className="bg-purple-600 text-white rounded-full w-8 h-8 flex items-center justify-center text-sm font-medium">
+                  {currentStep + 1}
+                </div>
+                <div className="text-sm text-gray-600">
+                  Passo {currentStep + 1} de {totalSteps}
+                </div>
+              </div>
+            </div>
+
+            {/* Título do Step Atual */}
+            <div className="text-center mb-6">
+              <h2 className="text-lg font-semibold text-gray-900 mb-2">
+                {currentStepData.title}
+              </h2>
+              <Badge variant="outline" className="text-xs">
+                {currentStepData.category}
+              </Badge>
+            </div>
+
+            {/* Conteúdo do Step */}
+            <Card className="mb-6">
+              <CardContent className="p-6">
+                {currentStepData.subItems && currentStepData.subItems.length > 0 ? (
+                  <Accordion type="single" collapsible className="w-full">
+                    {currentStepData.subItems.map((subItem, index) => (
+                      <AccordionItem key={subItem.id} value={`item-${index}`}>
+                        <AccordionTrigger className="text-left">
+                          <div className="flex items-center space-x-3">
+                            {getEvaluationIcon(subItem.evaluation)}
+                            <span className="font-medium">{subItem.title}</span>
+                            <Badge variant="outline" className="text-xs">
+                              {getEvaluationText(subItem.evaluation)}
+                            </Badge>
+                          </div>
+                        </AccordionTrigger>
+                        <AccordionContent>
+                          <div className="space-y-4 pt-4">
+                            {/* Situação Atual */}
+                            {subItem.currentSituation && (
+                              <div>
+                                <h4 className="font-medium text-gray-900 mb-2">Situação Atual</h4>
+                                <div className="bg-gray-50 p-3 rounded-lg">
+                                  <p className="text-sm text-gray-700">{subItem.currentSituation}</p>
+                                </div>
+                              </div>
+                            )}
+
+                            {/* Orientação para o Cliente */}
+                            {subItem.clientGuidance && (
+                              <div>
+                                <h4 className="font-medium text-gray-900 mb-2">Orientação para o Cliente</h4>
+                                <div className="bg-blue-50 p-3 rounded-lg">
+                                  <p className="text-sm text-gray-700">{subItem.clientGuidance}</p>
+                                </div>
+                              </div>
+                            )}
+
+                            {/* Fotos */}
+                            {subItem.photos && subItem.photos.length > 0 && (
+                              <div>
+                                <h4 className="font-medium text-gray-900 mb-2">📸 Fotos</h4>
+                                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                                  {subItem.photos.map((photo) => (
+                                    <div key={photo.id} className="bg-gray-50 p-2 rounded-lg">
+                                      <img
+                                        src={photo.url}
+                                        alt="Foto do local"
+                                        className="w-full h-32 object-cover rounded-lg cursor-pointer hover:opacity-90 transition-opacity shadow-sm"
+                                        onClick={() => window.open(photo.url, '_blank')}
+                                      />
+                                      <div className="text-xs text-gray-500 mt-2 space-y-1">
+                                        <p>📅 Capturada em: {new Date(photo.createdAt).toLocaleString('pt-BR')}</p>
+                                        {photo.latitude && photo.longitude && 
+                                         photo.latitude !== 0 && photo.longitude !== 0 && (
+                                          <div>
+                                            <p>📍 Localização: {photo.latitude.toFixed(6)}, {photo.longitude.toFixed(6)}</p>
+                                            <a 
+                                              href={`https://www.google.com/maps?q=${photo.latitude},${photo.longitude}`}
+                                              target="_blank"
+                                              rel="noopener noreferrer"
+                                              className="text-blue-600 hover:text-blue-800 underline text-xs"
+                                            >
+                                              🗺️ Ver no Google Maps
+                                            </a>
+                                          </div>
+                                        )}
+                                        {(!photo.latitude || !photo.longitude || 
+                                          (photo.latitude === 0 && photo.longitude === 0)) && (
+                                            <p className="text-orange-600 text-xs">⚠️ Foto sem localização GPS</p>
+                                        )}
+                                      </div>
+                                    </div>
+                                  ))}
+                                </div>
+                              </div>
+                            )}
+                          </div>
+                        </AccordionContent>
+                      </AccordionItem>
+                    ))}
+                  </Accordion>
+                ) : (
+                  <div className="text-center py-8">
+                    <p className="text-gray-500">Nenhum item encontrado para este passo.</p>
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+          </>
+        )}
+
+        {/* Observações */}
+        {projectDetails.observacoes && (
+          <Card className="mt-6">
+            <CardHeader>
+              <CardTitle>Observações</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <p className="text-gray-700">{projectDetails.observacoes}</p>
+            </CardContent>
+          </Card>
+        )}
+      </div>
+
+      {/* Navegação Fixa no Final do Main */}
+      {totalSteps > 0 && (
+        <div className="absolute bottom-0 left-0 right-0 bg-white border-t border-gray-200 p-4">
+          <div className="flex items-center justify-between max-w-4xl mx-auto">
             <Button
               variant="outline"
               onClick={() => setCurrentStep(prev => Math.max(0, prev - 1))}
@@ -447,19 +466,7 @@ const ProjectView = () => {
               <ArrowRight size={16} />
             </Button>
           </div>
-        </>
-      )}
-
-      {/* Observações */}
-      {projectDetails.observacoes && (
-        <Card className="mt-6">
-          <CardHeader>
-            <CardTitle>Observações</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <p className="text-gray-700">{projectDetails.observacoes}</p>
-          </CardContent>
-        </Card>
+        </div>
       )}
     </div>
   );

@@ -1,4 +1,4 @@
-import { Home, FolderOpen, FileText, Settings, HelpCircle, LogOut, User, Users, UserCheck, CheckSquare } from "lucide-react";
+import { Home, FolderOpen, FileText, Settings, LogOut, User, Users, UserCheck, CheckSquare } from "lucide-react";
 import { NavLink, useNavigate, useLocation } from "react-router-dom";
 import { Sidebar, SidebarContent, SidebarGroup, SidebarGroupContent, SidebarGroupLabel, SidebarMenu, SidebarMenuButton, SidebarMenuItem, SidebarHeader, SidebarFooter, useSidebar } from "@/components/ui/sidebar";
 import { Separator } from "@/components/ui/separator";
@@ -38,11 +38,7 @@ const clientMenuItems = [{
   icon: FolderOpen
 }];
 
-const supportItems = [{
-  title: "Suporte",
-  url: "/suporte",
-  icon: HelpCircle
-}];
+
 
 export function AppSidebar() {
   const navigate = useNavigate();
@@ -206,37 +202,7 @@ export function AppSidebar() {
               </SidebarGroupContent>
             </SidebarGroup>
 
-            {/* Separador visual */}
-            <div className="my-6">
-              <Separator className="bg-white/10" />
-            </div>
 
-            {/* Menu de suporte */}
-            <SidebarGroup>
-              <SidebarGroupContent>
-                <SidebarMenu className="space-y-1">
-                  {supportItems.map(item => (
-                    <SidebarMenuItem key={item.title}>
-                      <SidebarMenuButton 
-                        asChild 
-                        className={`
-                          h-9 md:h-10 px-2 md:px-3 py-2 rounded-lg transition-all duration-200
-                          ${isActive(item.url) 
-                            ? "bg-white/20 text-white font-medium shadow-sm" 
-                            : "text-white/80 hover:bg-white/10 hover:text-white"
-                          }
-                        `}
-                      >
-                        <NavLink to={item.url} className="flex items-center gap-2 md:gap-3">
-                          <item.icon className="h-4 w-4 flex-shrink-0" />
-                          {!isCollapsed && <span className="truncate text-sm md:text-base">{item.title}</span>}
-                        </NavLink>
-                      </SidebarMenuButton>
-                    </SidebarMenuItem>
-                  ))}
-                </SidebarMenu>
-              </SidebarGroupContent>
-            </SidebarGroup>
 
             {/* Informações de Localização */}
             {!isCollapsed && <LocationInfo />}
