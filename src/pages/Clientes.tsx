@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import '@/styles/mobile-fixes.css';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
@@ -47,7 +48,141 @@ const Clientes = () => {
 
   useEffect(() => {
     carregarClientes();
+    
+    // Definir título da página no header mobile
+    const headerTitle = document.querySelector('header h1');
+    if (headerTitle) {
+      headerTitle.textContent = 'Clientes';
+    }
   }, []);
+
+  // Aplicar estilos fullscreen no modal quando abrir no mobile
+  useEffect(() => {
+    if (dialogAberto) {
+      const modal = document.querySelector('[data-radix-dialog-content]') as HTMLElement;
+      if (modal && window.innerWidth <= 640) {
+        // Aplicar estilos inline para forçar fullscreen
+        Object.assign(modal.style, {
+          position: 'fixed',
+          top: '0',
+          left: '0',
+          right: '0',
+          bottom: '0',
+          width: '100vw',
+          height: '100vh',
+          maxWidth: 'none',
+          maxHeight: 'none',
+          margin: '0',
+          padding: '0',
+          borderRadius: '0',
+          transform: 'none',
+          overflowY: 'auto',
+          zIndex: '10000',
+          display: 'flex',
+          flexDirection: 'column',
+          background: 'linear-gradient(135deg, #f8fafc 0%, #ffffff 100%)',
+          boxShadow: 'none'
+        });
+        
+        // Estrutura interna
+        const children = modal.children;
+        if (children.length >= 3) {
+          // Header
+          const header = children[0] as HTMLElement;
+          Object.assign(header.style, {
+            flexShrink: '0',
+            padding: '1rem 1rem 0.5rem 1rem',
+            borderBottom: '1px solid #e5e7eb',
+            background: 'linear-gradient(135deg, #ffffff 0%, #f8fafc 100%)',
+            boxShadow: '0 1px 3px 0 rgba(0, 0, 0, 0.1)'
+          });
+          
+          // Conteúdo
+          const content = children[1] as HTMLElement;
+          Object.assign(content.style, {
+            flex: '1',
+            padding: '1rem',
+            overflowY: 'auto',
+            WebkitOverflowScrolling: 'touch'
+          });
+          
+          // Footer
+          const footer = children[2] as HTMLElement;
+          Object.assign(footer.style, {
+            flexShrink: '0',
+            padding: '1rem',
+            borderTop: '1px solid #e5e7eb',
+            background: 'linear-gradient(135deg, #f8fafc 0%, #ffffff 100%)',
+            boxShadow: '0 -1px 3px 0 rgba(0, 0, 0, 0.1)'
+          });
+        }
+      }
+    }
+  }, [dialogAberto]);
+
+  // Aplicar estilos fullscreen no modal de edição quando abrir no mobile
+  useEffect(() => {
+    if (dialogEdicaoAberto) {
+      const modal = document.querySelector('[data-radix-dialog-content]') as HTMLElement;
+      if (modal && window.innerWidth <= 640) {
+        // Aplicar estilos inline para forçar fullscreen
+        Object.assign(modal.style, {
+          position: 'fixed',
+          top: '0',
+          left: '0',
+          right: '0',
+          bottom: '0',
+          width: '100vw',
+          height: '100vh',
+          maxWidth: 'none',
+          maxHeight: 'none',
+          margin: '0',
+          padding: '0',
+          borderRadius: '0',
+          transform: 'none',
+          overflowY: 'auto',
+          zIndex: '10000',
+          display: 'flex',
+          flexDirection: 'column',
+          background: 'linear-gradient(135deg, #f8fafc 0%, #ffffff 100%)',
+          boxShadow: 'none'
+        });
+        
+        // Estrutura interna
+        const children = modal.children;
+        if (children.length >= 3) {
+          // Header
+          const header = children[0] as HTMLElement;
+          Object.assign(header.style, {
+            flexShrink: '0',
+            padding: '1rem 1rem 0.5rem 1rem',
+            borderBottom: '1px solid #e5e7eb',
+            background: 'linear-gradient(135deg, #ffffff 0%, #f8fafc 100%)',
+            boxShadow: '0 1px 3px 0 rgba(0, 0, 0, 0.1)'
+          });
+          
+          // Conteúdo
+          const content = children[1] as HTMLElement;
+          Object.assign(content.style, {
+            flex: '1',
+            padding: '1rem',
+            overflowY: 'auto',
+            WebkitOverflowScrolling: 'touch'
+          });
+          
+          // Footer
+          const footer = children[2] as HTMLElement;
+          Object.assign(footer.style, {
+            flexShrink: '0',
+            padding: '1rem',
+            borderTop: '1px solid #e5e7eb',
+            background: 'linear-gradient(135deg, #f8fafc 0%, #ffffff 100%)',
+            boxShadow: '0 -1px 3px 0 rgba(0, 0, 0, 0.1)'
+          });
+        }
+      }
+    }
+  }, [dialogEdicaoAberto]);
 
   const carregarClientes = async () => {
     try {
@@ -77,7 +212,9 @@ const Clientes = () => {
           };
         }) as Cliente[];
         
-        console.log('Clientes encontrados na coleção users:', clientesData.length);
+        console.log('Clientes encontrados na coleção users (com ordenação):', clientesData.length);
+        console.log('Dados dos clientes (com ordenação):', clientesData);
+        console.log('Documentos processados:', querySnapshot.docs.map(doc => ({ id: doc.id, type: doc.data().type })));
         
         // Carregar contagem de projetos para cada cliente
         await atualizarContagemProjetos(clientesData);
@@ -111,6 +248,7 @@ const Clientes = () => {
         clientesData.sort((a, b) => new Date(b.dataCriacao).getTime() - new Date(a.dataCriacao).getTime());
         
         console.log('Clientes encontrados na coleção users (sem ordenação):', clientesData.length);
+        console.log('Documentos processados (sem ordenação):', querySnapshot.docs.map(doc => ({ id: doc.id, type: doc.data().type })));
         
         // Carregar contagem de projetos para cada cliente
         await atualizarContagemProjetos(clientesData);
@@ -376,25 +514,35 @@ const Clientes = () => {
     return matchNome && matchStatus;
   });
 
+  // Debug: Log da contagem de clientes
+  console.log('=== DEBUG CLIENTES ===');
+  console.log('Total de clientes:', clientes.length);
+  console.log('Clientes filtrados:', clientesFiltrados.length);
+  console.log('Filtro nome:', filtroNome);
+  console.log('Filtro status:', filtroStatus);
+  console.log('Clientes originais:', clientes.map(c => ({ id: c.id, nome: c.nome, status: c.status })));
+  console.log('Clientes filtrados:', clientesFiltrados.map(c => ({ id: c.id, nome: c.nome, status: c.status })));
+  console.log('=====================');
+
 
 
   return (
-    <div className="container mx-auto p-6 space-y-6">
-      <div className="flex justify-between items-center">
-        <div>
-          <h1 className="text-3xl font-bold text-gray-900">Gerenciar Clientes</h1>
+    <div className="container mx-auto p-3 sm:p-6 space-y-4 sm:space-y-6">
+      <div className="page-header flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
+        <div className="flex-1 min-w-0">
+          <h1 className="text-2xl sm:text-3xl font-bold text-gray-900">Gerenciar Clientes</h1>
           <p className="text-gray-600 mt-1">Gerencie todos os clientes da plataforma</p>
         </div>
         
-        <div className="flex gap-2">
+        <div className="button-container flex gap-2 w-full sm:w-auto">
           <Dialog open={dialogAberto} onOpenChange={setDialogAberto}>
             <DialogTrigger asChild>
-              <Button className="bg-versys-primary hover:bg-versys-secondary">
+              <Button className="bg-versys-primary hover:bg-versys-secondary w-full sm:w-auto">
                 <Plus className="h-4 w-4 mr-2" />
                 Novo Cliente
               </Button>
             </DialogTrigger>
-            <DialogContent className="sm:max-w-[500px]">
+            <DialogContent className="sm:max-w-[500px] max-h-[90vh] overflow-y-auto mx-4 sm:mx-0">
               <DialogHeader>
                 <DialogTitle>Criar Novo Cliente</DialogTitle>
                 <DialogDescription>
@@ -403,31 +551,34 @@ const Clientes = () => {
               </DialogHeader>
               <div className="grid gap-4 py-4">
                 <div className="grid gap-2">
-                  <Label htmlFor="nome">Nome *</Label>
+                  <Label htmlFor="nome">Nome</Label>
                   <Input
                     id="nome"
                     value={novoCliente.nome}
                     onChange={(e) => setNovoCliente({...novoCliente, nome: e.target.value})}
                     placeholder="Nome completo"
+                    required
                   />
                 </div>
                 <div className="grid gap-2">
-                  <Label htmlFor="email">E-mail *</Label>
+                  <Label htmlFor="email">E-mail</Label>
                   <Input
                     id="email"
                     type="email"
                     value={novoCliente.email}
                     onChange={(e) => setNovoCliente({...novoCliente, email: e.target.value})}
                     placeholder="cliente@empresa.com"
+                    required
                   />
                 </div>
                 <div className="grid gap-2">
-                  <Label htmlFor="empresa">Empresa *</Label>
+                  <Label htmlFor="empresa">Empresa</Label>
                   <Input
                     id="empresa"
                     value={novoCliente.empresa}
                     onChange={(e) => setNovoCliente({...novoCliente, empresa: e.target.value})}
                     placeholder="Nome da empresa"
+                    required
                   />
                 </div>
                 <div className="grid gap-2">
@@ -449,7 +600,7 @@ const Clientes = () => {
                   />
                 </div>
                 <div className="grid gap-2">
-                  <Label htmlFor="senha">Senha do Cliente *</Label>
+                  <Label htmlFor="senha">Senha do Cliente</Label>
                   <div className="flex gap-2">
                     <div className="relative flex-1">
                       <Input
@@ -460,6 +611,7 @@ const Clientes = () => {
                         placeholder="Defina uma senha para o cliente"
                         className="pr-10"
                         required
+                        minLength={6}
                       />
                       <Button
                         type="button"
@@ -509,21 +661,21 @@ const Clientes = () => {
       {/* Filtros */}
       <Card>
         <CardContent className="p-4">
-          <div className="flex gap-4 items-end">
-            <div className="flex-1">
+          <div className="filters-container flex flex-col sm:flex-row gap-4 items-end">
+            <div className="search-container flex-1 min-w-0">
               <Label htmlFor="filtro-nome">Buscar</Label>
               <div className="relative">
                 <Search className="absolute left-3 top-3 h-4 w-4 text-gray-400" />
                 <Input
                   id="filtro-nome"
-                  placeholder="Buscar por nome, empresa ou email..."
+                  placeholder="Buscar por nome, empresa ou email"
                   value={filtroNome}
                   onChange={(e) => setFiltroNome(e.target.value)}
-                  className="pl-10"
+                  className="search-input pl-10"
                 />
               </div>
             </div>
-            <div>
+            <div className="status-container w-full sm:w-auto">
               <Label htmlFor="filtro-status">Status</Label>
               <select
                 id="filtro-status"
@@ -560,21 +712,23 @@ const Clientes = () => {
           ) : (
             <>
               {/* Layout Mobile/Tablet - Cards */}
-              <div className="block xl:hidden space-y-4">
+              <div className="cards-container block lg:hidden space-y-4">
                 {clientesFiltrados.map((cliente) => (
-                  <div key={cliente.id} className="border rounded-lg p-4 bg-white shadow-sm">
+                  <div key={cliente.id} className="client-card border rounded-lg p-4 bg-white shadow-sm">
                     <div className="flex justify-between items-start mb-3">
-                      <div className="flex-1">
-                        <h3 className="font-semibold text-lg text-gray-900">{cliente.nome}</h3>
-                        <p className="text-sm text-gray-600 mt-1">{cliente.empresa}</p>
-                        <p className="text-sm text-gray-500">{cliente.email}</p>
+                      <div className="flex-1 min-w-0">
+                        <h3 className="font-semibold text-lg text-gray-900 truncate">{cliente.nome}</h3>
+                        <p className="text-sm text-gray-600 mt-1 truncate">{cliente.empresa}</p>
+                        <p className="text-sm text-gray-500 truncate">{cliente.email}</p>
                         {cliente.telefone && (
-                          <p className="text-sm text-gray-500">{cliente.telefone}</p>
+                          <p className="text-sm text-gray-500 truncate">{cliente.telefone}</p>
                         )}
                       </div>
-                      <div className="flex flex-col items-end gap-2">
-                        {getStatusBadge(cliente.status)}
-                        <span className="text-xs text-gray-500 bg-gray-100 px-2 py-1 rounded">
+                      <div className="flex flex-col items-end gap-2 ml-2 flex-shrink-0">
+                        <div className="status-badge">
+                          {getStatusBadge(cliente.status)}
+                        </div>
+                        <span className="projects-count text-xs text-gray-500 bg-gray-100 px-2 py-1 rounded whitespace-nowrap">
                           {cliente.projetos} projeto{cliente.projetos !== 1 ? 's' : ''}
                         </span>
                       </div>
@@ -584,7 +738,7 @@ const Clientes = () => {
                       <span className="text-xs text-gray-500">
                         Criado em {new Date(cliente.dataCriacao).toLocaleDateString('pt-BR')}
                       </span>
-                      <div className="flex gap-2">
+                      <div className="action-buttons flex gap-2">
                         <Button
                           variant="outline"
                           size="sm"
@@ -653,7 +807,7 @@ const Clientes = () => {
               </div>
 
               {/* Layout Desktop - Tabela */}
-              <div className="hidden md:block">
+              <div className="table-container hidden lg:block">
                 <Table>
                   <TableHeader>
                     <TableRow>
@@ -747,113 +901,7 @@ const Clientes = () => {
                 </Table>
               </div>
 
-              {/* Layout Mobile - Cards */}
-              <div className="md:hidden space-y-4">
-                {clientesFiltrados.map((cliente) => (
-                  <Card key={cliente.id} className="p-4">
-                    <div className="space-y-3">
-                      {/* Header do Card */}
-                      <div className="flex items-start justify-between">
-                        <div className="flex-1">
-                          <h3 className="font-semibold text-lg text-gray-900">{cliente.nome}</h3>
-                          <p className="text-sm text-gray-600">{cliente.empresa}</p>
-                        </div>
-                        <div className="ml-2">
-                          {getStatusBadge(cliente.status)}
-                        </div>
-                      </div>
 
-                      {/* Informações do Cliente */}
-                      <div className="space-y-2">
-                        <div className="flex items-center text-sm">
-                          <span className="font-medium text-gray-700 w-20">Email:</span>
-                          <span className="text-gray-600 break-all">{cliente.email}</span>
-                        </div>
-                        {cliente.telefone && (
-                          <div className="flex items-center text-sm">
-                            <span className="font-medium text-gray-700 w-20">Telefone:</span>
-                            <span className="text-gray-600">{cliente.telefone}</span>
-                          </div>
-                        )}
-                        <div className="flex items-center text-sm">
-                          <span className="font-medium text-gray-700 w-20">Projetos:</span>
-                          <span className="text-gray-600">{cliente.projetos}</span>
-                        </div>
-                        <div className="flex items-center text-sm">
-                          <span className="font-medium text-gray-700 w-20">Criado:</span>
-                          <span className="text-gray-600">{new Date(cliente.dataCriacao).toLocaleDateString('pt-BR')}</span>
-                        </div>
-                      </div>
-
-                      {/* Ações */}
-                      <div className="flex gap-2 pt-2 border-t">
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          onClick={() => {
-                            setClienteEditando({ ...cliente });
-                            setDialogEdicaoAberto(true);
-                          }}
-                          className="flex-1"
-                        >
-                          <Edit className="h-4 w-4 mr-2" />
-                          Editar
-                        </Button>
-                        {cliente.status === 'ativo' ? (
-                          <Button
-                            variant="outline"
-                            size="sm"
-                            onClick={() => handleAlterarStatus(cliente.id, 'suspenso')}
-                            className="flex-1 text-orange-600 border-orange-600 hover:bg-orange-50"
-                          >
-                            <UserX className="h-4 w-4 mr-2" />
-                            Suspender
-                          </Button>
-                        ) : (
-                          <Button
-                            variant="outline"
-                            size="sm"
-                            onClick={() => handleAlterarStatus(cliente.id, 'ativo')}
-                            className="flex-1 text-green-600 border-green-600 hover:bg-green-50"
-                          >
-                            <UserCheck className="h-4 w-4 mr-2" />
-                            Ativar
-                          </Button>
-                        )}
-                        <AlertDialog>
-                          <AlertDialogTrigger asChild>
-                            <Button
-                              variant="outline"
-                              size="sm"
-                              className="text-red-600 border-red-600 hover:bg-red-50"
-                            >
-                              <Trash2 className="h-4 w-4" />
-                            </Button>
-                          </AlertDialogTrigger>
-                          <AlertDialogContent>
-                            <AlertDialogHeader>
-                              <AlertDialogTitle>Tem certeza?</AlertDialogTitle>
-                              <AlertDialogDescription>
-                                Esta ação não pode ser desfeita. Isso irá deletar permanentemente o cliente
-                                e remover todos os dados associados.
-                              </AlertDialogDescription>
-                            </AlertDialogHeader>
-                            <AlertDialogFooter>
-                              <AlertDialogCancel>Cancelar</AlertDialogCancel>
-                              <AlertDialogAction
-                                onClick={() => handleDeletarCliente(cliente.id)}
-                                className="bg-red-600 hover:bg-red-700"
-                              >
-                                Deletar
-                              </AlertDialogAction>
-                            </AlertDialogFooter>
-                          </AlertDialogContent>
-                        </AlertDialog>
-                      </div>
-                    </div>
-                  </Card>
-                ))}
-              </div>
             </>
           )}
         </CardContent>
@@ -861,7 +909,7 @@ const Clientes = () => {
 
       {/* Modal de Edição */}
       <Dialog open={dialogEdicaoAberto} onOpenChange={setDialogEdicaoAberto}>
-        <DialogContent className="sm:max-w-[425px]">
+        <DialogContent className="sm:max-w-[425px] max-h-[90vh] overflow-y-auto mx-4 sm:mx-0">
           <DialogHeader>
             <DialogTitle>Editar Cliente</DialogTitle>
             <DialogDescription>

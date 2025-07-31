@@ -351,21 +351,22 @@ const Colaboradores = () => {
   };
 
   return (
-    <div className="container mx-auto p-6 space-y-6">
-      <div className="flex justify-between items-center">
-        <div>
-          <h1 className="text-3xl font-bold text-gray-900">Gerenciar Colaboradores</h1>
-          <p className="text-gray-600 mt-1">Gerencie todos os colaboradores da empresa</p>
+    <div className="space-y-4 sm:space-y-6">
+      {/* Header responsivo */}
+      <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-4">
+        <div className="flex-1 min-w-0">
+          <h1 className="text-2xl sm:text-3xl font-bold text-gray-900">Gerenciar Colaboradores</h1>
+          <p className="text-gray-600 mt-1 text-sm sm:text-base">Gerencie todos os colaboradores da empresa</p>
         </div>
         
         <Dialog open={dialogAberto} onOpenChange={setDialogAberto}>
           <DialogTrigger asChild>
-            <Button className="bg-versys-primary hover:bg-versys-secondary">
+            <Button className="bg-versys-primary hover:bg-versys-secondary w-full sm:w-auto">
               <Plus className="h-4 w-4 mr-2" />
               Novo Colaborador
             </Button>
           </DialogTrigger>
-          <DialogContent className="sm:max-w-[600px]">
+          <DialogContent className="sm:max-w-[600px] max-h-[90vh] overflow-y-auto">
             <DialogHeader>
               <DialogTitle>Criar Novo Colaborador</DialogTitle>
               <DialogDescription>
@@ -373,7 +374,7 @@ const Colaboradores = () => {
               </DialogDescription>
             </DialogHeader>
             <div className="grid gap-4 py-4">
-              <div className="grid grid-cols-2 gap-4">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div className="grid gap-2">
                   <Label htmlFor="nome">Nome *</Label>
                   <Input
@@ -392,10 +393,9 @@ const Colaboradores = () => {
                     onChange={(e) => setNovoColaborador({...novoColaborador, email: e.target.value})}
                     placeholder="exemplo@email.com"
                   />
-
                 </div>
               </div>
-              <div className="grid grid-cols-2 gap-4">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div className="grid gap-2">
                   <Label htmlFor="telefone">Telefone</Label>
                   <Input
@@ -424,7 +424,7 @@ const Colaboradores = () => {
               </div>
               <div className="grid gap-2">
                 <Label htmlFor="senha">Senha Temporária (Opcional)</Label>
-                <div className="flex gap-2">
+                <div className="flex flex-col sm:flex-row gap-2">
                   <div className="relative flex-1">
                     <Input
                       id="senha"
@@ -457,16 +457,15 @@ const Colaboradores = () => {
                     Gerar
                   </Button>
                 </div>
-
               </div>
             </div>
-            <DialogFooter>
-              <Button variant="outline" onClick={() => setDialogAberto(false)} disabled={criandoColaborador}>
+            <DialogFooter className="flex flex-col sm:flex-row gap-2">
+              <Button variant="outline" onClick={() => setDialogAberto(false)} disabled={criandoColaborador} className="w-full sm:w-auto">
                 Cancelar
               </Button>
               <Button 
                 onClick={handleCriarColaborador} 
-                className="bg-versys-primary hover:bg-versys-secondary"
+                className="bg-versys-primary hover:bg-versys-secondary w-full sm:w-auto"
                 disabled={criandoColaborador}
               >
                 {criandoColaborador ? "Criando..." : "Criar Colaborador"}
@@ -476,10 +475,10 @@ const Colaboradores = () => {
         </Dialog>
       </div>
 
-      {/* Filtros */}
+      {/* Filtros responsivos */}
       <Card>
         <CardContent className="p-4">
-          <div className="flex gap-4 items-end">
+          <div className="flex flex-col sm:flex-row gap-4 items-stretch sm:items-end">
             <div className="flex-1">
               <Label htmlFor="filtro-nome">Buscar</Label>
               <div className="relative">
@@ -493,10 +492,10 @@ const Colaboradores = () => {
                 />
               </div>
             </div>
-            <div>
+            <div className="w-full sm:w-auto">
               <Label htmlFor="filtro-status">Status</Label>
               <Select value={filtroStatus} onValueChange={setFiltroStatus}>
-                <SelectTrigger className="w-32">
+                <SelectTrigger className="w-full sm:w-32">
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
@@ -634,7 +633,7 @@ const Colaboradores = () => {
           </div>
 
           {/* Layout Mobile - Cards */}
-          <div className="md:hidden space-y-4">
+          <div className="md:hidden space-y-3">
             {loading ? (
               <div className="text-center py-8">
                 <p>Carregando colaboradores...</p>
@@ -653,11 +652,11 @@ const Colaboradores = () => {
                   <div className="space-y-3">
                     {/* Header do Card */}
                     <div className="flex items-start justify-between">
-                      <div className="flex-1">
-                        <h3 className="font-semibold text-lg text-gray-900">{colaborador.nome}</h3>
-                        <p className="text-sm text-gray-600">{colaborador.email}</p>
+                      <div className="flex-1 min-w-0">
+                        <h3 className="font-semibold text-lg text-gray-900 truncate">{colaborador.nome}</h3>
+                        <p className="text-sm text-gray-600 truncate">{colaborador.email}</p>
                       </div>
-                      <div className="ml-2">
+                      <div className="ml-2 flex-shrink-0">
                         {getStatusBadge(colaborador.status)}
                       </div>
                     </div>
@@ -674,18 +673,18 @@ const Colaboradores = () => {
                       </div>
                       {colaborador.telefone && (
                         <div className="flex items-center text-sm">
-                          <span className="font-medium text-gray-700 w-20">Telefone:</span>
-                          <span className="text-gray-600">{colaborador.telefone}</span>
+                          <span className="font-medium text-gray-700 w-20 flex-shrink-0">Telefone:</span>
+                          <span className="text-gray-600 truncate">{colaborador.telefone}</span>
                         </div>
                       )}
                       <div className="flex items-center text-sm">
-                        <span className="font-medium text-gray-700 w-20">Admissão:</span>
+                        <span className="font-medium text-gray-700 w-20 flex-shrink-0">Admissão:</span>
                         <span className="text-gray-600">{new Date(colaborador.dataAdmissao).toLocaleDateString('pt-BR')}</span>
                       </div>
                     </div>
 
                     {/* Ações */}
-                    <div className="flex gap-2 pt-2 border-t">
+                    <div className="flex flex-col sm:flex-row gap-2 pt-2 border-t">
                       <Button
                         variant="outline"
                         size="sm"
@@ -762,7 +761,7 @@ const Colaboradores = () => {
 
       {/* Modal de Edição */}
       <Dialog open={dialogEdicaoAberto} onOpenChange={setDialogEdicaoAberto}>
-        <DialogContent className="sm:max-w-[500px]">
+        <DialogContent className="sm:max-w-[500px] max-h-[90vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle>Editar Colaborador</DialogTitle>
             <DialogDescription>
@@ -771,7 +770,7 @@ const Colaboradores = () => {
           </DialogHeader>
           {colaboradorEditando && (
             <div className="grid gap-4 py-4">
-              <div className="grid grid-cols-2 gap-4">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div className="grid gap-2">
                   <Label htmlFor="edit-nome">Nome</Label>
                   <Input
@@ -790,7 +789,7 @@ const Colaboradores = () => {
                   />
                 </div>
               </div>
-              <div className="grid grid-cols-2 gap-4">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div className="grid gap-2">
                   <Label htmlFor="edit-telefone">Telefone</Label>
                   <Input
@@ -818,21 +817,19 @@ const Colaboradores = () => {
               </div>
             </div>
           )}
-          <DialogFooter>
+          <DialogFooter className="flex flex-col sm:flex-row gap-2">
             <Button variant="outline" onClick={() => {
               setColaboradorEditando(null);
               setDialogEdicaoAberto(false);
-            }}>
+            }} className="w-full sm:w-auto">
               Cancelar
             </Button>
-            <Button onClick={handleEditarColaborador} className="bg-versys-primary hover:bg-versys-secondary">
+            <Button onClick={handleEditarColaborador} className="bg-versys-primary hover:bg-versys-secondary w-full sm:w-auto">
               Salvar Alterações
             </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
-
-
     </div>
   );
 };

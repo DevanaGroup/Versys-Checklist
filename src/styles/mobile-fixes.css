@@ -1,0 +1,856 @@
+/* Correções específicas para layout mobile da página de clientes */
+
+/* Container principal */
+@media (max-width: 768px) {
+  .container {
+    padding-left: 0.75rem;
+    padding-right: 0.75rem;
+  }
+}
+
+/* Modal/Dialog responsivo para mobile */
+@media (max-width: 640px) {
+  /* Overlay do modal */
+  [data-radix-dialog-overlay] {
+    z-index: 9999 !important;
+    background-color: rgba(0, 0, 0, 0.8) !important;
+    backdrop-filter: blur(2px) !important;
+  }
+  
+  /* Melhorar área de toque do overlay */
+  [data-radix-dialog-overlay] {
+    cursor: pointer !important;
+  }
+  
+  /* FORÇAR MODAL FULLSCREEN - SEM MARGENS */
+  [data-radix-dialog-content] {
+    position: fixed !important;
+    top: 0 !important;
+    left: 0 !important;
+    right: 0 !important;
+    bottom: 0 !important;
+    width: 100vw !important;
+    height: 100vh !important;
+    max-width: none !important;
+    max-height: none !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    border-radius: 0 !important;
+    transform: none !important;
+    overflow-y: auto !important;
+    z-index: 10000 !important;
+    cursor: default !important;
+    display: flex !important;
+    flex-direction: column !important;
+    animation: slideInFromBottom 0.3s ease-out !important;
+    background: linear-gradient(135deg, #f8fafc 0%, #ffffff 100%) !important;
+    box-shadow: none !important;
+  }
+  
+  /* SOBRESCREVER TODAS AS CLASSES PADRÃO DO RADIX */
+  [data-radix-dialog-content].fixed {
+    position: fixed !important;
+    top: 0 !important;
+    left: 0 !important;
+    right: 0 !important;
+    bottom: 0 !important;
+    width: 100vw !important;
+    height: 100vh !important;
+    max-width: none !important;
+    max-height: none !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    border-radius: 0 !important;
+    transform: none !important;
+  }
+  
+  [data-radix-dialog-content].left-\[50\%\] {
+    left: 0 !important;
+  }
+  
+  [data-radix-dialog-content].top-\[50\%\] {
+    top: 0 !important;
+  }
+  
+  [data-radix-dialog-content].translate-x-\[-50\%\] {
+    transform: none !important;
+  }
+  
+  [data-radix-dialog-content].translate-y-\[-50\%\] {
+    transform: none !important;
+  }
+  
+  [data-radix-dialog-content].w-full {
+    width: 100vw !important;
+  }
+  
+  [data-radix-dialog-content].max-w-lg {
+    max-width: none !important;
+  }
+  
+  [data-radix-dialog-content].max-h-\[90vh\] {
+    max-height: none !important;
+  }
+  
+  [data-radix-dialog-content].mx-4 {
+    margin: 0 !important;
+  }
+  
+  [data-radix-dialog-content].sm\:mx-0 {
+    margin: 0 !important;
+  }
+  
+  [data-radix-dialog-content].sm\:rounded-lg {
+    border-radius: 0 !important;
+  }
+  
+  /* Header do modal */
+  [data-radix-dialog-content] > div:first-child {
+    flex-shrink: 0 !important;
+    padding: 1rem 1rem 0.5rem 1rem !important;
+    border-bottom: 1px solid #e5e7eb !important;
+    background: linear-gradient(135deg, #ffffff 0%, #f8fafc 100%) !important;
+    box-shadow: 0 1px 3px 0 rgba(0, 0, 0, 0.1) !important;
+  }
+  
+  /* Conteúdo principal do modal */
+  [data-radix-dialog-content] > div:nth-child(2) {
+    flex: 1 !important;
+    padding: 1rem !important;
+    overflow-y: auto !important;
+    -webkit-overflow-scrolling: touch !important;
+  }
+  
+  /* Footer do modal */
+  [data-radix-dialog-content] > div:last-child {
+    flex-shrink: 0 !important;
+    padding: 1rem !important;
+    border-top: 1px solid #e5e7eb !important;
+    background: linear-gradient(135deg, #f8fafc 0%, #ffffff 100%) !important;
+    box-shadow: 0 -1px 3px 0 rgba(0, 0, 0, 0.1) !important;
+  }
+  
+  /* Garantir que o modal fique acima do header */
+  [data-radix-dialog-content] {
+    margin-top: 0 !important;
+  }
+  
+  /* Melhorar espaçamento dos campos no modal */
+  [data-radix-dialog-content] .grid.gap-4 {
+    gap: 1.25rem !important;
+  }
+  
+  /* Ajustar botões do modal */
+  [data-radix-dialog-content] .flex.gap-2 {
+    gap: 0.75rem !important;
+  }
+  
+  /* Garantir que inputs tenham tamanho adequado no mobile */
+  [data-radix-dialog-content] input,
+  [data-radix-dialog-content] textarea {
+    font-size: 16px !important; /* Evita zoom no iOS */
+    padding: 0.75rem !important;
+    border-radius: 0.5rem !important;
+  }
+  
+  /* Melhorar botão de fechar do modal */
+  [data-radix-dialog-content] button[data-radix-dialog-close] {
+    position: absolute !important;
+    top: 1rem !important;
+    right: 1rem !important;
+    width: 2.5rem !important;
+    height: 2.5rem !important;
+    border-radius: 0.5rem !important;
+    background-color: rgba(0, 0, 0, 0.05) !important;
+    display: flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+    z-index: 10 !important;
+  }
+  
+  /* Melhorar área de toque dos botões do modal */
+  [data-radix-dialog-content] button {
+    min-height: 3rem !important;
+    padding: 0.75rem 1.5rem !important;
+    font-size: 1rem !important;
+    border-radius: 0.5rem !important;
+  }
+  
+  /* Garantir que o modal não seja cortado */
+  [data-radix-dialog-content] {
+    box-sizing: border-box !important;
+  }
+  
+  /* Melhorar scroll do modal */
+  [data-radix-dialog-content] {
+    -webkit-overflow-scrolling: touch !important;
+    scroll-behavior: smooth !important;
+  }
+  
+  /* Melhorar visibilidade dos labels */
+  [data-radix-dialog-content] label {
+    font-weight: 600 !important;
+    margin-bottom: 0.5rem !important;
+    font-size: 0.875rem !important;
+    color: #374151 !important;
+  }
+  
+  /* Ajustar espaçamento entre campos */
+  [data-radix-dialog-content] .grid.gap-4 > div {
+    margin-bottom: 0.75rem !important;
+  }
+  
+  /* Melhorar título do modal */
+  [data-radix-dialog-content] h2 {
+    font-size: 1.25rem !important;
+    font-weight: 700 !important;
+    margin-bottom: 0.5rem !important;
+  }
+  
+  /* Melhorar descrição do modal */
+  [data-radix-dialog-content] p {
+    font-size: 0.875rem !important;
+    color: #6b7280 !important;
+    line-height: 1.5 !important;
+  }
+  
+  /* Ajustar container dos campos */
+  [data-radix-dialog-content] .grid.gap-2 {
+    gap: 0.75rem !important;
+  }
+  
+  /* Melhorar campo de senha com botão gerar */
+  [data-radix-dialog-content] .flex.gap-2 > div:first-child {
+    flex: 1 !important;
+  }
+  
+  [data-radix-dialog-content] .flex.gap-2 > button {
+    flex-shrink: 0 !important;
+    min-width: 4rem !important;
+  }
+  
+  /* Melhorar texto de ajuda */
+  [data-radix-dialog-content] .text-xs {
+    font-size: 0.75rem !important;
+    color: #6b7280 !important;
+    margin-top: 0.5rem !important;
+    line-height: 1.4 !important;
+  }
+  
+  /* Garantir que o modal não seja cortado */
+  [data-radix-dialog-content] {
+    box-sizing: border-box !important;
+  }
+  
+  /* Melhorar scroll do modal */
+  [data-radix-dialog-content] {
+    -webkit-overflow-scrolling: touch !important;
+    scroll-behavior: smooth !important;
+  }
+  
+  /* Melhorar foco nos inputs */
+  [data-radix-dialog-content] input:focus,
+  [data-radix-dialog-content] textarea:focus {
+    border-color: #3b82f6 !important;
+    box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1) !important;
+    outline: none !important;
+    scroll-margin-top: 2rem !important;
+  }
+  
+  /* Melhorar hover nos botões */
+  [data-radix-dialog-content] button:hover {
+    transform: translateY(-1px) !important;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15) !important;
+  }
+  
+  /* Melhorar botão de fechar no hover */
+  [data-radix-dialog-content] button[data-radix-dialog-close]:hover {
+    background-color: rgba(0, 0, 0, 0.1) !important;
+    transform: scale(1.1) !important;
+  }
+  
+  /* Melhorar experiência quando teclado virtual aparece */
+  @media (max-height: 600px) {
+    [data-radix-dialog-content] {
+      height: 100vh !important;
+      overflow-y: auto !important;
+    }
+    
+    [data-radix-dialog-content] > div:nth-child(2) {
+      padding-bottom: 2rem !important;
+    }
+  }
+  
+  /* Ajustar para telas muito pequenas */
+  @media (max-height: 500px) {
+    [data-radix-dialog-content] {
+      height: 100vh !important;
+    }
+    
+    [data-radix-dialog-content] > div:first-child {
+      padding: 0.75rem 1rem 0.5rem 1rem !important;
+    }
+    
+    [data-radix-dialog-content] > div:nth-child(2) {
+      padding: 0.75rem 1rem !important;
+    }
+    
+    [data-radix-dialog-content] > div:last-child {
+      padding: 0.75rem 1rem !important;
+    }
+  }
+  
+  /* Melhorar campos obrigatórios */
+  [data-radix-dialog-content] label:has(+ input[required])::after,
+  [data-radix-dialog-content] label:has(+ textarea[required])::after {
+    content: " *" !important;
+    color: #ef4444 !important;
+    font-weight: 700 !important;
+  }
+  
+  /* Melhorar feedback visual dos campos */
+  [data-radix-dialog-content] input:valid,
+  [data-radix-dialog-content] textarea:valid {
+    border-color: #10b981 !important;
+  }
+  
+  [data-radix-dialog-content] input:invalid:not(:placeholder-shown),
+  [data-radix-dialog-content] textarea:invalid:not(:placeholder-shown) {
+    border-color: #ef4444 !important;
+  }
+  
+  /* Animação de entrada do modal */
+  @keyframes slideInFromBottom {
+    from {
+      transform: translateY(100%) !important;
+      opacity: 0 !important;
+    }
+    to {
+      transform: translateY(0) !important;
+      opacity: 1 !important;
+    }
+  }
+  
+  /* Melhorar transições */
+  [data-radix-dialog-content] {
+    transition: all 0.3s ease-out !important;
+  }
+  
+  /* FORÇAR FULLSCREEN - ESTILOS MAIS AGRESSIVOS */
+  @media (max-width: 640px) {
+    /* Sobrescrever TODAS as propriedades de posicionamento */
+    div[role="dialog"][data-radix-dialog-content] {
+      position: fixed !important;
+      top: 0 !important;
+      left: 0 !important;
+      right: 0 !important;
+      bottom: 0 !important;
+      width: 100vw !important;
+      height: 100vh !important;
+      max-width: none !important;
+      max-height: none !important;
+      margin: 0 !important;
+      padding: 0 !important;
+      border-radius: 0 !important;
+      transform: none !important;
+      overflow-y: auto !important;
+      z-index: 10000 !important;
+      display: flex !important;
+      flex-direction: column !important;
+      background: linear-gradient(135deg, #f8fafc 0%, #ffffff 100%) !important;
+      box-shadow: none !important;
+      animation: slideInFromBottom 0.3s ease-out !important;
+    }
+    
+    /* Sobrescrever classes específicas do Tailwind */
+    div[role="dialog"][data-radix-dialog-content].fixed {
+      position: fixed !important;
+      top: 0 !important;
+      left: 0 !important;
+      right: 0 !important;
+      bottom: 0 !important;
+      width: 100vw !important;
+      height: 100vh !important;
+      max-width: none !important;
+      max-height: none !important;
+      margin: 0 !important;
+      padding: 0 !important;
+      border-radius: 0 !important;
+      transform: none !important;
+    }
+    
+    div[role="dialog"][data-radix-dialog-content].left-\[50\%\] {
+      left: 0 !important;
+    }
+    
+    div[role="dialog"][data-radix-dialog-content].top-\[50\%\] {
+      top: 0 !important;
+    }
+    
+    div[role="dialog"][data-radix-dialog-content].translate-x-\[-50\%\] {
+      transform: none !important;
+    }
+    
+    div[role="dialog"][data-radix-dialog-content].translate-y-\[-50\%\] {
+      transform: none !important;
+    }
+    
+    div[role="dialog"][data-radix-dialog-content].w-full {
+      width: 100vw !important;
+    }
+    
+    div[role="dialog"][data-radix-dialog-content].max-w-lg {
+      max-width: none !important;
+    }
+    
+    div[role="dialog"][data-radix-dialog-content].max-h-\[90vh\] {
+      max-height: none !important;
+    }
+    
+    div[role="dialog"][data-radix-dialog-content].mx-4 {
+      margin: 0 !important;
+    }
+    
+    div[role="dialog"][data-radix-dialog-content].sm\:mx-0 {
+      margin: 0 !important;
+    }
+    
+    div[role="dialog"][data-radix-dialog-content].sm\:rounded-lg {
+      border-radius: 0 !important;
+    }
+    
+    /* Estrutura interna do modal */
+    div[role="dialog"][data-radix-dialog-content] > div:first-child {
+      flex-shrink: 0 !important;
+      padding: 1rem 1rem 0.5rem 1rem !important;
+      border-bottom: 1px solid #e5e7eb !important;
+      background: linear-gradient(135deg, #ffffff 0%, #f8fafc 100%) !important;
+      box-shadow: 0 1px 3px 0 rgba(0, 0, 0, 0.1) !important;
+    }
+    
+    div[role="dialog"][data-radix-dialog-content] > div:nth-child(2) {
+      flex: 1 !important;
+      padding: 1rem !important;
+      overflow-y: auto !important;
+      -webkit-overflow-scrolling: touch !important;
+    }
+    
+    div[role="dialog"][data-radix-dialog-content] > div:last-child {
+      flex-shrink: 0 !important;
+      padding: 1rem !important;
+      border-top: 1px solid #e5e7eb !important;
+      background: linear-gradient(135deg, #f8fafc 0%, #ffffff 100%) !important;
+      box-shadow: 0 -1px 3px 0 rgba(0, 0, 0, 0.1) !important;
+    }
+    
+    /* REMOVER TODOS OS PADDINGS E MARGINS DO MODAL */
+    div[role="dialog"][data-radix-dialog-content] {
+      padding: 0 !important;
+      margin: 0 !important;
+    }
+    
+    /* REMOVER PADDING DO CONTAINER PRINCIPAL */
+    div[role="dialog"][data-radix-dialog-content] > div {
+      padding: 0 !important;
+      margin: 0 !important;
+    }
+    
+    /* GARANTIR QUE O MODAL OCUPE TODA A TELA */
+    div[role="dialog"][data-radix-dialog-content] {
+      inset: 0 !important;
+      width: 100vw !important;
+      height: 100vh !important;
+      max-width: 100vw !important;
+      max-height: 100vh !important;
+      min-width: 100vw !important;
+      min-height: 100vh !important;
+    }
+    
+    /* SOBRESCREVER QUALQUER PADDING DO COMPONENTE DIALOG */
+    div[role="dialog"][data-radix-dialog-content].p-6 {
+      padding: 0 !important;
+    }
+    
+    /* REMOVER QUALQUER GAP */
+    div[role="dialog"][data-radix-dialog-content].gap-4 {
+      gap: 0 !important;
+    }
+    
+    /* GARANTIR QUE O MODAL SEJA REALMENTE FULLSCREEN */
+    div[role="dialog"][data-radix-dialog-content] {
+      position: fixed !important;
+      top: 0 !important;
+      left: 0 !important;
+      right: 0 !important;
+      bottom: 0 !important;
+      width: 100vw !important;
+      height: 100vh !important;
+      max-width: none !important;
+      max-height: none !important;
+      margin: 0 !important;
+      padding: 0 !important;
+      border-radius: 0 !important;
+      transform: none !important;
+      overflow-y: auto !important;
+      z-index: 10000 !important;
+      display: flex !important;
+      flex-direction: column !important;
+      background: linear-gradient(135deg, #f8fafc 0%, #ffffff 100%) !important;
+      box-shadow: none !important;
+      animation: slideInFromBottom 0.3s ease-out !important;
+    }
+  }
+}
+
+/* Garantir que o header da aplicação seja visível */
+@media (max-width: 640px) {
+  /* Header da aplicação */
+  header {
+    z-index: 100 !important;
+    position: sticky !important;
+    top: 0 !important;
+  }
+  
+  /* Sidebar */
+  [data-radix-sidebar] {
+    z-index: 200 !important;
+  }
+  
+  /* Trigger do sidebar */
+  [data-radix-sidebar-trigger] {
+    z-index: 150 !important;
+  }
+  
+  /* Melhorar experiência quando teclado virtual aparece */
+  @media (max-height: 600px) {
+    [data-radix-dialog-content] {
+      max-height: calc(100vh - 1rem) !important;
+      top: 1rem !important;
+      transform: translate(-50%, 0) !important;
+    }
+  }
+  
+  /* Ajustar posicionamento do modal em telas muito pequenas */
+  @media (max-height: 500px) {
+    [data-radix-dialog-content] {
+      position: absolute !important;
+      top: 0.5rem !important;
+      transform: translate(-50%, 0) !important;
+      max-height: calc(100vh - 1rem) !important;
+    }
+  }
+}
+
+/* Cards de clientes no mobile */
+@media (max-width: 1024px) {
+  .client-card {
+    margin-bottom: 1rem;
+    border-radius: 0.75rem;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+  }
+  
+  .client-card .flex-1 {
+    min-width: 0;
+    overflow: hidden;
+  }
+  
+  .client-card h3,
+  .client-card p {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  
+  .client-card .badge {
+    flex-shrink: 0;
+  }
+}
+
+/* Campo de busca */
+@media (max-width: 640px) {
+  .search-input {
+    font-size: 16px; /* Evita zoom no iOS */
+  }
+  
+  .search-input::placeholder {
+    font-size: 14px;
+  }
+}
+
+/* Botões de ação */
+@media (max-width: 1024px) {
+  .action-buttons {
+    gap: 0.5rem;
+  }
+  
+  .action-buttons button {
+    min-width: 2rem;
+    height: 2rem;
+    padding: 0;
+  }
+}
+
+/* Status badge */
+.status-badge {
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+
+/* Projetos count */
+.projects-count {
+  white-space: nowrap;
+  flex-shrink: 0;
+  font-size: 0.75rem;
+}
+
+/* Header responsivo */
+@media (max-width: 640px) {
+  .page-header {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 1rem;
+  }
+  
+  .page-header h1 {
+    font-size: 1.5rem;
+    line-height: 2rem;
+  }
+  
+  .page-header .button-container {
+    width: 100%;
+  }
+  
+  .page-header button {
+    width: 100%;
+  }
+}
+
+/* Filtros responsivos */
+@media (max-width: 640px) {
+  .filters-container {
+    flex-direction: column;
+    gap: 1rem;
+  }
+  
+  .filters-container .search-container {
+    width: 100%;
+  }
+  
+  .filters-container .status-container {
+    width: 100%;
+  }
+}
+
+/* Tabela responsiva */
+@media (max-width: 1024px) {
+  .table-container {
+    display: none;
+  }
+}
+
+/* Cards responsivos */
+@media (min-width: 1025px) {
+  .cards-container {
+    display: none;
+  }
+} 
+
+/* Estilos específicos para a página de Colaboradores no mobile */
+@media (max-width: 768px) {
+  /* Melhorar layout dos cards de colaboradores */
+  .md\\:hidden .card {
+    border-radius: 0.75rem;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+    margin-bottom: 0.75rem;
+    padding: 1rem;
+  }
+  
+  /* Ajustar botões de ação nos cards */
+  .md\\:hidden .flex.flex-col.sm\\:flex-row.gap-2 {
+    gap: 0.5rem;
+  }
+  
+  /* Melhorar layout dos filtros */
+  .flex.flex-col.sm\\:flex-row.gap-4 {
+    gap: 1rem;
+  }
+  
+  /* Ajustar largura do select de status */
+  .w-full.sm\\:w-32 {
+    width: 100%;
+  }
+  
+  /* Melhorar espaçamento do header */
+  .flex.flex-col.sm\\:flex-row.sm\\:justify-between.sm\\:items-center.gap-4 {
+    gap: 1rem;
+  }
+  
+  /* Ajustar botão "Novo Colaborador" */
+  .w-full.sm\\:w-auto {
+    width: 100%;
+  }
+  
+  /* Melhorar layout dos modais */
+  [data-radix-dialog-content] {
+    margin: 1rem;
+    max-height: calc(100vh - 2rem);
+    overflow-y: auto;
+  }
+  
+  /* Ajustar grid dos formulários nos modais */
+  .grid.grid-cols-1.sm\\:grid-cols-2.gap-4 {
+    grid-template-columns: 1fr;
+    gap: 1rem;
+  }
+  
+  /* Melhorar layout dos campos de senha */
+  .flex.flex-col.sm\\:flex-row.gap-2 {
+    gap: 0.75rem;
+  }
+  
+  /* Ajustar footer dos modais */
+  .flex.flex-col.sm\\:flex-row.gap-2 {
+    gap: 0.75rem;
+  }
+}
+
+/* Ajustes específicos para telas muito pequenas */
+@media (max-width: 480px) {
+  /* Reduzir padding dos cards */
+  .md\\:hidden .card.p-4 {
+    padding: 0.75rem;
+  }
+  
+  /* Ajustar tamanho dos textos */
+  .md\\:hidden .font-semibold.text-lg {
+    font-size: 1.125rem;
+  }
+  
+  /* Melhorar espaçamento dos badges */
+  .md\\:hidden .flex.items-center.gap-2 {
+    gap: 0.5rem;
+  }
+  
+  /* Ajustar largura dos labels nos cards */
+  .md\\:hidden .w-20.flex-shrink-0 {
+    width: 4rem;
+  }
+  
+  /* Melhorar layout dos botões de ação */
+  .md\\:hidden .flex.flex-col.sm\\:flex-row.gap-2 {
+    flex-direction: column;
+  }
+  
+  /* Ajustar tamanho dos ícones nos botões */
+  .md\\:hidden .h-4.w-4 {
+    width: 1rem;
+    height: 1rem;
+  }
+}
+
+/* Melhorar experiência de scroll nos modais */
+@media (max-width: 640px) {
+  [data-radix-dialog-content] {
+    -webkit-overflow-scrolling: touch;
+    scroll-behavior: smooth;
+  }
+  
+  /* Ajustar altura máxima dos modais */
+  .max-h-\\[90vh\\] {
+    max-height: calc(100vh - 2rem);
+  }
+  
+  /* Melhorar padding dos modais */
+  [data-radix-dialog-content] .p-4 {
+    padding: 1rem;
+  }
+  
+  /* Ajustar espaçamento dos campos nos modais */
+  .grid.gap-4.py-4 {
+    gap: 1rem;
+    padding: 1rem 0;
+  }
+}
+
+/* Garantir que os inputs não quebrem o layout */
+@media (max-width: 640px) {
+  input[type="email"],
+  input[type="text"],
+  input[type="password"] {
+    font-size: 16px; /* Evita zoom no iOS */
+    min-height: 44px; /* Melhora acessibilidade */
+  }
+  
+  /* Ajustar tamanho dos selects */
+  [data-radix-select-trigger] {
+    min-height: 44px;
+  }
+  
+  /* Melhorar espaçamento dos labels */
+  label {
+    margin-bottom: 0.25rem;
+  }
+}
+
+/* Otimizar para tablets */
+@media (min-width: 641px) and (max-width: 1024px) {
+  /* Ajustar layout dos cards para tablets */
+  .md\\:hidden .card {
+    padding: 1.25rem;
+  }
+  
+  /* Melhorar grid dos formulários */
+  .grid.grid-cols-1.sm\\:grid-cols-2.gap-4 {
+    grid-template-columns: repeat(2, 1fr);
+  }
+  
+  /* Ajustar botões para tablets */
+  .w-full.sm\\:w-auto {
+    width: auto;
+  }
+}
+
+/* Melhorar acessibilidade dos botões */
+@media (max-width: 640px) {
+  button {
+    min-height: 44px;
+    min-width: 44px;
+  }
+  
+  /* Ajustar botões pequenos */
+  button[data-variant="outline"][data-size="sm"] {
+    min-height: 36px;
+    min-width: 36px;
+  }
+}
+
+/* Garantir que os badges não quebrem o layout */
+@media (max-width: 640px) {
+  .badge {
+    font-size: 0.75rem;
+    padding: 0.25rem 0.5rem;
+    white-space: nowrap;
+  }
+}
+
+/* Melhorar layout dos filtros em telas pequenas */
+@media (max-width: 640px) {
+  .search-input {
+    font-size: 16px;
+  }
+  
+  .search-input::placeholder {
+    font-size: 16px;
+  }
+}
+
+@media (max-width: 1024px) {
+  .action-buttons {
+    flex-wrap: wrap;
+  }
+  
+  .action-buttons button {
+    flex: 1;
+    min-width: 120px;
+  }
+}
