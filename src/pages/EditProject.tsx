@@ -7,7 +7,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
-import { Plus, X, ArrowLeft, ChevronDown, ChevronRight, Save, ArrowRight, CheckCircle } from "lucide-react";
+import { Plus, X, ArrowLeft, ChevronDown, ChevronRight, Save, ArrowRight, CheckCircle, Download } from "lucide-react";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog";
 import { useNavigate, useParams } from "react-router-dom";
 import { toast } from "sonner";
@@ -18,6 +18,7 @@ import { Badge } from "@/components/ui/badge";
 import { Textarea } from "@/components/ui/textarea";
 import { RelatorioService } from '@/lib/relatorioService';
 import { useAuthContext } from '@/contexts/AuthContext';
+import { PDFService, PDFProjectData } from '@/lib/pdfService';
 
 interface SubItem {
   id: string;
@@ -216,6 +217,8 @@ const EditProject = () => {
   const [loadingProject, setLoadingProject] = useState(true);
   const [savingProject, setSavingProject] = useState(false);
   const [draggedItem, setDraggedItem] = useState<Omit<SelectedItem, 'subItems' | 'isExpanded'> | null>(null);
+  const [showDownloadButton, setShowDownloadButton] = useState(false);
+  const [generatingPDF, setGeneratingPDF] = useState(false);
 
   const steps = [
     { id: 1, title: "Informações Básicas", description: "Nome e Cliente" },
@@ -627,13 +630,45 @@ const EditProject = () => {
       }
       
       toast.success("Projeto atualizado com sucesso!");
-      navigate("/projetos");
+      // Mostrar botão de download após salvar
+      setShowDownloadButton(true);
       
     } catch (error) {
       console.error('Erro ao atualizar projeto:', error);
       toast.error("Erro ao atualizar projeto. Tente novamente.");
     } finally {
       setSavingProject(false);
+    }
+  };
+
+  const generatePDF = async () => {
+    if (!projectId) return;
+    
+    setGeneratingPDF(true);
+    try {
+      // Buscar dados atualizados do projeto
+      const projectDoc = await getDoc(doc(db, "projetos", projectId));
+      if (!projectDoc.exists()) {
+        toast.error('Projeto não encontrado');
+        return;
+      }
+
+      const projectData = projectDoc.data();
+      const clienteData = projectData.cliente || null;
+      
+      const pdfData: PDFProjectData = {
+        nome: projectData.nome,
+        cliente: clienteData,
+        customAccordions: projectData.customAccordions || []
+      };
+      
+      await PDFService.generateProjectPDF(pdfData);
+      toast.success('PDF gerado com sucesso!');
+    } catch (error) {
+      console.error('Erro ao gerar PDF:', error);
+      toast.error('Erro ao gerar PDF');
+    } finally {
+      setGeneratingPDF(false);
     }
   };
 
@@ -1389,6 +1424,22 @@ const EditProject = () => {
           )}
         </div>
       </div>
+
+      {/* Botão de Download PDF - aparece após salvar */}
+      {showDownloadButton && (
+        <div className="bg-white border-t p-4">
+          <div className="flex justify-center">
+            <Button
+              onClick={generatePDF}
+              disabled={generatingPDF}
+              className="bg-green-600 hover:bg-green-700 text-white flex items-center space-x-2"
+            >
+              <Download size={16} />
+              <span>{generatingPDF ? 'Gerando PDF...' : 'Download PDF'}</span>
+            </Button>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

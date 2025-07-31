@@ -12,11 +12,12 @@ import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, 
 import { toast } from "sonner";
 import { db } from "@/lib/firebase";
 import { doc, getDoc, updateDoc } from "firebase/firestore";
-import { ArrowLeft, ArrowRight, CheckCircle, Camera, ThumbsUp, ThumbsDown, Clock, XCircle, AlertTriangle, Eye, ZoomIn, X, Mic, MicOff } from "lucide-react";
+import { ArrowLeft, ArrowRight, CheckCircle, Camera, ThumbsUp, ThumbsDown, Clock, XCircle, AlertTriangle, Eye, ZoomIn, X, Mic, MicOff, Download } from "lucide-react";
 // Removido import do Transformers.js - usando Web Speech API nativa
 import { getStorage, ref, uploadBytes, getDownloadURL } from "firebase/storage";
 import { RelatorioService } from '@/lib/relatorioService';
 import { useAuthContext } from '@/contexts/AuthContext';
+import { PDFService, PDFProjectData } from '@/lib/pdfService';
 
 interface SubItem {
   id: string;
@@ -98,6 +99,8 @@ const ProjectWrite = () => {
   const [isRecording, setIsRecording] = useState<Record<string, boolean>>({});
   const [isTranscribing, setIsTranscribing] = useState<Record<string, boolean>>({});
   const [imageModalOpen, setImageModalOpen] = useState(false);
+  const [showDownloadButton, setShowDownloadButton] = useState(false);
+  const [generatingPDF, setGeneratingPDF] = useState(false);
   const [currentView, setCurrentView] = useState<'evaluation' | 'adequacy'>('evaluation');
 
   // Adicione o estado para controlar a aba ativa de cada subitem
@@ -469,6 +472,8 @@ const ProjectWrite = () => {
       toast.success('Formulário salvo com sucesso!');
       // Fechar o diálogo de confirmação
       setShowSaveConfirmation(false);
+      // Mostrar botão de download
+      setShowDownloadButton(true);
     } catch (error) {
       toast.error('Erro ao salvar formulário');
     } finally {
@@ -478,6 +483,27 @@ const ProjectWrite = () => {
 
   const handleSaveClick = () => {
     setShowSaveConfirmation(true);
+  };
+
+  const generatePDF = async () => {
+    if (!projectDetails) return;
+    
+    setGeneratingPDF(true);
+    try {
+      const pdfData: PDFProjectData = {
+        nome: projectDetails.nome,
+        cliente: projectDetails.cliente,
+        customAccordions: projectDetails.customAccordions || []
+      };
+      
+      await PDFService.generateProjectPDF(pdfData);
+      toast.success('PDF gerado com sucesso!');
+    } catch (error) {
+      console.error('Erro ao gerar PDF:', error);
+      toast.error('Erro ao gerar PDF');
+    } finally {
+      setGeneratingPDF(false);
+    }
   };
 
   // Função para calcular progresso do projeto
@@ -1145,33 +1171,47 @@ const ProjectWrite = () => {
               <AlertDialogContent>
                 <AlertDialogHeader>
                   <AlertDialogTitle>Confirmar Salvamento</AlertDialogTitle>
-                  <AlertDialogDescription>
-                    Tem certeza que deseja salvar todas as alterações do formulário? 
-                    Esta ação salvará todos os dados preenchidos e não poderá ser desfeita.
-                  </AlertDialogDescription>
-                </AlertDialogHeader>
-                <AlertDialogFooter>
-                  <AlertDialogCancel>Cancelar</AlertDialogCancel>
-                  <AlertDialogAction onClick={handleSave} disabled={saving}>
-                    {saving ? 'Salvando...' : 'Confirmar Salvamento'}
-                  </AlertDialogAction>
-                </AlertDialogFooter>
-              </AlertDialogContent>
-            </AlertDialog>
-          ) : (
-            <Button
-              onClick={() => {
-                setCurrentStep(prev => Math.min(totalSteps - 1, prev + 1));
-                setActiveTabs({}); // Resetar todas as abas para visualização ao navegar
-              }}
-              className="flex items-center space-x-2"
-            >
-              <span>Próximo</span>
-              <ArrowRight size={16} />
-            </Button>
-          )}
-        </div>
-      )}
+                <AlertDialogDescription>
+                  Tem certeza que deseja salvar todas as alterações do formulário? 
+                  Esta ação salvará todos os dados preenchidos e não poderá ser desfeita.
+                </AlertDialogDescription>
+              </AlertDialogHeader>
+              <AlertDialogFooter>
+                <AlertDialogCancel>Cancelar</AlertDialogCancel>
+                <AlertDialogAction onClick={handleSave} disabled={saving}>
+                  {saving ? 'Salvando...' : 'Confirmar Salvamento'}
+                </AlertDialogAction>
+              </AlertDialogFooter>
+            </AlertDialogContent>
+          </AlertDialog>
+        ) : (
+          <Button
+            onClick={() => {
+              setCurrentStep(prev => Math.min(totalSteps - 1, prev + 1));
+              setActiveTabs({}); // Resetar todas as abas para visualização ao navegar
+            }}
+            className="flex items-center space-x-2"
+          >
+            <span>Próximo</span>
+            <ArrowRight size={16} />
+          </Button>
+        )}
+      </div>
+    )}
+
+    {/* Botão de Download PDF - aparece após salvar */}
+    {showDownloadButton && (
+      <div className="flex justify-center pt-4 border-t border-gray-100">
+        <Button
+          onClick={generatePDF}
+          disabled={generatingPDF}
+          className="bg-green-600 hover:bg-green-700 text-white flex items-center space-x-2"
+        >
+          <Download size={16} />
+          <span>{generatingPDF ? 'Gerando PDF...' : 'Download PDF'}</span>
+        </Button>
+      </div>
+    )}
 
       {/* Modal de Imagem */}
       {imageModalOpen && selectedImage && (
