@@ -26,6 +26,20 @@ const ProjectReports = () => {
   // Log essencial apenas
   if (relatorios.length > 0) {
     console.log('📊 Relatórios carregados:', relatorios.length);
+    // Debug: verificar se há dados vazios
+    const emptyData = relatorios.filter(item => 
+      !item.category || !item.itemTitle || !item.local || !item.responsible
+    );
+    if (emptyData.length > 0) {
+      console.warn('⚠️ Dados vazios detectados:', emptyData.length, 'itens com campos vazios');
+      console.warn('⚠️ Detalhes dos dados vazios:', emptyData.map(item => ({
+        id: item.id,
+        category: item.category,
+        itemTitle: item.itemTitle,
+        local: item.local,
+        responsible: item.responsible
+      })));
+    }
   }
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
@@ -388,7 +402,7 @@ const ProjectReports = () => {
       setFilteredData(allRelatorios);
       
       // Extrair e ordenar categorias
-      const uniqueCategories = Array.from(new Set(allRelatorios.map(item => item.category)));
+      const uniqueCategories = Array.from(new Set(allRelatorios.map(item => item.category).filter(cat => cat && cat.trim() !== '')));
       const sortedCategories = uniqueCategories.sort((a, b) => {
         // Ordem específica das categorias
         const categoryOrder = [
@@ -397,7 +411,8 @@ const ProjectReports = () => {
           'PLANO DE SEGURANÇA PORTUÁRIA (PSP)',
           'SEGURANÇA',
           'COMUNICAÇÕES E TECNOLOGIA DA INFORMAÇÃO (TI)',
-          '6.1 - Descrever detalhadamente'
+          '6.1 - Descrever detalhadamente',
+          'OUTROS ITENS JULGADOS NECESSÁRIOS'
         ];
         
         const aIndex = categoryOrder.indexOf(a);
@@ -415,8 +430,16 @@ const ProjectReports = () => {
       });
       setCategories(sortedCategories);
       
+      // Debug: verificar se há valores vazios nos arrays
+      console.log('🔍 DEBUG - Arrays populados:', {
+        categories: sortedCategories,
+        articles: uniqueArticles,
+        locals: uniqueLocals,
+        responsibles: uniqueResponsibles
+      });
+      
       // Extrair e ordenar artigos
-      const uniqueArticles = Array.from(new Set(allRelatorios.map(item => item.itemTitle)));
+      const uniqueArticles = Array.from(new Set(allRelatorios.map(item => item.itemTitle).filter(title => title && title.trim() !== '')));
       const sortedArticles = uniqueArticles.sort((a, b) => {
         // Extrair números dos artigos (ex: "1.1", "1.2", "2.1")
         const parseArticleNumber = (title: string) => {
@@ -436,11 +459,11 @@ const ProjectReports = () => {
       setArticles(sortedArticles);
       
       // Extrair locais
-      const uniqueLocals = Array.from(new Set(allRelatorios.map(item => item.local)));
+      const uniqueLocals = Array.from(new Set(allRelatorios.map(item => item.local).filter(local => local && local.trim() !== '')));
       setLocals(uniqueLocals);
       
       // Extrair responsáveis
-      const uniqueResponsibles = Array.from(new Set(allRelatorios.map(item => item.responsible).filter(Boolean)));
+      const uniqueResponsibles = Array.from(new Set(allRelatorios.map(item => item.responsible).filter(resp => resp && resp.trim() !== '')));
       setResponsibles(uniqueResponsibles);
       
       // Mostrar mensagem de sucesso com detalhes
@@ -777,7 +800,7 @@ const ProjectReports = () => {
         setFilteredData(sortedData);
         
         // Extrair e ordenar categorias
-        const uniqueCategories = Array.from(new Set(sortedData.map(item => item.category)));
+        const uniqueCategories = Array.from(new Set(sortedData.map(item => item.category).filter(cat => cat && cat.trim() !== '')));
         const sortedCategories = uniqueCategories.sort((a, b) => {
           // Ordem específica das categorias
           const categoryOrder = [
@@ -786,7 +809,8 @@ const ProjectReports = () => {
             'PLANO DE SEGURANÇA PORTUÁRIA (PSP)',
             'SEGURANÇA',
             'COMUNICAÇÕES E TECNOLOGIA DA INFORMAÇÃO (TI)',
-            '6.1 - Descrever detalhadamente'
+            '6.1 - Descrever detalhadamente',
+            'OUTROS ITENS JULGADOS NECESSÁRIOS'
           ];
           
           const aIndex = categoryOrder.indexOf(a);
@@ -804,8 +828,16 @@ const ProjectReports = () => {
         });
         setCategories(sortedCategories);
         
+        // Debug: verificar se há valores vazios nos arrays
+        console.log('🔍 DEBUG - Arrays populados (segunda parte):', {
+          categories: sortedCategories,
+          articles: uniqueArticles,
+          locals: uniqueLocals,
+          responsibles: uniqueResponsibles
+        });
+        
         // Extrair e ordenar artigos
-        const uniqueArticles = Array.from(new Set(sortedData.map(item => item.itemTitle)));
+        const uniqueArticles = Array.from(new Set(sortedData.map(item => item.itemTitle).filter(title => title && title.trim() !== '')));
         const sortedArticles = uniqueArticles.sort((a, b) => {
           // Extrair números dos artigos (ex: "1.1", "1.2", "2.1")
           const parseArticleNumber = (title: string) => {
@@ -825,11 +857,11 @@ const ProjectReports = () => {
         setArticles(sortedArticles);
         
         // Extrair locais
-        const uniqueLocals = Array.from(new Set(sortedData.map(item => item.local)));
+        const uniqueLocals = Array.from(new Set(sortedData.map(item => item.local).filter(local => local && local.trim() !== '')));
         setLocals(uniqueLocals);
         
         // Extrair responsáveis
-        const uniqueResponsibles = Array.from(new Set(sortedData.map(item => item.responsible).filter(Boolean)));
+        const uniqueResponsibles = Array.from(new Set(sortedData.map(item => item.responsible).filter(resp => resp && resp.trim() !== '')));
         setResponsibles(uniqueResponsibles);
         
               // Sincronizar novos itens do projeto
@@ -1023,9 +1055,22 @@ const ProjectReports = () => {
   const getValue = (item: RelatorioItem, field: keyof RelatorioItem) => {
     const localValue = localChanges[item.id]?.[field];
     const originalValue = item[field];
-    const finalValue = localValue ?? originalValue ?? '';
+    const finalValue = localValue ?? originalValue;
     
-    return finalValue;
+    // Para campos específicos, garantir valores padrão
+    if (field === 'adequacyStatus' && (!finalValue || finalValue === '')) {
+      return 'pending';
+    }
+    if (field === 'status' && (!finalValue || finalValue === '')) {
+      return 'pending';
+    }
+    
+    // Debug: verificar se há valores vazios sendo retornados
+    if (finalValue === '' || finalValue === null || finalValue === undefined) {
+      console.warn(`⚠️ Valor vazio detectado para campo ${field} no item ${item.id}:`, finalValue);
+    }
+    
+    return finalValue ?? '';
   };
 
   // Função para validar se cliente pode alterar adequacyStatus
@@ -1816,9 +1861,11 @@ const ProjectReports = () => {
                 </SelectTrigger>
                 <SelectContent>
                   <SelectItem value="all">Todas as categorias</SelectItem>
-                  {categories.map(category => (
+                  {categories.filter(cat => cat && cat.trim() !== '').length > 0 ? categories.filter(cat => cat && cat.trim() !== '').map(category => (
                     <SelectItem key={category} value={category}>{category}</SelectItem>
-                  ))}
+                  )) : (
+                    <SelectItem value="no-categories" disabled>Nenhuma categoria disponível</SelectItem>
+                  )}
                 </SelectContent>
               </Select>
             </div>
@@ -1831,7 +1878,7 @@ const ProjectReports = () => {
                 </SelectTrigger>
                 <SelectContent>
                   <SelectItem value="all">Todos os status</SelectItem>
-                  {statuses.map(status => (
+                  {statuses.filter(status => status && status.trim() !== '').map(status => (
                     <SelectItem key={status} value={status}>
                       {status === 'pending' ? 'Pendente' :
                        status === 'in_progress' ? 'Em Andamento' :
@@ -1850,9 +1897,11 @@ const ProjectReports = () => {
                 </SelectTrigger>
                 <SelectContent>
                   <SelectItem value="all">Todos os artigos</SelectItem>
-                  {articles.map(article => (
+                  {articles.filter(article => article && article.trim() !== '').length > 0 ? articles.filter(article => article && article.trim() !== '').map(article => (
                     <SelectItem key={article} value={article}>{article}</SelectItem>
-                  ))}
+                  )) : (
+                    <SelectItem value="no-articles" disabled>Nenhum artigo disponível</SelectItem>
+                  )}
                 </SelectContent>
               </Select>
             </div>
@@ -1865,9 +1914,11 @@ const ProjectReports = () => {
                 </SelectTrigger>
                 <SelectContent>
                   <SelectItem value="all">Todos os locais</SelectItem>
-                  {locals.map(local => (
+                  {locals.filter(local => local && local.trim() !== '').length > 0 ? locals.filter(local => local && local.trim() !== '').map(local => (
                     <SelectItem key={local} value={local}>{local}</SelectItem>
-                  ))}
+                  )) : (
+                    <SelectItem value="no-locals" disabled>Nenhum local disponível</SelectItem>
+                  )}
                 </SelectContent>
               </Select>
             </div>
@@ -1880,9 +1931,11 @@ const ProjectReports = () => {
                 </SelectTrigger>
                 <SelectContent>
                   <SelectItem value="all">Todos os responsáveis</SelectItem>
-                  {responsibles.map(responsible => (
+                  {responsibles.filter(resp => resp && resp.trim() !== '').length > 0 ? responsibles.filter(resp => resp && resp.trim() !== '').map(responsible => (
                     <SelectItem key={responsible} value={responsible}>{responsible}</SelectItem>
-                  ))}
+                  )) : (
+                    <SelectItem value="no-responsibles" disabled>Nenhum responsável disponível</SelectItem>
+                  )}
                 </SelectContent>
               </Select>
             </div>
@@ -2134,7 +2187,7 @@ const ProjectReports = () => {
                         {userData?.type === 'client' ? (
                           <div className="space-y-1">
                             <Select 
-                              value={getValue(item, 'status') as string || 'pending'} 
+                              value={String(getValue(item, 'status') || 'pending')} 
                               onValueChange={(value) => updateLocalValue(item.id, 'status', value)}
                             >
                               <SelectTrigger className="w-full h-8 text-sm border-gray-200 focus:border-blue-400">
@@ -2297,7 +2350,7 @@ const ProjectReports = () => {
                                 </Badge>
                                 {/* Seletor de Status de Adequação para Cliente */}
                                 <Select 
-                                  value={getValue(item, 'adequacyStatus') as string || 'pending'} 
+                                  value={String(getValue(item, 'adequacyStatus') || 'pending')} 
                                   onValueChange={(value) => updateLocalValue(item.id, 'adequacyStatus', value)}
                                   disabled={!canChangeAdequacyStatus(item)}
                                 >
