@@ -31,11 +31,17 @@ const ProjectReports = () => {
   const [searchTerm, setSearchTerm] = useState('');
   const [categoryFilter, setCategoryFilter] = useState('all');
   const [statusFilter, setStatusFilter] = useState('all');
+  const [articleFilter, setArticleFilter] = useState('all');
+  const [localFilter, setLocalFilter] = useState('all');
+  const [responsibleFilter, setResponsibleFilter] = useState('all');
   const [projectId, setProjectId] = useState<string | null>(null);
 
   // Estados para filtros únicos
   const [categories, setCategories] = useState<string[]>([]);
   const [statuses] = useState(['pending', 'in_progress', 'completed']);
+  const [articles, setArticles] = useState<string[]>([]);
+  const [locals, setLocals] = useState<string[]>([]);
+  const [responsibles, setResponsibles] = useState<string[]>([]);
   
   // Estado para controlar execuções simultâneas e evitar duplicação
   const [isCreatingRelatorios, setIsCreatingRelatorios] = useState(false);
@@ -64,7 +70,7 @@ const ProjectReports = () => {
 
   useEffect(() => {
     applyFilters();
-  }, [relatorios, searchTerm, categoryFilter, statusFilter]);
+  }, [relatorios, searchTerm, categoryFilter, statusFilter, articleFilter, localFilter, responsibleFilter]);
 
   // Carregar relatórios da coleção 'relatorios'
   const loadFromRelatoriosCollection = async (projectId: string): Promise<RelatorioItem[] | null> => {
@@ -223,7 +229,7 @@ const ProjectReports = () => {
                     itemTitle: item.title,
                     subItemId: subItem.id,
                     subItemTitle: subItem.title,
-                    local: subItem.local || 'Local não informado',
+                    local: subItem.location || 'Local não informado',
                     currentSituation: subItem.currentSituation || '',
                     clientGuidance: subItem.clientGuidance || '',
                     responsible: subItem.responsible || '',
@@ -381,9 +387,61 @@ const ProjectReports = () => {
       setRelatorios(allRelatorios);
       setFilteredData(allRelatorios);
       
-      // Extrair categorias
+      // Extrair e ordenar categorias
       const uniqueCategories = Array.from(new Set(allRelatorios.map(item => item.category)));
-      setCategories(uniqueCategories);
+      const sortedCategories = uniqueCategories.sort((a, b) => {
+        // Ordem específica das categorias
+        const categoryOrder = [
+          'DOCUMENTAÇÃO PRELIMINAR',
+          'ESTUDO DE AVALIAÇÃO DE RISCOS (EAR)',
+          'PLANO DE SEGURANÇA PORTUÁRIA (PSP)',
+          'SEGURANÇA',
+          'COMUNICAÇÕES E TECNOLOGIA DA INFORMAÇÃO (TI)',
+          '6.1 - Descrever detalhadamente'
+        ];
+        
+        const aIndex = categoryOrder.indexOf(a);
+        const bIndex = categoryOrder.indexOf(b);
+        
+        // Se ambos estão na lista de ordem, usar a ordem definida
+        if (aIndex !== -1 && bIndex !== -1) {
+          return aIndex - bIndex;
+        }
+        // Se apenas um está na lista, priorizar o que está na lista
+        if (aIndex !== -1) return -1;
+        if (bIndex !== -1) return 1;
+        // Se nenhum está na lista, ordenar alfabeticamente
+        return a.localeCompare(b);
+      });
+      setCategories(sortedCategories);
+      
+      // Extrair e ordenar artigos
+      const uniqueArticles = Array.from(new Set(allRelatorios.map(item => item.itemTitle)));
+      const sortedArticles = uniqueArticles.sort((a, b) => {
+        // Extrair números dos artigos (ex: "1.1", "1.2", "2.1")
+        const parseArticleNumber = (title: string) => {
+          const match = title.match(/^(\d+)\.(\d+)/);
+          if (match) {
+            return [parseInt(match[1]), parseInt(match[2])];
+          }
+          return [0, 0];
+        };
+        
+        const [aMain, aSub] = parseArticleNumber(a);
+        const [bMain, bSub] = parseArticleNumber(b);
+        
+        if (aMain !== bMain) return aMain - bMain;
+        return aSub - bSub;
+      });
+      setArticles(sortedArticles);
+      
+      // Extrair locais
+      const uniqueLocals = Array.from(new Set(allRelatorios.map(item => item.local)));
+      setLocals(uniqueLocals);
+      
+      // Extrair responsáveis
+      const uniqueResponsibles = Array.from(new Set(allRelatorios.map(item => item.responsible).filter(Boolean)));
+      setResponsibles(uniqueResponsibles);
       
       // Mostrar mensagem de sucesso com detalhes
       if (newItemsCount > 0 && updatedItemsCount > 0) {
@@ -452,7 +510,7 @@ const ProjectReports = () => {
                       itemTitle: item.title,
                       subItemId: subItem.id,
                       subItemTitle: subItem.title,
-                      local: subItem.local || 'Local não informado',
+                      local: subItem.location || 'Local não informado',
                       currentSituation: subItem.currentSituation || '',
                       clientGuidance: subItem.clientGuidance || '',
                       responsible: subItem.responsible || '',
@@ -510,6 +568,112 @@ const ProjectReports = () => {
     } catch (error) {
       console.error('❌ SYNC: Erro ao sincronizar:', error);
       toast.error('Erro ao sincronizar novos itens');
+    }
+  };
+
+  // Atualizar dados existentes com informações do projeto
+  const updateExistingRelatoriosFromProject = async (projectId: string, existingRelatorios: RelatorioItem[]) => {
+    try {
+      console.log('🔄 UPDATE: Atualizando dados existentes com informações do projeto...');
+      
+      const { doc, getDoc, updateDoc } = await import('firebase/firestore');
+      
+      // 1. Buscar dados atuais do projeto
+      const projectRef = doc(db, 'projetos', projectId);
+      const projectSnap = await getDoc(projectRef);
+      
+      if (!projectSnap.exists()) {
+        console.log('❌ UPDATE: Projeto não encontrado');
+        return;
+      }
+      
+      const projectData = projectSnap.data();
+      
+      // 2. Criar mapa dos dados do projeto por subItemId
+      const projectDataMap = new Map<string, any>();
+      
+      if (projectData.customAccordions) {
+        for (const accordion of projectData.customAccordions) {
+          if (accordion.items) {
+            for (const item of accordion.items) {
+              if (item.subItems) {
+                for (const subItem of item.subItems) {
+                  projectDataMap.set(subItem.id, {
+                    location: subItem.location || '',
+                    currentSituation: subItem.currentSituation || '',
+                    clientGuidance: subItem.clientGuidance || '',
+                    evaluation: subItem.evaluation || '',
+                    photos: Array.isArray(subItem.photos) 
+                      ? subItem.photos.map(photo => typeof photo === 'string' ? photo : (photo as any)?.url || '')
+                      : []
+                  });
+                }
+              }
+            }
+          }
+        }
+      }
+      
+      // 3. Atualizar relatórios existentes
+      let updatedCount = 0;
+      
+      for (const relatorio of existingRelatorios) {
+        const projectSubItem = projectDataMap.get(relatorio.subItemId);
+        
+        if (projectSubItem) {
+          // Verificar se há diferenças que precisam ser atualizadas
+          const needsUpdate = 
+            relatorio.local !== projectSubItem.location ||
+            relatorio.currentSituation !== projectSubItem.currentSituation ||
+            relatorio.clientGuidance !== projectSubItem.clientGuidance ||
+            relatorio.evaluation !== projectSubItem.evaluation ||
+            JSON.stringify(relatorio.photos) !== JSON.stringify(projectSubItem.photos);
+          
+          if (needsUpdate) {
+            console.log(`🔄 UPDATE: Atualizando relatório ${relatorio.id} (${relatorio.subItemTitle})`);
+            
+            const updateData = {
+              local: projectSubItem.location,
+              currentSituation: projectSubItem.currentSituation,
+              clientGuidance: projectSubItem.clientGuidance,
+              evaluation: projectSubItem.evaluation,
+              photos: projectSubItem.photos,
+              updatedAt: new Date().toISOString(),
+              updatedBy: userData?.uid || ''
+            };
+            
+            try {
+              const docRef = doc(db, 'relatorios', relatorio.id);
+              await updateDoc(docRef, updateData);
+              updatedCount++;
+              
+              // Atualizar também o estado local
+              setRelatorios(prev => prev.map(item => 
+                item.id === relatorio.id 
+                  ? { ...item, ...updateData }
+                  : item
+              ));
+              setFilteredData(prev => prev.map(item => 
+                item.id === relatorio.id 
+                  ? { ...item, ...updateData }
+                  : item
+              ));
+            } catch (error) {
+              console.error(`❌ UPDATE: Erro ao atualizar relatório ${relatorio.id}:`, error);
+            }
+          }
+        }
+      }
+      
+      if (updatedCount > 0) {
+        console.log(`✅ UPDATE: ${updatedCount} relatórios atualizados com dados do projeto`);
+        toast.success(`${updatedCount} relatórios atualizados com dados do projeto!`);
+      } else {
+        console.log('✅ UPDATE: Nenhum relatório precisava ser atualizado');
+      }
+      
+    } catch (error) {
+      console.error('❌ UPDATE: Erro ao atualizar relatórios existentes:', error);
     }
   };
 
@@ -612,13 +776,68 @@ const ProjectReports = () => {
         setRelatorios(sortedData);
         setFilteredData(sortedData);
         
-        // Extrair categorias
+        // Extrair e ordenar categorias
         const uniqueCategories = Array.from(new Set(sortedData.map(item => item.category)));
-        setCategories(uniqueCategories);
+        const sortedCategories = uniqueCategories.sort((a, b) => {
+          // Ordem específica das categorias
+          const categoryOrder = [
+            'DOCUMENTAÇÃO PRELIMINAR',
+            'ESTUDO DE AVALIAÇÃO DE RISCOS (EAR)',
+            'PLANO DE SEGURANÇA PORTUÁRIA (PSP)',
+            'SEGURANÇA',
+            'COMUNICAÇÕES E TECNOLOGIA DA INFORMAÇÃO (TI)',
+            '6.1 - Descrever detalhadamente'
+          ];
+          
+          const aIndex = categoryOrder.indexOf(a);
+          const bIndex = categoryOrder.indexOf(b);
+          
+          // Se ambos estão na lista de ordem, usar a ordem definida
+          if (aIndex !== -1 && bIndex !== -1) {
+            return aIndex - bIndex;
+          }
+          // Se apenas um está na lista, priorizar o que está na lista
+          if (aIndex !== -1) return -1;
+          if (bIndex !== -1) return 1;
+          // Se nenhum está na lista, ordenar alfabeticamente
+          return a.localeCompare(b);
+        });
+        setCategories(sortedCategories);
         
-        // Sincronizar novos itens do projeto
-        await syncNewItemsFromProject(projectId, sortedData);
-        return;
+        // Extrair e ordenar artigos
+        const uniqueArticles = Array.from(new Set(sortedData.map(item => item.itemTitle)));
+        const sortedArticles = uniqueArticles.sort((a, b) => {
+          // Extrair números dos artigos (ex: "1.1", "1.2", "2.1")
+          const parseArticleNumber = (title: string) => {
+            const match = title.match(/^(\d+)\.(\d+)/);
+            if (match) {
+              return [parseInt(match[1]), parseInt(match[2])];
+            }
+            return [0, 0];
+          };
+          
+          const [aMain, aSub] = parseArticleNumber(a);
+          const [bMain, bSub] = parseArticleNumber(b);
+          
+          if (aMain !== bMain) return aMain - bMain;
+          return aSub - bSub;
+        });
+        setArticles(sortedArticles);
+        
+        // Extrair locais
+        const uniqueLocals = Array.from(new Set(sortedData.map(item => item.local)));
+        setLocals(uniqueLocals);
+        
+        // Extrair responsáveis
+        const uniqueResponsibles = Array.from(new Set(sortedData.map(item => item.responsible).filter(Boolean)));
+        setResponsibles(uniqueResponsibles);
+        
+              // Sincronizar novos itens do projeto
+      await syncNewItemsFromProject(projectId, sortedData);
+      
+      // Atualizar dados existentes com informações do projeto
+      await updateExistingRelatoriosFromProject(projectId, sortedData);
+      return;
       }
       
       // Se não há dados existentes, criar novos
@@ -636,9 +855,34 @@ const ProjectReports = () => {
   // Função para ordenar os dados na ordem correta
   const sortRelatorios = (data: RelatorioItem[]) => {
     return [...data].sort((a, b) => {
-      // 1. Ordenar por categoria (alfabeticamente)
-      const categoryCompare = a.category.localeCompare(b.category);
-      if (categoryCompare !== 0) return categoryCompare;
+      // 1. Ordenar por categoria (ordem específica)
+      const categoryOrder = [
+        'DOCUMENTAÇÃO PRELIMINAR',
+        'ESTUDO DE AVALIAÇÃO DE RISCOS (EAR)',
+        'PLANO DE SEGURANÇA PORTUÁRIA (PSP)',
+        'SEGURANÇA',
+        'COMUNICAÇÕES E TECNOLOGIA DA INFORMAÇÃO (TI)',
+        '6.1 - Descrever detalhadamente',
+        'OUTROS ITENS JULGADOS NECESSÁRIOS'
+      ];
+      
+      const aCategoryIndex = categoryOrder.indexOf(a.category);
+      const bCategoryIndex = categoryOrder.indexOf(b.category);
+      
+      // Se ambos estão na lista de ordem, usar a ordem definida
+      if (aCategoryIndex !== -1 && bCategoryIndex !== -1) {
+        if (aCategoryIndex !== bCategoryIndex) {
+          return aCategoryIndex - bCategoryIndex;
+        }
+      } else if (aCategoryIndex !== -1) {
+        return -1; // a vem primeiro
+      } else if (bCategoryIndex !== -1) {
+        return 1; // b vem primeiro
+      } else {
+        // Se nenhum está na lista, ordenar alfabeticamente
+        const categoryCompare = a.category.localeCompare(b.category);
+        if (categoryCompare !== 0) return categoryCompare;
+      }
       
       // 2. Ordenar por artigo (numericamente: 1.1, 1.2, 1.3, etc.)
       const parseArticle = (article: string) => {
@@ -690,6 +934,21 @@ const ProjectReports = () => {
     // Filtro de status
     if (statusFilter !== 'all') {
       filtered = filtered.filter(item => item.status === statusFilter);
+    }
+
+    // Filtro de artigo
+    if (articleFilter !== 'all') {
+      filtered = filtered.filter(item => item.itemTitle === articleFilter);
+    }
+
+    // Filtro de local
+    if (localFilter !== 'all') {
+      filtered = filtered.filter(item => item.local === localFilter);
+    }
+
+    // Filtro de responsável
+    if (responsibleFilter !== 'all') {
+      filtered = filtered.filter(item => item.responsible === responsibleFilter);
     }
 
     // Aplicar ordenação
@@ -1119,58 +1378,203 @@ const ProjectReports = () => {
     }
   };
 
+  // Função para formatar data no formato dd/mm/aaaa
+  const formatDate = (dateString: string) => {
+    if (!dateString) return '';
+    
+    // Remove todos os caracteres não numéricos
+    const numbers = dateString.replace(/\D/g, '');
+    
+    // Se não tem números, retorna vazio
+    if (numbers.length === 0) return '';
+    
+    // Se tem menos de 8 dígitos, formata progressivamente
+    if (numbers.length <= 2) {
+      return numbers;
+    } else if (numbers.length <= 4) {
+      return `${numbers.substring(0, 2)}/${numbers.substring(2)}`;
+    } else if (numbers.length <= 8) {
+      return `${numbers.substring(0, 2)}/${numbers.substring(2, 4)}/${numbers.substring(4, 8)}`;
+    } else {
+      // Se tem mais de 8 dígitos, pega apenas os primeiros 8
+      return `${numbers.substring(0, 2)}/${numbers.substring(2, 4)}/${numbers.substring(4, 8)}`;
+    }
+  };
+
+  // Função para validar formato de data
+  const validateDate = (dateString: string) => {
+    if (!dateString) return true;
+    
+    // Verifica se tem o formato básico dd/mm/aaaa
+    const regex = /^(0[1-9]|[12][0-9]|3[01])\/(0[1-9]|1[0-2])\/\d{4}$/;
+    if (!regex.test(dateString)) return false;
+    
+    // Validação adicional: verifica se a data é válida
+    const parts = dateString.split('/');
+    const day = parseInt(parts[0]);
+    const month = parseInt(parts[1]);
+    const year = parseInt(parts[2]);
+    
+    // Verifica se o ano é razoável (entre 1900 e 2100)
+    if (year < 1900 || year > 2100) return false;
+    
+    // Verifica se o mês é válido
+    if (month < 1 || month > 12) return false;
+    
+    // Verifica se o dia é válido para o mês
+    const daysInMonth = new Date(year, month, 0).getDate();
+    if (day < 1 || day > daysInMonth) return false;
+    
+    return true;
+  };
+
+  // Função para converter data de outros formatos para dd/mm/aaaa
+  const convertToDateFormat = (dateString: string) => {
+    if (!dateString) return '';
+    
+    // Se já está no formato correto, retorna como está
+    if (validateDate(dateString)) return dateString;
+    
+    // Tenta converter de diferentes formatos
+    try {
+      // Tenta converter de ISO string (2024-01-15)
+      if (dateString.includes('-')) {
+        const date = new Date(dateString);
+        if (!isNaN(date.getTime())) {
+          const day = String(date.getDate()).padStart(2, '0');
+          const month = String(date.getMonth() + 1).padStart(2, '0');
+          const year = date.getFullYear();
+          return `${day}/${month}/${year}`;
+        }
+      }
+      
+      // Tenta converter de outros formatos com barras
+      if (dateString.includes('/')) {
+        const parts = dateString.split('/');
+        if (parts.length === 3) {
+          // Se está no formato mm/dd/yyyy, converte para dd/mm/yyyy
+          if (parts[0].length === 2 && parts[1].length === 2 && parts[2].length === 4) {
+            const month = parts[0];
+            const day = parts[1];
+            const year = parts[2];
+            return `${day}/${month}/${year}`;
+          }
+        }
+      }
+    } catch (error) {
+      console.error('Erro ao converter data:', error);
+    }
+    
+    // Se não conseguiu converter, retorna como está
+    return dateString;
+  };
+
   const exportToCSV = () => {
+    console.log('📊 Iniciando exportação CSV...');
+    console.log('📊 Dados filtrados:', filteredData.length, 'itens');
+    
     if (filteredData.length === 0) {
       toast.error('Nenhum dado para exportar');
       return;
     }
 
+    // Função para escapar caracteres especiais no CSV
+    const escapeCSV = (text: string) => {
+      if (!text) return '';
+      // Remove quebras de linha e substitui aspas duplas
+      return text.replace(/"/g, '""').replace(/\n/g, ' ').replace(/\r/g, ' ');
+    };
+
     const headers = [
-      'Projeto',
-      'Cliente',
       'Categoria',
+      'Artigo',
       'Item',
       'Local',
-      'Situação Atual',
-      'Orientação',
-      'Responsável',
+      'Situacao Atual',
+      'Orientacao',
+      'Fotos',
+      'Responsavel',
       'Status',
-      'Avaliação',
+      'Avaliacao',
       'O que foi alterado',
       'Prazo para tratar',
-      'Adequação Reportada',
-      'Status da Adequação'
+      'Adequacao'
     ];
 
     const csvContent = [
       headers.join(','),
-      ...filteredData.map(item => [
-        `"${item.projectName}"`,
-        `"${item.clientName}"`,
-        `"${item.category}"`,
-        `"${item.subItemTitle}"`,
-        `"${item.local}"`,
-        `"${item.currentSituation}"`,
-        `"${item.clientGuidance}"`,
-        `"${item.responsible || ''}"`,
-        `"${item.status}"`,
-        `"${item.evaluation}"`,
-        `"${item.changesDescription || ''}"`,
-        `"${item.treatmentDeadline || ''}"`,
-        `"${item.adequacyReported ? 'Sim' : 'Não'}"`,
-        `"${item.adequacyStatus || ''}"`
-      ].join(','))
+      ...filteredData.map((item, index) => {
+        console.log(`📊 Processando item ${index + 1}:`, item);
+        
+        // Preparar dados das fotos
+        const photosInfo = item.photos && item.photos.length > 0 
+          ? `${item.photos.length} foto(s)` 
+          : 'Sem fotos';
+        
+        // Preparar dados da adequação
+        let adequacyInfo = '';
+        if (item.adequacyReported) {
+          adequacyInfo = `Reportada - ${item.adequacyStatus || 'Pendente'}`;
+          if (item.adequacyDetails) {
+            adequacyInfo += ` - ${item.adequacyDetails}`;
+          }
+        } else {
+          adequacyInfo = 'Nao reportada';
+        }
+
+        const row = [
+          `"${escapeCSV(item.category || '')}"`,
+          `"${escapeCSV(item.itemTitle || '')}"`,
+          `"${escapeCSV(item.subItemTitle || '')}"`,
+          `"${escapeCSV(item.local || '')}"`,
+          `"${escapeCSV(item.currentSituation || '')}"`,
+          `"${escapeCSV(item.clientGuidance || '')}"`,
+          `"${escapeCSV(photosInfo)}"`,
+          `"${escapeCSV(item.responsible || '')}"`,
+          `"${escapeCSV(item.status || '')}"`,
+          `"${escapeCSV(item.evaluation || '')}"`,
+          `"${escapeCSV(item.changesDescription || '')}"`,
+          `"${escapeCSV(item.treatmentDeadline || '')}"`,
+          `"${escapeCSV(adequacyInfo)}"`
+        ].join(',');
+        
+        console.log(`📊 Linha ${index + 1} gerada:`, row);
+        return row;
+      })
     ].join('\n');
 
-    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+    // Adicionar BOM para UTF-8
+    const BOM = '\uFEFF';
+    const csvWithBOM = BOM + csvContent;
+
+    console.log('📊 CSV gerado com sucesso');
+    console.log('📊 Tamanho do CSV:', csvWithBOM.length, 'caracteres');
+    console.log('📊 Primeiras linhas:', csvWithBOM.split('\n').slice(0, 3));
+
+    const blob = new Blob([csvWithBOM], { type: 'text/csv;charset=utf-8;' });
     const link = document.createElement('a');
     const url = URL.createObjectURL(blob);
     link.setAttribute('href', url);
     link.setAttribute('download', `relatorio_${projectId || 'geral'}_${new Date().toISOString().split('T')[0]}.csv`);
     link.style.visibility = 'hidden';
     document.body.appendChild(link);
-    link.click();
+    
+    console.log('📊 Link criado:', url);
+    console.log('📊 Nome do arquivo:', `relatorio_${projectId || 'geral'}_${new Date().toISOString().split('T')[0]}.csv`);
+    
+    try {
+      link.click();
+      console.log('📊 Click executado com sucesso');
+    } catch (error) {
+      console.error('📊 Erro ao executar click:', error);
+      toast.error('Erro ao baixar arquivo');
+      return;
+    }
+    
     document.body.removeChild(link);
+    
+    console.log('📊 Download iniciado');
+    toast.success('Relatório exportado com sucesso!');
   };
 
   const getStatusBadge = (status: string) => {
@@ -1393,7 +1797,7 @@ const ProjectReports = () => {
           <CardTitle>Filtros</CardTitle>
         </CardHeader>
         <CardContent>
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
             <div>
               <Label htmlFor="search">Buscar</Label>
               <Input
@@ -1433,6 +1837,51 @@ const ProjectReports = () => {
                        status === 'in_progress' ? 'Em Andamento' :
                        status === 'completed' ? 'Concluído' : status}
                     </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            
+            <div>
+              <Label htmlFor="article">Artigo</Label>
+              <Select value={articleFilter} onValueChange={setArticleFilter}>
+                <SelectTrigger>
+                  <SelectValue placeholder="Todos os artigos" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">Todos os artigos</SelectItem>
+                  {articles.map(article => (
+                    <SelectItem key={article} value={article}>{article}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            
+            <div>
+              <Label htmlFor="local">Local</Label>
+              <Select value={localFilter} onValueChange={setLocalFilter}>
+                <SelectTrigger>
+                  <SelectValue placeholder="Todos os locais" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">Todos os locais</SelectItem>
+                  {locals.map(local => (
+                    <SelectItem key={local} value={local}>{local}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            
+            <div>
+              <Label htmlFor="responsible">Responsável</Label>
+              <Select value={responsibleFilter} onValueChange={setResponsibleFilter}>
+                <SelectTrigger>
+                  <SelectValue placeholder="Todos os responsáveis" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">Todos os responsáveis</SelectItem>
+                  {responsibles.map(responsible => (
+                    <SelectItem key={responsible} value={responsible}>{responsible}</SelectItem>
                   ))}
                 </SelectContent>
               </Select>
@@ -1510,7 +1959,7 @@ const ProjectReports = () => {
                 variant="outline"
                 size="sm"
                 className="w-8 h-8 p-0"
-                disabled={relatorios.length === 0}
+                disabled={filteredData.length === 0}
                 title="Exportar CSV"
               >
                 <Download size={16} />
@@ -1730,15 +2179,49 @@ const ProjectReports = () => {
                       </TableCell>
                       <TableCell className="min-w-40">
                         {userData?.type === 'client' ? (
-                          <Input
-                            type="text"
-                            value={String(getValue(item, 'treatmentDeadline') || '')}
-                            onChange={(e) => updateLocalValue(item.id, 'treatmentDeadline', e.target.value)}
-                            placeholder="Ex: 15/01/2024"
-                            className="w-full h-8 text-sm border-gray-200 focus:border-blue-400"
-                          />
+                          <div className="space-y-1">
+                            <Input
+                              type="text"
+                              value={String(getValue(item, 'treatmentDeadline') || '')}
+                              onChange={(e) => {
+                                const value = e.target.value;
+                                const formatted = formatDate(value);
+                                updateLocalValue(item.id, 'treatmentDeadline', formatted);
+                              }}
+                              onBlur={(e) => {
+                                const value = e.target.value;
+                                if (value && !validateDate(value)) {
+                                  toast.error('Formato de data inválido. Use dd/mm/aaaa');
+                                } else if (value) {
+                                  // Converte para o formato correto se necessário
+                                  const converted = convertToDateFormat(value);
+                                  if (converted !== value) {
+                                    updateLocalValue(item.id, 'treatmentDeadline', converted);
+                                  }
+                                }
+                              }}
+                              placeholder="dd/mm/aaaa"
+                              maxLength={10}
+                              className={`w-full h-8 text-sm border-gray-200 focus:border-blue-400 ${
+                                getValue(item, 'treatmentDeadline') && !validateDate(String(getValue(item, 'treatmentDeadline'))) 
+                                  ? 'border-red-500' 
+                                  : ''
+                              }`}
+                            />
+                            {getValue(item, 'treatmentDeadline') && !validateDate(String(getValue(item, 'treatmentDeadline'))) && (
+                              <p className="text-xs text-red-500">Formato inválido</p>
+                            )}
+                          </div>
                         ) : (
-                          item.treatmentDeadline || '-'
+                          <div className="text-sm">
+                            {(() => {
+                              const deadline = getValue(item, 'treatmentDeadline');
+                              if (!deadline) return '-';
+                              
+                              const converted = convertToDateFormat(String(deadline));
+                              return validateDate(converted) ? converted : String(deadline);
+                            })()}
+                          </div>
                         )}
                       </TableCell>
                       <TableCell className="min-w-48">
