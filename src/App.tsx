@@ -24,6 +24,7 @@ import Colaboradores from "./pages/Colaboradores";
 import ColaboradorFirstLogin from "./pages/ColaboradorFirstLogin";
 import ClienteFirstLogin from "./pages/ClienteFirstLogin";
 import Presets from "./pages/Presets";
+import Itens from "./pages/Itens";
 import ProjectWrite from "./pages/ProjectWrite";
 import ProjectView from "./pages/ProjectView";
 import ProjectMap from "./pages/ProjectMap";
@@ -121,6 +122,13 @@ const App = () => (
               </ProtectedRoute>
             }>
               <Route index element={<Presets />} />
+            </Route>
+            <Route path="/itens" element={
+              <ProtectedRoute requiredType="admin">
+                <DashboardLayout />
+              </ProtectedRoute>
+            }>
+              <Route index element={<Itens />} />
             </Route>
             <Route path="/clientes" element={
               <ProtectedRoute requiredType="admin">

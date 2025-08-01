@@ -1,4 +1,4 @@
-import { Home, FolderOpen, FileText, Settings, LogOut, User, Users, UserCheck, CheckSquare } from "lucide-react";
+import { Home, FolderOpen, FileText, Settings, LogOut, User, Users, UserCheck, CheckSquare, Package, ClipboardList } from "lucide-react";
 import { NavLink, useNavigate, useLocation } from "react-router-dom";
 import { Sidebar, SidebarContent, SidebarGroup, SidebarGroupContent, SidebarGroupLabel, SidebarMenu, SidebarMenuButton, SidebarMenuItem, SidebarHeader, SidebarFooter, useSidebar } from "@/components/ui/sidebar";
 import { Separator } from "@/components/ui/separator";
@@ -22,6 +22,14 @@ const adminMenuItems = [{
   title: "Presets",
   url: "/presets",
   icon: CheckSquare
+}, {
+  title: "Itens",
+  url: "/itens",
+  icon: Package
+}, {
+  title: "Checklist",
+  url: "/checklist",
+  icon: ClipboardList
 }, {
   title: "Clientes",
   url: "/clientes",
