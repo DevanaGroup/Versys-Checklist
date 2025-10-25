@@ -8,7 +8,8 @@ import { cn } from "@/lib/utils"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Separator } from "@/components/ui/separator"
-import { Sheet, SheetContent } from "@/components/ui/sheet"
+import { Sheet, SheetContent, SheetPortal, SheetOverlay } from "@/components/ui/sheet"
+import * as SheetPrimitive from "@radix-ui/react-dialog"
 import { Skeleton } from "@/components/ui/skeleton"
 import {
   Tooltip,
@@ -193,19 +194,21 @@ const Sidebar = React.forwardRef<
     if (isMobile) {
       return (
         <Sheet open={openMobile} onOpenChange={setOpenMobile} {...props}>
-          <SheetContent
-            data-sidebar="sidebar"
-            data-mobile="true"
-            className="w-[--sidebar-width] bg-sidebar p-0 text-sidebar-foreground [&>button]:hidden"
-            style={
-              {
-                "--sidebar-width": SIDEBAR_WIDTH_MOBILE,
-              } as React.CSSProperties
-            }
-            side={side}
-          >
-            <div className="flex h-full w-full flex-col">{children}</div>
-          </SheetContent>
+          <SheetPortal>
+            <SheetOverlay className="top-14" />
+            <SheetPrimitive.Content
+              data-sidebar="sidebar"
+              data-mobile="true"
+              className="fixed top-14 left-0 z-50 h-[calc(100vh-3.5rem)] w-[--sidebar-width] gap-4 border-r bg-sidebar p-0 text-sidebar-foreground shadow-lg transition ease-in-out data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:duration-300 data-[state=open]:duration-500 data-[state=closed]:slide-out-to-left data-[state=open]:slide-in-from-left"
+              style={
+                {
+                  "--sidebar-width": SIDEBAR_WIDTH_MOBILE,
+                } as React.CSSProperties
+              }
+            >
+              <div className="flex h-full w-full flex-col">{children}</div>
+            </SheetPrimitive.Content>
+          </SheetPortal>
         </Sheet>
       )
     }

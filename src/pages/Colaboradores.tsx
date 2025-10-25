@@ -8,10 +8,18 @@ import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, D
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog";
 import { Badge } from "@/components/ui/badge";
 import { toast } from "sonner";
-import { Plus, Edit, Trash2, UserX, UserCheck, Search, Shield, User, Eye, EyeOff } from "lucide-react";
+import { Plus, Edit, Trash2, UserX, UserCheck, Search, Shield, User, Eye, EyeOff, MoreVertical } from "lucide-react";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { auth, db } from "@/lib/firebase";
 import { collection, addDoc, getDocs, doc, updateDoc, deleteDoc, query, orderBy, where, setDoc } from "firebase/firestore";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+  DropdownMenuSeparator,
+} from "@/components/ui/dropdown-menu";
+import { usePageTitle } from '@/contexts/PageTitleContext';
 
 interface Colaborador {
   id: string;
@@ -29,6 +37,7 @@ interface Colaborador {
 }
 
 const Colaboradores = () => {
+  const { setPageTitle } = usePageTitle();
   const [colaboradores, setColaboradores] = useState<Colaborador[]>([]);
   const [loading, setLoading] = useState(true);
   const [filtroNome, setFiltroNome] = useState("");
@@ -47,6 +56,11 @@ const Colaboradores = () => {
     senha: "",
     status: "ativo"
   });
+
+  // Limpar o título do header no mobile
+  useEffect(() => {
+    setPageTitle('');
+  }, [setPageTitle]);
 
   // Carregar colaboradores do Firestore
   const carregarColaboradores = async () => {
@@ -556,74 +570,70 @@ const Colaboradores = () => {
                     <TableCell>{getTipoBadge(colaborador.tipo)}</TableCell>
                     <TableCell>{getStatusBadge(colaborador.status)}</TableCell>
                     <TableCell className="text-center">
-                      <div className="flex justify-center gap-2">
-                        {/* Botão Editar */}
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          onClick={() => {
+                      <DropdownMenu>
+                        <DropdownMenuTrigger asChild>
+                          <Button variant="ghost" size="sm">
+                            <MoreVertical className="h-4 w-4" />
+                          </Button>
+                        </DropdownMenuTrigger>
+                        <DropdownMenuContent align="end">
+                          <DropdownMenuItem onClick={() => {
                             setColaboradorEditando({ ...colaborador });
                             setDialogEdicaoAberto(true);
-                          }}
-                        >
-                          <Edit className="h-4 w-4" />
-                        </Button>
-
-                        {/* Botão de Status */}
-                        {colaborador.status === 'ativo' ? (
-                          <Button
-                            variant="outline"
-                            size="sm"
-                            onClick={() => handleAlterarStatus(colaborador.id, 'suspenso')}
-                            className="text-orange-600 border-orange-600 hover:bg-orange-50"
-                            title="Suspender colaborador"
-                          >
-                            <UserX className="h-4 w-4" />
-                          </Button>
-                        ) : (
-                          <Button
-                            variant="outline"
-                            size="sm"
-                            onClick={() => handleAlterarStatus(colaborador.id, 'ativo')}
-                            className="text-green-600 border-green-600 hover:bg-green-50"
-                            title="Ativar colaborador"
-                          >
-                            <UserCheck className="h-4 w-4" />
-                          </Button>
-                        )}
-
-                        {/* Botão Deletar */}
-                        <AlertDialog>
-                          <AlertDialogTrigger asChild>
-                            <Button
-                              variant="outline"
-                              size="sm"
-                              className="text-red-600 border-red-600 hover:bg-red-50"
-                              title="Deletar colaborador"
+                          }}>
+                            <Edit className="h-4 w-4 mr-2" />
+                            Editar
+                          </DropdownMenuItem>
+                          <DropdownMenuSeparator />
+                          {colaborador.status === 'ativo' ? (
+                            <DropdownMenuItem 
+                              onClick={() => handleAlterarStatus(colaborador.id, 'suspenso')}
+                              className="text-orange-600 focus:text-orange-600 focus:bg-orange-50"
                             >
-                              <Trash2 className="h-4 w-4" />
-                            </Button>
-                          </AlertDialogTrigger>
-                          <AlertDialogContent>
-                            <AlertDialogHeader>
-                              <AlertDialogTitle>Confirmar Exclusão</AlertDialogTitle>
-                              <AlertDialogDescription>
-                                Tem certeza que deseja deletar o colaborador "{colaborador.nome}"?
-                                Esta ação não pode ser desfeita e também removerá o acesso do usuário ao sistema.
-                              </AlertDialogDescription>
-                            </AlertDialogHeader>
-                            <AlertDialogFooter>
-                              <AlertDialogCancel>Cancelar</AlertDialogCancel>
-                              <AlertDialogAction
-                                onClick={() => handleDeletarColaborador(colaborador.id)}
-                                className="bg-red-600 hover:bg-red-700"
+                              <UserX className="h-4 w-4 mr-2" />
+                              Suspender
+                            </DropdownMenuItem>
+                          ) : (
+                            <DropdownMenuItem 
+                              onClick={() => handleAlterarStatus(colaborador.id, 'ativo')}
+                              className="text-green-600 focus:text-green-600 focus:bg-green-50"
+                            >
+                              <UserCheck className="h-4 w-4 mr-2" />
+                              Ativar
+                            </DropdownMenuItem>
+                          )}
+                          <DropdownMenuSeparator />
+                          <AlertDialog>
+                            <AlertDialogTrigger asChild>
+                              <DropdownMenuItem
+                                onSelect={(e) => e.preventDefault()}
+                                className="text-red-600 focus:text-red-600 focus:bg-red-50"
                               >
-                                Deletar
-                              </AlertDialogAction>
-                            </AlertDialogFooter>
-                          </AlertDialogContent>
-                        </AlertDialog>
-                      </div>
+                                <Trash2 className="h-4 w-4 mr-2" />
+                                Excluir
+                              </DropdownMenuItem>
+                            </AlertDialogTrigger>
+                            <AlertDialogContent>
+                              <AlertDialogHeader>
+                                <AlertDialogTitle>Confirmar Exclusão</AlertDialogTitle>
+                                <AlertDialogDescription>
+                                  Tem certeza que deseja deletar o colaborador "{colaborador.nome}"?
+                                  Esta ação não pode ser desfeita e também removerá o acesso do usuário ao sistema.
+                                </AlertDialogDescription>
+                              </AlertDialogHeader>
+                              <AlertDialogFooter>
+                                <AlertDialogCancel>Cancelar</AlertDialogCancel>
+                                <AlertDialogAction
+                                  onClick={() => handleDeletarColaborador(colaborador.id)}
+                                  className="bg-red-600 hover:bg-red-700"
+                                >
+                                  Deletar
+                                </AlertDialogAction>
+                              </AlertDialogFooter>
+                            </AlertDialogContent>
+                          </AlertDialog>
+                        </DropdownMenuContent>
+                      </DropdownMenu>
                     </TableCell>
                   </TableRow>
                 ))
@@ -656,8 +666,91 @@ const Colaboradores = () => {
                         <h3 className="font-semibold text-lg text-gray-900 truncate">{colaborador.nome}</h3>
                         <p className="text-sm text-gray-600 truncate">{colaborador.email}</p>
                       </div>
-                      <div className="ml-2 flex-shrink-0">
+                      <div className="ml-2 flex-shrink-0 flex items-center gap-2">
                         {getStatusBadge(colaborador.status)}
+                        
+                        {/* Dropdown no canto superior - Mobile */}
+                        <div className="sm:hidden">
+                          <DropdownMenu>
+                            <DropdownMenuTrigger asChild>
+                              <button className="p-1 hover:bg-gray-100 rounded-full transition-colors">
+                                <MoreVertical className="h-5 w-5 text-gray-600" />
+                              </button>
+                            </DropdownMenuTrigger>
+                            <DropdownMenuContent align="end" className="w-48">
+                              <DropdownMenuItem
+                                onClick={() => {
+                                  setColaboradorEditando({ ...colaborador });
+                                  setDialogEdicaoAberto(true);
+                                }}
+                              >
+                                <Edit className="h-4 w-4 mr-2" />
+                                Editar
+                              </DropdownMenuItem>
+                              
+                              <DropdownMenuSeparator />
+                              
+                              {colaborador.status === 'ativo' ? (
+                                <DropdownMenuItem
+                                  onClick={() => handleAlterarStatus(colaborador.id, 'suspenso')}
+                                  className="text-orange-600"
+                                >
+                                  <UserX className="h-4 w-4 mr-2" />
+                                  Suspender
+                                </DropdownMenuItem>
+                              ) : (
+                                <DropdownMenuItem
+                                  onClick={() => handleAlterarStatus(colaborador.id, 'ativo')}
+                                  className="text-green-600"
+                                >
+                                  <UserCheck className="h-4 w-4 mr-2" />
+                                  Ativar
+                                </DropdownMenuItem>
+                              )}
+                              
+                              <DropdownMenuSeparator />
+                              
+                              <DropdownMenuItem
+                                onClick={() => {
+                                  const deleteButton = document.querySelector(`[data-delete-colab="${colaborador.id}"]`) as HTMLElement;
+                                  deleteButton?.click();
+                                }}
+                                className="text-red-600"
+                              >
+                                <Trash2 className="h-4 w-4 mr-2" />
+                                Deletar
+                              </DropdownMenuItem>
+                            </DropdownMenuContent>
+                          </DropdownMenu>
+                          
+                          {/* Hidden AlertDialog trigger */}
+                          <AlertDialog>
+                            <AlertDialogTrigger asChild>
+                              <button
+                                data-delete-colab={colaborador.id}
+                                className="hidden"
+                              />
+                            </AlertDialogTrigger>
+                            <AlertDialogContent className="w-[90vw] max-w-[400px] sm:max-w-[450px] rounded-2xl p-4 sm:p-6">
+                              <AlertDialogHeader>
+                                <AlertDialogTitle className="text-base sm:text-lg">Confirmar Exclusão</AlertDialogTitle>
+                                <AlertDialogDescription className="text-xs sm:text-sm">
+                                  Tem certeza que deseja deletar o colaborador "{colaborador.nome}"?
+                                  Esta ação não pode ser desfeita e também removerá o acesso do usuário ao sistema.
+                                </AlertDialogDescription>
+                              </AlertDialogHeader>
+                              <AlertDialogFooter className="gap-2 sm:gap-0">
+                                <AlertDialogCancel className="h-9 text-sm">Cancelar</AlertDialogCancel>
+                                <AlertDialogAction
+                                  onClick={() => handleDeletarColaborador(colaborador.id)}
+                                  className="bg-red-600 hover:bg-red-700 h-9 text-sm"
+                                >
+                                  Deletar
+                                </AlertDialogAction>
+                              </AlertDialogFooter>
+                            </AlertDialogContent>
+                          </AlertDialog>
+                        </div>
                       </div>
                     </div>
 
@@ -683,8 +776,8 @@ const Colaboradores = () => {
                       </div>
                     </div>
 
-                    {/* Ações */}
-                    <div className="flex flex-col sm:flex-row gap-2 pt-2 border-t">
+                    {/* Ações - Apenas Desktop */}
+                    <div className="hidden sm:flex gap-2 pt-2 border-t">
                       <Button
                         variant="outline"
                         size="sm"
@@ -731,19 +824,19 @@ const Colaboradores = () => {
                             <Trash2 className="h-4 w-4" />
                           </Button>
                         </AlertDialogTrigger>
-                        <AlertDialogContent>
+                        <AlertDialogContent className="w-[90vw] max-w-[400px] sm:max-w-[450px] rounded-2xl p-4 sm:p-6">
                           <AlertDialogHeader>
-                            <AlertDialogTitle>Confirmar Exclusão</AlertDialogTitle>
-                            <AlertDialogDescription>
+                            <AlertDialogTitle className="text-base sm:text-lg">Confirmar Exclusão</AlertDialogTitle>
+                            <AlertDialogDescription className="text-xs sm:text-sm">
                               Tem certeza que deseja deletar o colaborador "{colaborador.nome}"?
                               Esta ação não pode ser desfeita e também removerá o acesso do usuário ao sistema.
                             </AlertDialogDescription>
                           </AlertDialogHeader>
-                          <AlertDialogFooter>
-                            <AlertDialogCancel>Cancelar</AlertDialogCancel>
+                          <AlertDialogFooter className="gap-2 sm:gap-0">
+                            <AlertDialogCancel className="h-9 text-sm">Cancelar</AlertDialogCancel>
                             <AlertDialogAction
                               onClick={() => handleDeletarColaborador(colaborador.id)}
-                              className="bg-red-600 hover:bg-red-700"
+                              className="bg-red-600 hover:bg-red-700 h-9 text-sm"
                             >
                               Deletar
                             </AlertDialogAction>

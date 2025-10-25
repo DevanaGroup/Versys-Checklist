@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -6,41 +6,30 @@ import { Badge } from "@/components/ui/badge";
 import { Progress } from "@/components/ui/progress";
 import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
-import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
-import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion";
-import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog";
+import { Input } from "@/components/ui/input";
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { toast } from "sonner";
 import { db } from "@/lib/firebase";
-import { doc, getDoc, updateDoc } from "firebase/firestore";
-import { ArrowLeft, ArrowRight, CheckCircle, Camera, ThumbsUp, ThumbsDown, Clock, XCircle, AlertTriangle, Eye, ZoomIn, X, Mic, MicOff, Download } from "lucide-react";
-// Removido import do Transformers.js - usando Web Speech API nativa
+import { doc, getDoc, updateDoc, collection, getDocs } from "firebase/firestore";
+import { ArrowLeft, Camera, Clock, X, Plus, Trash2, Paperclip, MessageCircle, Save, FileText, ChevronRight, ChevronLeft, Sparkles, MoreVertical } from "lucide-react";
+import { HierarchicalProjectSidebar } from "@/components/HierarchicalProjectSidebar";
+import { ProjectModule, NC, ResponseOption, RESPONSE_VALUES, WeightedQuestion } from "@/lib/types";
 import { getStorage, ref, uploadBytes, getDownloadURL } from "firebase/storage";
-import { RelatorioService } from '@/lib/relatorioService';
 import { useAuthContext } from '@/contexts/AuthContext';
-import { PDFService, PDFProjectData } from '@/lib/pdfService';
+import { usePageTitle } from '@/contexts/PageTitleContext';
+import { useHeaderActions } from '@/contexts/HeaderActionsContext';
+import { useIsMobile } from '@/hooks/use-mobile';
+
+// Configurações da OpenAI
+const OPENAI_ASSISTANT_ID = "asst_9dvrBEsSkU33QT9HwrzAYnT1";
+const OPENAI_API_KEY = "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";
 
 interface SubItem {
   id: string;
   title: string;
-  evaluation: "nc" | "r" | "na" | "";
-  currentSituation?: string;
-  clientGuidance?: string;
-  completed?: boolean;
-  photoData?: {
-    url: string;
-    firebaseUrl?: string; // Adicionado para fallback
-    createdAt: string;
-    latitude: number;
-    longitude: number;
-  };
-  // Campos para adequação
-  adequacyReported?: boolean;
-  adequacyDetails?: string;
-  adequacyImages?: string[];
-  adequacyDate?: string;
-  adequacyStatus?: "pending" | "approved" | "rejected";
-  adminRejectionReason?: string;
-  adequacyRevisionCount?: number;
 }
 
 interface ProjectItem {
@@ -48,8 +37,6 @@ interface ProjectItem {
   title: string;
   category: string;
   subItems: SubItem[];
-  isExpanded?: boolean;
-  completed?: boolean;
 }
 
 interface ProjectDetail {
@@ -72,43 +59,73 @@ interface ProjectDetail {
     title: string;
     items: ProjectItem[];
   }>;
-  itens?: ProjectItem[];
 }
+
+// Função para gerar IDs únicos
+const generateUniqueId = (prefix: string) => {
+  return `${prefix}_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+};
+
+// Função para sanitizar IDs duplicados
+const sanitizeDuplicateIds = (modules: ProjectModule[]): ProjectModule[] => {
+  const seenQuestionIds = new Set<string>();
+  
+  return modules.map(module => ({
+    ...module,
+    itens: module.itens.map(item => ({
+      ...item,
+      ncs: item.ncs.map(nc => ({
+        ...nc,
+        perguntas: nc.perguntas.map(q => {
+          // Se o ID já foi visto, gerar um novo ID único
+          if (seenQuestionIds.has(q.id)) {
+            console.warn(`⚠️ ID duplicado detectado: ${q.id}. Gerando novo ID.`);
+            const newId = generateUniqueId('question');
+            seenQuestionIds.add(newId);
+            return { ...q, id: newId };
+          }
+          seenQuestionIds.add(q.id);
+          return q;
+        })
+      }))
+    }))
+  }));
+};
 
 const ProjectWrite = () => {
   const navigate = useNavigate();
   const { id } = useParams<{ id: string }>();
   const { userData } = useAuthContext();
+  const { setPageTitle } = usePageTitle();
+  const { setRightAction } = useHeaderActions();
+  const isMobile = useIsMobile();
+  
   const [projectDetails, setProjectDetails] = useState<ProjectDetail | null>(null);
   const [loading, setLoading] = useState(true);
-  const [currentStep, setCurrentStep] = useState(0);
-  const [projectSteps, setProjectSteps] = useState<ProjectItem[]>([]);
-  const [formState, setFormState] = useState<Record<string, any>>({});
   const [saving, setSaving] = useState(false);
-  const [photoUploading, setPhotoUploading] = useState<Record<string, boolean>>({});
-  const [photoPreview, setPhotoPreview] = useState<Record<string, string>>({});
-  const [showSaveConfirmation, setShowSaveConfirmation] = useState(false);
   
-  // Estados para adequação
-  const [evaluatingAdequacy, setEvaluatingAdequacy] = useState<string | null>(null);
-  const [rejectionReason, setRejectionReason] = useState('');
-  const [selectedImage, setSelectedImage] = useState<string | null>(null);
+  // Estados para novo sistema de avaliação ponderada
+  const [modules, setModules] = useState<ProjectModule[]>([]);
+  const [currentModuleId, setCurrentModuleId] = useState<string>("");
+  const [currentItemId, setCurrentItemId] = useState<string>("");
+  const [currentNcId, setCurrentNcId] = useState<string>("");
+  const [questionPhotos, setQuestionPhotos] = useState<Record<string, any>>({});
+  const [questionPhotoUploading, setQuestionPhotoUploading] = useState<Record<string, boolean>>({});
+  const [isSidebarOpen, setIsSidebarOpen] = useState(false);
+  const [photoDrawerOpen, setPhotoDrawerOpen] = useState<string | null>(null); // ID da pergunta com drawer aberto
+  const [generatingGuidance, setGeneratingGuidance] = useState<Record<string, boolean>>({});
+  const [showSituacaoAtual, setShowSituacaoAtual] = useState<Record<string, boolean>>({});
+  const [floatingButtonTop, setFloatingButtonTop] = useState<number>(200);
   
-  // Estados para transcrição de áudio com Web Speech API
-  const [speechRecognition, setSpeechRecognition] = useState<any>(null);
-  const [isRecording, setIsRecording] = useState<Record<string, boolean>>({});
-  const [isTranscribing, setIsTranscribing] = useState<Record<string, boolean>>({});
-  const [imageModalOpen, setImageModalOpen] = useState(false);
-  const [showDownloadButton, setShowDownloadButton] = useState(false);
-  const [generatingPDF, setGeneratingPDF] = useState(false);
-  const [currentView, setCurrentView] = useState<'evaluation' | 'adequacy'>('evaluation');
-
-  // Adicione o estado para controlar a aba ativa de cada subitem
-  const [activeTabs, setActiveTabs] = useState<Record<string, 'visualizacao' | 'adequacao'>>({});
+  // Estados para importação de preset
+  const [showPresetModal, setShowPresetModal] = useState(false);
+  const [availablePresets, setAvailablePresets] = useState<any[]>([]);
+  const [selectedPresetId, setSelectedPresetId] = useState<string>("");
+  const [loadingPresets, setLoadingPresets] = useState(false);
+  const [importingPreset, setImportingPreset] = useState(false);
 
   useEffect(() => {
     if (!id) {
-      // Verificar se o usuário é cliente ou admin para redirecionar corretamente
       const isClient = window.location.pathname.includes('/client-projects');
       navigate(isClient ? "/client-projects" : "/projetos");
       return;
@@ -117,238 +134,526 @@ const ProjectWrite = () => {
     // eslint-disable-next-line
   }, [id]);
 
-  // Função para melhorar pontuação e formatação do texto transcrito (versão conservadora)
-  const improveTranscription = (text: string): string => {
-    if (!text) return text;
-    
-    let improvedText = text.trim();
-    
-    // Capitalizar primeira letra apenas se não houver pontuação já presente
-    if (improvedText.length > 0 && !/^[A-ZÀ-Ü]/.test(improvedText)) {
-      improvedText = improvedText.charAt(0).toUpperCase() + improvedText.slice(1);
-    }
-    
-    // Corrigir espaçamentos múltiplos
-    improvedText = improvedText.replace(/\s{2,}/g, ' ');
-    
-    // Corrigir espaçamento antes de pontuação existente
-    improvedText = improvedText.replace(/\s+([,.!?;:])/g, '$1');
-    
-    // Apenas adicionar ponto final se realmente não houver pontuação e a frase parecer completa
-    if (!/[.!?;:]$/.test(improvedText) && improvedText.length > 10) {
-      // Verificar se termina com palavras que indicam fim de frase
-      if (/\b(concluído|finalizado|terminado|pronto|ok|certo|feito|acabado)$/gi.test(improvedText)) {
-        improvedText += '.';
-      }
-      // Ou se parece ser uma frase declarativa completa (mais de 5 palavras)
-      else if (improvedText.split(' ').length >= 5) {
-        improvedText += '.';
-      }
-    }
-    
-    return improvedText;
-  };
-
-  // Inicializar Web Speech API para transcrição de áudio
+  // Atualizar título do header quando o módulo mudar
   useEffect(() => {
-    console.log('Inicializando Web Speech API...');
-    
-    // Verificar suporte do navegador
-    const SpeechRecognition = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
-    
-    if (SpeechRecognition) {
-      const recognition = new SpeechRecognition();
-      recognition.lang = 'pt-BR';
-      recognition.interimResults = true; // Mostrar resultados intermediários
-      recognition.maxAlternatives = 1;
-      recognition.continuous = true; // Gravação contínua
-      recognition.serviceURI = 'pt-BR';
-      
-      setSpeechRecognition(recognition);
-      console.log('Web Speech API inicializada com sucesso!');
-    } else {
-      console.error('Web Speech API não suportada pelo navegador');
-      toast.error('Transcrição de áudio não suportada neste navegador');
+    if (currentModuleId && modules.length > 0) {
+      const currentModule = modules.find(m => m.id === currentModuleId);
+      if (currentModule) {
+        setPageTitle(currentModule.titulo);
+      }
     }
-  }, []);
+  }, [currentModuleId, modules, setPageTitle]);
+
+  // Função de salvar para uso no header
+  const handleSaveProjectFromHeader = useCallback(async () => {
+    if (!projectDetails || !id) return;
+
+    try {
+      setSaving(true);
+      
+      // Calcular progresso geral
+      const totalQuestions = modules.reduce(
+        (sum, module) =>
+          sum +
+          module.itens.reduce(
+            (itemSum, item) =>
+              itemSum + item.ncs.reduce((ncSum, nc) => ncSum + nc.perguntas.length, 0),
+            0
+          ),
+        0
+      );
+
+      const answeredQuestions = modules.reduce(
+        (sum, module) =>
+          sum +
+          module.itens.reduce(
+            (itemSum, item) =>
+              itemSum +
+              item.ncs.reduce(
+                (ncSum, nc) =>
+                  ncSum + nc.perguntas.filter((q) => q.response !== null).length,
+                0
+              ),
+            0
+          ),
+        0
+      );
+
+      const progresso = totalQuestions > 0 ? Math.round((answeredQuestions / totalQuestions) * 100) : 0;
+
+      await updateDoc(doc(db, "projetos", id), {
+        weightedModules: modules,
+        progresso,
+        nome: projectDetails.nome,
+      });
+
+      toast.success("Projeto salvo com sucesso!");
+    } catch (error) {
+      console.error("Erro ao salvar:", error);
+      toast.error("Erro ao salvar projeto");
+    } finally {
+      setSaving(false);
+    }
+  }, [projectDetails, id, modules]);
+
+  // Adicionar botão de salvar no header (mobile)
+  useEffect(() => {
+    const saveButton = (
+      <Button 
+        onClick={handleSaveProjectFromHeader} 
+        disabled={saving} 
+        variant="ghost"
+        size="icon" 
+        className="h-9 w-9"
+      >
+        <Save className="h-5 w-5" />
+      </Button>
+    );
+    
+    setRightAction(saveButton);
+
+    // Limpar ao desmontar
+    return () => {
+      setRightAction(null);
+    };
+  }, [saving, handleSaveProjectFromHeader, setRightAction]);
+
+  // Calcular posição do botão flutuante baseado na div de ações das NCs
+  useEffect(() => {
+    if (!isMobile) return;
+
+    const updateFloatingButtonPosition = () => {
+      const actionsDiv = document.getElementById('nc-actions-buttons');
+      if (actionsDiv) {
+        const rect = actionsDiv.getBoundingClientRect();
+        const scrollTop = window.pageYOffset || document.documentElement.scrollTop;
+        const topPosition = rect.top + scrollTop;
+        setFloatingButtonTop(topPosition);
+      }
+    };
+
+    // Atualizar posição inicial
+    updateFloatingButtonPosition();
+
+    // Atualizar quando o conteúdo mudar ou a janela for redimensionada
+    const observer = new MutationObserver(updateFloatingButtonPosition);
+    const targetNode = document.body;
+    observer.observe(targetNode, { childList: true, subtree: true });
+
+    window.addEventListener('resize', updateFloatingButtonPosition);
+    window.addEventListener('scroll', updateFloatingButtonPosition);
+
+    return () => {
+      observer.disconnect();
+      window.removeEventListener('resize', updateFloatingButtonPosition);
+      window.removeEventListener('scroll', updateFloatingButtonPosition);
+    };
+  }, [isMobile, currentNcId, currentItemId, currentModuleId]);
 
   const loadProject = async () => {
+    if (!id) return;
+
     try {
       setLoading(true);
-      const projectRef = doc(db, 'projetos', id!);
-      const projectDoc = await getDoc(projectRef);
-      if (!projectDoc.exists()) {
-        toast.error('Projeto não encontrado');
-        // Verificar se o usuário é cliente ou admin para redirecionar corretamente
-        const isClient = window.location.pathname.includes('/client-projects');
-        navigate(isClient ? "/client-projects" : "/projetos");
-        return;
-      }
-      const projectData = projectDoc.data();
-      const accordions = projectData.customAccordions || [];
-      const steps: ProjectItem[] = [];
-      accordions.forEach((accordion: any) => {
-        if (accordion.items && Array.isArray(accordion.items)) {
-          accordion.items.forEach((item: any) => {
-            steps.push({ ...item, category: accordion.title || 'Sem categoria' });
+      const projectRef = doc(db, "projetos", id);
+      const projectSnap = await getDoc(projectRef);
+
+      if (projectSnap.exists()) {
+        const data = projectSnap.data();
+        const projectData: ProjectDetail = {
+          id: projectSnap.id,
+          nome: data.nome || "",
+          status: data.status || "em_andamento",
+          progresso: data.progresso || 0,
+          dataInicio: data.dataInicio || "",
+          previsaoConclusao: data.previsaoConclusao,
+          consultor: data.consultor,
+          cliente: data.cliente,
+          observacoes: data.observacoes,
+          customAccordions: data.customAccordions || []
+        };
+
+        setProjectDetails(projectData);
+        
+        // Carregar estrutura hierárquica ponderada
+        if (data.weightedModules) {
+          console.log('📦 weightedModules encontrado:', data.weightedModules);
+          // Log detalhado da estrutura
+          data.weightedModules.forEach((module: any, mIdx: number) => {
+            console.log(`  Módulo ${mIdx}: ${module.titulo} (${module.itens?.length || 0} itens)`);
+            module.itens?.forEach((item: any, iIdx: number) => {
+              console.log(`    Item ${iIdx}: ${item.titulo} (${item.ncs?.length || 0} NCs)`);
+            });
+          });
+          
+          // Sanitizar IDs duplicados antes de carregar
+          const sanitizedModules = sanitizeDuplicateIds(data.weightedModules);
+          setModules(sanitizedModules);
+          
+          // Log detalhado PÓS-CARREGAMENTO para verificar NCs e Respostas
+          console.log('🔍 VERIFICAÇÃO DE NCs E RESPOSTAS:');
+          data.weightedModules.forEach((mod: any) => {
+            mod.itens?.forEach((item: any) => {
+              if (item.ncs && item.ncs.length > 0) {
+                if (item.ncs.length > 1) {
+                  console.log(`  ⚠️ ATENÇÃO: "${item.titulo}" tem ${item.ncs.length} NCs!`);
+                }
+                item.ncs.forEach((nc: any, idx: number) => {
+                  const perguntasRespondidas = nc.perguntas?.filter((p: any) => p.response !== null).length || 0;
+                  const totalPerguntas = nc.perguntas?.length || 0;
+                  console.log(`    NC ${idx + 1}: ${nc.ncTitulo} - ${perguntasRespondidas}/${totalPerguntas} respondidas`);
+                  
+                  // Log das respostas salvas
+                  nc.perguntas?.forEach((pergunta: any, pIdx: number) => {
+                    if (pergunta.response) {
+                      console.log(`      ✅ Pergunta ${pIdx + 1} respondida:`, {
+                        resposta: pergunta.response.selectedOption,
+                        fotos: pergunta.response.mediaAttachments?.length || 0,
+                        comentarios: pergunta.response.comments?.length || 0
           });
         }
       });
-      // Recalcular progresso baseado no estado atual dos subitens
-      const currentProgress = calculateProgress(accordions);
-      
-      setProjectDetails({
-        id: projectDoc.id,
-        nome: projectData.nome,
-        status: projectData.status || 'Iniciado',
-        progresso: currentProgress,
-        dataInicio: projectData.dataInicio,
-        previsaoConclusao: projectData.previsaoConclusao,
-        consultor: projectData.consultor || 'Não definido',
-        cliente: projectData.cliente,
-        observacoes: projectData.observacoes || '',
-        customAccordions: accordions,
-        itens: projectData.itens || []
-      });
-      
-      // Atualizar progresso no Firebase se estiver diferente
-      if (currentProgress !== (projectData.progresso || 0)) {
-        updateDoc(projectRef, { progresso: currentProgress }).catch(console.error);
-      }
-      setProjectSteps(steps);
-      // Inicializa o estado do formulário
-      const initialForm: Record<string, any> = {};
-      steps.forEach((item) => {
-        item.subItems.forEach((sub) => {
-          initialForm[sub.id] = {
-            evaluation: sub.evaluation || '',
-            currentSituation: sub.currentSituation || '',
-            clientGuidance: sub.clientGuidance || '',
-            photoData: sub.photoData || null
-          };
+                });
+              }
         });
       });
-      setFormState(initialForm);
-    } catch (error) {
-      toast.error('Erro ao carregar projeto');
+          
+          // Auto-selecionar primeira NC disponível
+          if (data.weightedModules.length > 0) {
+            const firstModule = data.weightedModules[0];
+            if (firstModule.itens.length > 0) {
+              const firstItem = firstModule.itens[0];
+              console.log(`📍 Primeiro item: "${firstItem.titulo}" com ${firstItem.ncs?.length || 0} NCs`);
+              if (firstItem.ncs.length > 0) {
+                setCurrentModuleId(firstModule.id);
+                setCurrentItemId(firstItem.id);
+                setCurrentNcId(firstItem.ncs[0].id);
+              }
+            }
+          }
+        } else {
+          console.log('⚠️ weightedModules NÃO encontrado, convertendo de customAccordions...');
+          // Converter estrutura antiga para nova (primeira vez)
+          loadHierarchicalStructure(projectData);
+        }
+      } else {
+        toast.error("Projeto não encontrado");
       navigate("/projetos");
+      }
+    } catch (error) {
+      console.error("Erro ao carregar projeto:", error);
+      toast.error("Erro ao carregar projeto");
     } finally {
       setLoading(false);
     }
   };
 
-  const handleChange = (subId: string, field: string, value: any) => {
-    setFormState((prev) => ({
-      ...prev,
-      [subId]: {
-        ...prev[subId],
-        [field]: value
-      }
-    }));
-  };
+  const loadHierarchicalStructure = (project: ProjectDetail) => {
+    console.log('🔄 Convertendo customAccordions para estrutura hierárquica...');
+    const hierarchicalModules: ProjectModule[] = [];
+    
+    // Agrupar itens por categoria (módulo)
+    const itemsByCategory = new Map<string, any[]>();
 
-  // Função para iniciar transcrição com Web Speech API
-  const startRecording = (subId: string) => {
-    if (!speechRecognition) {
-      toast.error('Transcrição de áudio não suportada neste navegador');
-      return;
-    }
-
-    try {
-      setIsRecording(prev => ({ ...prev, [subId]: true }));
-      setIsTranscribing(prev => ({ ...prev, [subId]: false }));
+    if (project.customAccordions) {
+      console.log('customAccordions completo:', project.customAccordions);
       
-      // Configurar eventos da Speech Recognition
-      speechRecognition.onstart = () => {
-        console.log('Reconhecimento de voz iniciado para', subId);
-        toast.success('Gravação iniciada! Fale agora...');
-      };
-
-      speechRecognition.onresult = (event: any) => {
-        let interimTranscript = '';
-        let finalTranscriptPart = '';
-        
-        // Processar todos os resultados
-        for (let i = event.resultIndex; i < event.results.length; i++) {
-          const transcript = event.results[i][0].transcript;
+      // Primeiro, coletar todos os itens e agrupar por categoria
+      project.customAccordions.forEach((accordion) => {
+        accordion.items.forEach((item) => {
+          console.log('  📄 Item encontrado:', {
+            titulo: item.title,
+            categoria: item.category,
+            numSubItems: item.subItems?.length || 0
+          });
           
-          if (event.results[i].isFinal) {
-            finalTranscriptPart += transcript;
-          } else {
-            interimTranscript += transcript;
+          const category = item.category || accordion.title || 'SEM CATEGORIA';
+          if (!itemsByCategory.has(category)) {
+            itemsByCategory.set(category, []);
           }
-        }
-        
-        // Se temos resultado final, processar e adicionar ao campo
-        if (finalTranscriptPart) {
-          console.log('Texto final:', finalTranscriptPart);
-          
-          // Aplicar melhorias de pontuação apenas no texto final
-          const improvedTranscript = improveTranscription(finalTranscriptPart);
-          console.log('Texto melhorado:', improvedTranscript);
-          
-          // Adicionar ao campo atual
-          const currentText = formState[subId]?.currentSituation || '';
-          const newText = currentText ? `${currentText} ${improvedTranscript}` : improvedTranscript;
-          
-          handleChange(subId, 'currentSituation', newText);
-        }
-        
-        // Log do progresso (resultado intermediário)
-        if (interimTranscript) {
-          console.log('Transcrevendo...:', interimTranscript);
-        }
-      };
+          itemsByCategory.get(category)!.push(item);
+        });
+      });
 
-      speechRecognition.onerror = (event: any) => {
-        console.error('Erro na transcrição:', event.error);
-        toast.error('Erro ao transcrever áudio: ' + event.error);
-        setIsRecording(prev => ({ ...prev, [subId]: false }));
-        setIsTranscribing(prev => ({ ...prev, [subId]: false }));
-      };
+      // Agora criar módulos a partir das categorias agrupadas
+      let moduleIndex = 0;
+      itemsByCategory.forEach((items, categoryName) => {
+        const module: ProjectModule = {
+          id: `module_${moduleIndex}`,
+          titulo: categoryName,
+          ordem: moduleIndex,
+          itens: []
+        };
 
-      speechRecognition.onend = () => {
-        console.log('Reconhecimento de voz finalizado para', subId);
-        setIsRecording(prev => ({ ...prev, [subId]: false }));
-        setIsTranscribing(prev => ({ ...prev, [subId]: false }));
-      };
+        items.forEach((item, itemIndex) => {
+          console.log(`    🔨 Criando item: ${item.title} com ${item.subItems?.length || 0} subItems`);
+          
+          const hierItem: any = {
+            id: `item_${moduleIndex}_${itemIndex}`,
+            titulo: item.title,
+            descricao: item.category,
+            ordem: itemIndex,
+            ncs: [],
+            pontuacaoAtual: 0,
+            pontuacaoMaxima: 0
+          };
 
-      // Iniciar reconhecimento
-      speechRecognition.start();
-    } catch (error) {
-      console.error('Erro ao iniciar reconhecimento:', error);
-      toast.error('Erro ao iniciar transcrição');
-      setIsRecording(prev => ({ ...prev, [subId]: false }));
+          // Se o item já tem NCs salvas (modo novo), usar elas
+          if (item.ncs && Array.isArray(item.ncs) && item.ncs.length > 0) {
+            console.log(`      ✅ Item já tem ${item.ncs.length} NCs salvas no Firebase`);
+            hierItem.ncs = item.ncs;
+            hierItem.pontuacaoMaxima = item.ncs.reduce((sum: number, nc: NC) => sum + nc.pontuacaoMaxima, 0);
+          } else {
+            // Criar uma NC para cada subItem (formato antigo) e converter dados existentes
+            console.log(`      🆕 Criando ${item.subItems?.length || 0} NCs (uma para cada subItem)`);
+            
+            (item.subItems || []).forEach((subItem: any, ncIndex: number) => {
+              // Converter evaluation antiga para nova estrutura
+              let selectedOption: any = null;
+              let score = 0;
+              
+              if (subItem.evaluation) {
+                console.log(`        📝 Convertendo evaluation "${subItem.evaluation}" do subItem`);
+                switch (subItem.evaluation.toLowerCase()) {
+                  case 'nc':
+                    selectedOption = 'very_bad';
+                    score = 0;
+                    break;
+                  case 'r':
+                    selectedOption = 'good';
+                    score = 15; // peso 2 * valor 7.5
+                    break;
+                  case 'na':
+                    selectedOption = 'na';
+                    score = 0;
+                    break;
+                }
+              }
+              
+              // Converter fotos antigas para novo formato
+              const mediaAttachments = [];
+              if (subItem.photos && Array.isArray(subItem.photos)) {
+                console.log(`        📸 Convertendo ${subItem.photos.length} fotos do formato antigo`);
+                mediaAttachments.push(...subItem.photos.map((photo: any) => ({
+                  type: 'photo' as const,
+                  url: photo.url,
+                  timestamp: photo.createdAt || new Date().toISOString(),
+                  uploadedBy: 'legacy',
+                  location: (photo.latitude && photo.longitude) ? {
+                    latitude: photo.latitude,
+                    longitude: photo.longitude,
+                    timestamp: photo.createdAt || new Date().toISOString()
+                  } : undefined
+                })));
+              } else if (subItem.photoData) {
+                console.log(`        📸 Convertendo 1 foto (photoData) do formato antigo`);
+                mediaAttachments.push({
+                  type: 'photo' as const,
+                  url: subItem.photoData.url,
+                  timestamp: subItem.photoData.createdAt || new Date().toISOString(),
+                  uploadedBy: 'legacy',
+                  location: (subItem.photoData.latitude && subItem.photoData.longitude) ? {
+                    latitude: subItem.photoData.latitude,
+                    longitude: subItem.photoData.longitude,
+                    timestamp: subItem.photoData.createdAt || new Date().toISOString()
+                  } : undefined
+                });
+              }
+              
+              // Manter campos antigos como campos próprios (não converter para comentários)
+              const currentSituation = subItem.currentSituation || '';
+              const aiGuidance = subItem.clientGuidance || subItem.adminFeedback || '';
+              
+              const nc: NC = {
+                id: `nc_${moduleIndex}_${itemIndex}_${ncIndex}`,
+                numero: ncIndex + 1,
+                ncTitulo: `NC ${ncIndex + 1}`,
+                descricao: `Não Conformidade ${ncIndex + 1}`,
+                perguntas: [{
+                  id: `question_${moduleIndex}_${itemIndex}_${ncIndex}_0`,
+                  text: subItem.title,
+                  weight: 2,
+                  required: true,
+                  responseOptions: ['na', 'very_bad', 'good'] as ResponseOption[],
+                  response: selectedOption ? {
+                    selectedOption,
+                    score,
+                    respondedAt: new Date().toISOString(),
+                    respondedBy: 'legacy',
+                    mediaAttachments,
+                    currentSituation,
+                    aiGuidance
+                  } as any : null,
+                  order: 0
+                }],
+                pontuacaoAtual: score,
+                pontuacaoMaxima: 2 * 10,
+                status: selectedOption ? 'completed' : 'pending' as const
+              };
+              
+              hierItem.ncs.push(nc);
+            });
+            
+            hierItem.pontuacaoMaxima = hierItem.ncs.reduce((sum: number, nc: NC) => sum + nc.pontuacaoMaxima, 0);
+          }
+          
+          console.log(`      ✔️ Item finalizado com ${hierItem.ncs.length} NCs`);
+          module.itens.push(hierItem);
+        });
+
+        hierarchicalModules.push(module);
+        moduleIndex++;
+      });
+    }
+
+    // Sanitizar IDs duplicados antes de aplicar
+    const sanitizedModules = sanitizeDuplicateIds(hierarchicalModules);
+    setModules(sanitizedModules);
+    
+    // Auto-selecionar primeira NC
+    if (sanitizedModules.length > 0 && sanitizedModules[0].itens.length > 0) {
+      setCurrentModuleId(sanitizedModules[0].id);
+      setCurrentItemId(sanitizedModules[0].itens[0].id);
+      setCurrentNcId(sanitizedModules[0].itens[0].ncs[0].id);
     }
   };
 
-  // Função para parar transcrição
-  const stopRecording = (subId: string) => {
-    if (speechRecognition && isRecording[subId]) {
-      speechRecognition.stop();
-      toast.info('Finalizando transcrição...');
-    }
+  const handleNavigate = (moduleId: string, itemId: string, ncId: string) => {
+    setCurrentModuleId(moduleId);
+    setCurrentItemId(itemId);
+    setCurrentNcId(ncId);
   };
 
-  const handlePhoto = async (subId: string, file: File) => {
+  const handleWeightedResponseChange = (questionId: string, option: ResponseOption) => {
+    setModules(prevModules =>
+      prevModules.map(module => ({
+        ...module,
+        itens: module.itens.map(item => ({
+          ...item,
+          ncs: item.ncs.map(nc => {
+            const updatedPerguntas = nc.perguntas.map(q => {
+              if (q.id === questionId) {
+                const score = RESPONSE_VALUES[option] * q.weight;
+                return {
+                  ...q,
+                  response: {
+                    selectedOption: option,
+                    score: score,
+                    timestamp: new Date().toISOString(),
+                    answeredBy: userData?.uid || '',
+                    answeredByName: userData?.displayName || 'Usuário',
+                    mediaAttachments: q.response?.mediaAttachments || [],
+                    comments: q.response?.comments || []
+                  }
+                };
+              }
+              return q;
+            });
+
+            // Recalcular pontuação da NC
+            const ncPontuacaoAtual = updatedPerguntas.reduce(
+              (sum, q) => sum + ((q.response as any)?.score || 0),
+              0
+            );
+            const ncPontuacaoMaxima = updatedPerguntas.reduce(
+              (sum, q) => sum + (q.weight * 10),
+              0
+            );
+
+            return {
+              ...nc,
+              perguntas: updatedPerguntas,
+              pontuacaoAtual: ncPontuacaoAtual,
+              pontuacaoMaxima: ncPontuacaoMaxima,
+              status: updatedPerguntas.every(q => q.response) ? 'completed' : 'in_progress'
+            };
+          })
+        }))
+      }))
+    );
+  };
+
+  const addNC = (moduleId: string, itemId: string) => {
+    setModules(prevModules =>
+      prevModules.map(module => {
+        if (module.id === moduleId) {
+          return {
+            ...module,
+            itens: module.itens.map(item => {
+              if (item.id === itemId) {
+                const ncNumber = item.ncs.length + 1;
+                const firstNc = item.ncs[0];
+                
+                const newNC: NC = {
+                  id: generateUniqueId('nc'),
+                  numero: ncNumber,
+                  ncTitulo: `NC ${ncNumber}`,
+                  descricao: `Não Conformidade ${ncNumber}`,
+                  perguntas: firstNc ? firstNc.perguntas.map(q => ({
+                    ...q,
+                    id: generateUniqueId('question'),
+                    response: null
+                  })) : [],
+                  pontuacaoAtual: 0,
+                  pontuacaoMaxima: firstNc?.pontuacaoMaxima || 0,
+                  status: 'pending'
+                };
+                
+                return {
+                  ...item,
+                  ncs: [...item.ncs, newNC]
+                };
+              }
+              return item;
+            })
+          };
+        }
+        return module;
+      })
+    );
+    toast.success("NC adicionada!");
+  };
+
+  const removeNC = (moduleId: string, itemId: string, ncId: string) => {
+    setModules(prevModules =>
+      prevModules.map(module => {
+        if (module.id === moduleId) {
+          return {
+            ...module,
+            itens: module.itens.map(item => {
+              if (item.id === itemId) {
+                return {
+                  ...item,
+                  ncs: item.ncs.filter(nc => nc.id !== ncId)
+                };
+              }
+              return item;
+            })
+          };
+        }
+        return module;
+      })
+    );
+    toast.success("NC removida!");
+  };
+
+  const handleQuestionPhoto = async (questionId: string, file: File) => {
     if (!projectDetails) return;
-    setPhotoUploading(prev => ({ ...prev, [subId]: true }));
+    setQuestionPhotoUploading(prev => ({ ...prev, [questionId]: true }));
     
     try {
-      console.log('=== INICIANDO CAPTURA DE FOTO (PROJECT WRITE) ===');
+      console.log('=== INICIANDO CAPTURA DE FOTO (MODO PONDERADO) ===');
       
-      // 1. VALIDAR ARQUIVO
       if (!file.type.startsWith('image/')) {
         toast.error('Arquivo deve ser uma imagem');
         return;
       }
       
-      if (file.size > 10 * 1024 * 1024) { // 10MB
+      if (file.size > 10 * 1024 * 1024) {
         toast.error('Arquivo muito grande. Máximo 10MB');
         return;
       }
 
-      // 2. CONVERTER PARA BASE64
       const base64Data = await new Promise<string>((resolve, reject) => {
         const reader = new FileReader();
         reader.onload = () => {
@@ -364,7 +669,6 @@ const ProjectWrite = () => {
         reader.readAsDataURL(file);
       });
 
-      // 3. OBTER GEOLOCALIZAÇÃO
       const location = await new Promise<{ latitude: number; longitude: number }>((resolve) => {
         if (!navigator.geolocation) {
           console.warn('Geolocalização não suportada');
@@ -388,11 +692,10 @@ const ProjectWrite = () => {
         );
       });
 
-      // 4. UPLOAD PARA FIREBASE STORAGE (BACKUP)
       let firebaseUrl = '';
       try {
         const storage = getStorage();
-        const storageRef = ref(storage, `projetos/${projectDetails.id}/subitens/${subId}/${Date.now()}_${file.name}`);
+        const storageRef = ref(storage, `projetos/${projectDetails.id}/perguntas/${questionId}/${Date.now()}_${file.name}`);
         await uploadBytes(storageRef, file);
         firebaseUrl = await getDownloadURL(storageRef);
         console.log('✅ Backup no Firebase Storage criado');
@@ -400,7 +703,6 @@ const ProjectWrite = () => {
         console.warn('⚠️ Erro no backup do Firebase:', error);
       }
 
-      // 5. CRIAR DADOS DA FOTO
       const photoData = {
         url: base64Data,
         firebaseUrl: firebaseUrl || undefined,
@@ -409,22 +711,10 @@ const ProjectWrite = () => {
         longitude: location.longitude
       };
       
-      console.log('=== DADOS DA FOTO PREPARADOS (PROJECT WRITE) ===');
-      console.log('Base64 válido:', base64Data.substring(0, 50) + '...');
-      console.log('Firebase URL:', firebaseUrl);
-      console.log('Localização:', location);
+      console.log('=== DADOS DA FOTO PREPARADOS (MODO PONDERADO) ===');
       
-      // Atualiza o estado local
-      setFormState(prev => ({
-        ...prev,
-        [subId]: {
-          ...prev[subId],
-          photoData: photoData
-        }
-      }));
-      setPhotoPreview(prev => ({ ...prev, [subId]: base64Data }));
+      setQuestionPhotos(prev => ({ ...prev, [questionId]: photoData }));
       
-      // 6. FEEDBACK PARA O USUÁRIO
       if (location.latitude !== 0 && location.longitude !== 0) {
         toast.success('✅ Foto salva com localização GPS!');
       } else {
@@ -434,803 +724,1064 @@ const ProjectWrite = () => {
       console.error('❌ Erro no processamento da foto:', error);
       toast.error('Erro ao processar foto');
     } finally {
-      setPhotoUploading(prev => ({ ...prev, [subId]: false }));
+      setQuestionPhotoUploading(prev => ({ ...prev, [questionId]: false }));
     }
   };
 
-  const handleSave = async () => {
-    if (!projectDetails) return;
-    setSaving(true);
+  // Função para gerar orientação com IA
+  const handleGenerateGuidance = async (questionId: string) => {
+    // Encontrar a pergunta atual para pegar a situação atual
+    let currentSituation = '';
+    for (const module of modules) {
+      for (const item of module.itens) {
+        for (const nc of item.ncs) {
+          const question = nc.perguntas.find(q => q.id === questionId);
+          if (question) {
+            currentSituation = question.response?.currentSituation || '';
+            break;
+          }
+        }
+      }
+    }
+
+    if (!currentSituation.trim()) {
+      toast.error('Descreva a situação atual antes de gerar orientação');
+      return;
+    }
+
     try {
-      // Atualiza os subitens no Firestore
-      const updatedAccordions = (projectDetails.customAccordions || []).map((accordion) => ({
-        ...accordion,
-        items: accordion.items.map((item) => ({
-          ...item,
-          subItems: item.subItems.map((sub) => ({
-            ...sub,
-            evaluation: formState[sub.id]?.evaluation || '',
-            currentSituation: formState[sub.id]?.currentSituation || '',
-            clientGuidance: formState[sub.id]?.clientGuidance || '',
-            photoData: formState[sub.id]?.photoData || sub.photoData || null
+      setGeneratingGuidance(prev => ({ ...prev, [questionId]: true }));
+      toast.info('Gerando orientação com IA...');
+
+      // Chamar a API da OpenAI
+      const assistantResponse = await fetch(`https://api.openai.com/v1/assistants/${OPENAI_ASSISTANT_ID}`, {
+        method: "GET",
+        headers: {
+          "Authorization": `Bearer ${OPENAI_API_KEY}`,
+          "Content-Type": "application/json",
+          "OpenAI-Beta": "assistants=v2"
+        }
+      });
+
+      const assistantData = await assistantResponse.json();
+
+      const threadResponse = await fetch("https://api.openai.com/v1/threads", {
+        method: "POST",
+        headers: {
+          "Authorization": `Bearer ${OPENAI_API_KEY}`,
+          "Content-Type": "application/json",
+          "OpenAI-Beta": "assistants=v2"
+        },
+        body: JSON.stringify({})
+      });
+
+      const threadData = await threadResponse.json();
+      const threadId = threadData.id;
+
+      await fetch(`https://api.openai.com/v1/threads/${threadId}/messages`, {
+        method: "POST",
+        headers: {
+          "Authorization": `Bearer ${OPENAI_API_KEY}`,
+          "Content-Type": "application/json",
+          "OpenAI-Beta": "assistants=v2"
+        },
+        body: JSON.stringify({
+          role: "user",
+          content: currentSituation
+        })
+      });
+
+      const runResponse = await fetch(`https://api.openai.com/v1/threads/${threadId}/runs`, {
+        method: "POST",
+        headers: {
+          "Authorization": `Bearer ${OPENAI_API_KEY}`,
+          "Content-Type": "application/json",
+          "OpenAI-Beta": "assistants=v2"
+        },
+        body: JSON.stringify({
+          assistant_id: OPENAI_ASSISTANT_ID,
+          instructions: assistantData.instructions,
+          model: assistantData.model || "gpt-4-turbo-preview"
+        })
+      });
+
+      const runData = await runResponse.json();
+      const runId = runData.id;
+
+      // Polling para aguardar conclusão
+      let status = runData.status;
+      let attempts = 0;
+      const maxAttempts = 60;
+
+      while (!['completed', 'failed', 'cancelled', 'expired'].includes(status) && attempts < maxAttempts) {
+        await new Promise((resolve) => setTimeout(resolve, 2000));
+        attempts++;
+
+        const checkResponse = await fetch(`https://api.openai.com/v1/threads/${threadId}/runs/${runId}`, {
+          method: "GET",
+          headers: {
+            "Authorization": `Bearer ${OPENAI_API_KEY}`,
+            "OpenAI-Beta": "assistants=v2"
+          }
+        });
+
+        const checkData = await checkResponse.json();
+        status = checkData.status;
+      }
+
+      if (status !== 'completed') {
+        throw new Error('Timeout ao gerar orientação');
+      }
+
+      const messagesResponse = await fetch(`https://api.openai.com/v1/threads/${threadId}/messages`, {
+        method: "GET",
+        headers: {
+          "Authorization": `Bearer ${OPENAI_API_KEY}`,
+          "OpenAI-Beta": "assistants=v2"
+        }
+      });
+
+      const messagesData = await messagesResponse.json();
+      const assistantMessage = messagesData.data.find((msg: any) => msg.role === 'assistant');
+      const textContent = assistantMessage.content.find((item: any) => item.type === 'text');
+      const orientacao = textContent.text.value.trim();
+
+      // Atualizar a orientação na pergunta
+      setModules(prevModules =>
+        prevModules.map(module => ({
+          ...module,
+          itens: module.itens.map(item => ({
+            ...item,
+            ncs: item.ncs.map(nc => ({
+              ...nc,
+              perguntas: nc.perguntas.map(q => {
+                if (q.id === questionId) {
+                  return {
+                    ...q,
+                    response: {
+                      ...q.response,
+                      aiGuidance: orientacao
+                    }
+                  };
+                }
+                return q;
+              })
+            }))
           }))
         }))
-      }));
-      await updateDoc(doc(db, 'projetos', projectDetails.id), {
-        customAccordions: updatedAccordions
-      });
-      
-      // Sincronizar relatórios após atualizar o projeto
-      try {
-        await RelatorioService.syncRelatoriosFromProject(projectDetails.id, userData?.uid || '');
-        console.log('✅ Relatórios sincronizados após atualização do projeto');
-      } catch (syncError) {
-        console.error('⚠️ Erro ao sincronizar relatórios:', syncError);
-        // Não falhar a operação principal por causa da sincronização
-      }
-      
-      toast.success('Formulário salvo com sucesso!');
-      // Fechar o diálogo de confirmação
-      setShowSaveConfirmation(false);
-      // Mostrar botão de download
-      setShowDownloadButton(true);
+      );
+
+      toast.success('Orientação gerada com sucesso!');
     } catch (error) {
-      toast.error('Erro ao salvar formulário');
+      console.error('Erro ao gerar orientação:', error);
+      toast.error('Erro ao gerar orientação. Tente novamente.');
+    } finally {
+      setGeneratingGuidance(prev => ({ ...prev, [questionId]: false }));
+    }
+  };
+
+  const handleSaveProject = async () => {
+    if (!projectDetails || !id) return;
+
+    try {
+      setSaving(true);
+      
+      // Calcular progresso geral
+      const totalQuestions = modules.reduce(
+        (sum, module) =>
+          sum +
+          module.itens.reduce(
+            (itemSum, item) =>
+              itemSum + item.ncs.reduce((ncSum, nc) => ncSum + nc.perguntas.length, 0),
+            0
+          ),
+        0
+      );
+
+      const answeredQuestions = modules.reduce(
+        (sum, module) =>
+          sum +
+          module.itens.reduce(
+            (itemSum, item) =>
+              itemSum +
+              item.ncs.reduce(
+                (ncSum, nc) =>
+                  ncSum + nc.perguntas.filter((q) => q.response !== null).length,
+                0
+              ),
+            0
+          ),
+        0
+      );
+
+      const progresso = totalQuestions > 0 ? Math.round((answeredQuestions / totalQuestions) * 100) : 0;
+
+      // Log antes de salvar
+      console.log('💾 SALVANDO NO FIREBASE:');
+      modules.forEach((mod, mIdx) => {
+        console.log(`  Módulo ${mIdx}: ${mod.titulo}`);
+        mod.itens.forEach((item, iIdx) => {
+          if (item.ncs.length > 1) {
+            console.log(`    ⚠️ Item "${item.titulo}" com ${item.ncs.length} NCs`);
+          } else {
+            console.log(`    Item "${item.titulo}" com ${item.ncs.length} NC`);
+          }
+        });
+      });
+
+      const projectRef = doc(db, "projetos", id);
+      await updateDoc(projectRef, {
+        nome: projectDetails.nome,
+        weightedModules: modules,
+        progresso: progresso,
+        ultimaAtualizacao: new Date().toISOString(),
+        atualizadoPor: userData?.uid || ''
+      });
+
+      toast.success("Projeto salvo com sucesso!");
+    } catch (error) {
+      console.error("Erro ao salvar:", error);
+      toast.error("Erro ao salvar projeto");
     } finally {
       setSaving(false);
     }
   };
 
-  const handleSaveClick = () => {
-    setShowSaveConfirmation(true);
-  };
-
-  const generatePDF = async () => {
-    if (!projectDetails) return;
-    
-    setGeneratingPDF(true);
+  // Função para carregar presets disponíveis
+  const loadPresets = async () => {
     try {
-      const pdfData: PDFProjectData = {
-        nome: projectDetails.nome,
-        cliente: projectDetails.cliente,
-        customAccordions: projectDetails.customAccordions || []
-      };
-      
-      await PDFService.generateProjectPDF(pdfData);
-      toast.success('PDF gerado com sucesso!');
+      setLoadingPresets(true);
+      console.log('📦 Carregando presets...');
+      const presetsRef = collection(db, 'presets');
+      const presetsSnap = await getDocs(presetsRef);
+      const presetsList = presetsSnap.docs.map(doc => ({
+        id: doc.id,
+        ...doc.data()
+      }));
+      console.log('✅ Presets carregados:', presetsList.length, presetsList);
+      setAvailablePresets(presetsList);
     } catch (error) {
-      console.error('Erro ao gerar PDF:', error);
-      toast.error('Erro ao gerar PDF');
+      console.error('❌ Erro ao carregar presets:', error);
+      toast.error('Erro ao carregar presets');
     } finally {
-      setGeneratingPDF(false);
+      setLoadingPresets(false);
     }
   };
 
-  // Função para calcular progresso do projeto
-  const calculateProgress = (accordions: any[]): number => {
-    // Agora o progresso é calculado baseado nos itens concluídos pelo cliente
-    let totalSubItems = 0;
-    let completedItems = 0;
-    
-    accordions.forEach(accordion => {
-      accordion.items.forEach(item => {
-        item.subItems.forEach(subItem => {
-          totalSubItems++;
-          // Conta como progresso se o item foi marcado como concluído
-          if (subItem.status === 'completed' || subItem.completed === true) {
-            completedItems++;
-          }
-        });
-      });
-    });
-    
-    return totalSubItems > 0 ? Math.round((completedItems / totalSubItems) * 100) : 0;
-  };
-
-  // Funções para adequação
-  const approveAdequacy = async (subItemId: string) => {
-    if (!projectDetails) return;
-    
-    try {
-      const updatedAccordions = projectDetails.customAccordions?.map(accordion => ({
-        ...accordion,
-        items: accordion.items.map(item => ({
-          ...item,
-          subItems: item.subItems.map(subItem => {
-            if (subItem.id === subItemId) {
-              return {
-                ...subItem,
-                adequacyStatus: 'approved' as const,
-                completed: true
-              };
-            }
-            return subItem;
-          })
-        }))
-      }));
-
-      // Calcular novo progresso
-      const newProgress = calculateProgress(updatedAccordions || []);
-
-      await updateDoc(doc(db, 'projetos', projectDetails.id), {
-        customAccordions: updatedAccordions,
-        progresso: newProgress
-      });
-
-      setProjectDetails(prev => prev ? { 
-        ...prev, 
-        customAccordions: updatedAccordions,
-        progresso: newProgress
-      } : null);
-      
-      // Atualizar o formState local para refletir imediatamente a aprovação
-      setFormState(prev => ({
-        ...prev,
-        [subItemId]: {
-          ...prev[subItemId],
-          adequacyStatus: 'approved',
-          completed: true
-        }
-      }));
-      
-      setEvaluatingAdequacy(null);
-      toast.success(`Adequação aprovada com sucesso! Progresso: ${newProgress}%`);
-    } catch (error) {
-      console.error('Erro ao aprovar adequação:', error);
-      toast.error('Erro ao aprovar adequação');
-    }
-  };
-
-  const rejectAdequacy = async (subItemId: string) => {
-    if (!projectDetails || !rejectionReason.trim()) {
-      toast.error('Por favor, informe o motivo da rejeição.');
+  // Função para importar preset selecionado
+  const handleImportPreset = async () => {
+    if (!selectedPresetId) {
+      toast.error('Selecione um preset');
       return;
     }
-    
+
     try {
-      const updatedAccordions = projectDetails.customAccordions?.map(accordion => ({
-        ...accordion,
-        items: accordion.items.map(item => ({
-          ...item,
-          subItems: item.subItems.map(subItem => {
-            if (subItem.id === subItemId) {
-              return {
-                ...subItem,
-                adequacyStatus: 'rejected' as const,
-                adminRejectionReason: rejectionReason,
-                completed: false
-              };
-            }
-            return subItem;
-          })
-        }))
-      }));
+      setImportingPreset(true);
+      console.log('🔄 Iniciando importação do preset:', selectedPresetId);
+      const selectedPreset = availablePresets.find(p => p.id === selectedPresetId);
+      
+      if (!selectedPreset) {
+        console.error('❌ Preset não encontrado na lista');
+        toast.error('Preset não encontrado');
+        return;
+      }
 
-      // Calcular novo progresso
-      const newProgress = calculateProgress(updatedAccordions || []);
-
-      await updateDoc(doc(db, 'projetos', projectDetails.id), {
-        customAccordions: updatedAccordions,
-        progresso: newProgress
+      console.log('📄 Preset selecionado:', selectedPreset);
+      console.log('🔍 Estrutura do preset:', {
+        hasTopicos: !!selectedPreset.topicos,
+        hasAreas: !!selectedPreset.areas,
+        topicosLength: selectedPreset.topicos?.length,
+        areasLength: selectedPreset.areas?.length
       });
 
-      setProjectDetails(prev => prev ? { 
-        ...prev, 
-        customAccordions: updatedAccordions,
-        progresso: newProgress
-      } : null);
+      // Converter estrutura do preset para módulos ponderados
+      const newModules: ProjectModule[] = [];
       
-      // Atualizar o formState local para refletir imediatamente a rejeição
-      setFormState(prev => ({
-        ...prev,
-        [subItemId]: {
-          ...prev[subItemId],
-          adequacyStatus: 'rejected',
-          adminRejectionReason: rejectionReason,
-          completed: false
-        }
-      }));
+      // Suporte para estrutura com "topicos" (antiga)
+      if (selectedPreset.topicos && Array.isArray(selectedPreset.topicos)) {
+        console.log('📋 Convertendo preset com estrutura "topicos"...');
+        selectedPreset.topicos.forEach((topico: any, mIdx: number) => {
+          const moduleId = generateUniqueId('module');
+          const moduleItems: any[] = [];
+          
+          if (topico.perguntas && Array.isArray(topico.perguntas)) {
+            topico.perguntas.forEach((pergunta: any, iIdx: number) => {
+              const itemId = generateUniqueId('item');
+              const ncId = generateUniqueId('nc');
+              
+              const weightedQuestion: WeightedQuestion = {
+                id: generateUniqueId('question'),
+                text: pergunta.texto || pergunta.text || 'Pergunta sem título',
+                weight: pergunta.peso || 1,
+                required: pergunta.obrigatorio || false,
+                responseOptions: pergunta.opcoesResposta || ['na', 'very_bad', 'good'],
+                response: null,
+                order: iIdx + 1
+              };
+              
+              const nc: NC = {
+                id: ncId,
+                numero: 1,
+                ncTitulo: `NC 1`,
+                perguntas: [weightedQuestion],
+                pontuacaoAtual: 0,
+                pontuacaoMaxima: RESPONSE_VALUES.excellent * weightedQuestion.weight,
+                status: 'pending'
+              };
+              
+              moduleItems.push({
+                id: itemId,
+                titulo: pergunta.texto || pergunta.text || 'Item sem título',
+                ordem: iIdx + 1,
+                ncs: [nc],
+                pontuacaoAtual: 0,
+                pontuacaoMaxima: RESPONSE_VALUES.excellent * weightedQuestion.weight
+              });
+            });
+          }
+          
+          if (moduleItems.length > 0) {
+            newModules.push({
+              id: moduleId,
+              titulo: topico.titulo || `Módulo ${mIdx + 1}`,
+              ordem: mIdx + 1,
+              itens: moduleItems
+            });
+          }
+        });
+      }
+      // Suporte para estrutura com "areas" (nova)
+      else if (selectedPreset.areas && Array.isArray(selectedPreset.areas)) {
+        console.log('📋 Convertendo preset com estrutura "areas"...');
+        selectedPreset.areas.forEach((area: any, mIdx: number) => {
+          const moduleId = generateUniqueId('module');
+          const moduleItems: any[] = [];
+          
+          if (area.items && Array.isArray(area.items)) {
+            area.items.forEach((item: any, iIdx: number) => {
+              const itemId = generateUniqueId('item');
+              const ncId = generateUniqueId('nc');
+              
+              // Criar uma pergunta padrão para o item
+              const weightedQuestion: WeightedQuestion = {
+                id: generateUniqueId('question'),
+                text: item.description || item.title || 'Pergunta sem título',
+                weight: 2, // Peso padrão
+                required: false,
+                responseOptions: ['na', 'very_bad', 'good'],
+                response: null,
+                order: iIdx + 1
+              };
+              
+              const nc: NC = {
+                id: ncId,
+                numero: 1,
+                ncTitulo: `NC 1`,
+                perguntas: [weightedQuestion],
+                pontuacaoAtual: 0,
+                pontuacaoMaxima: RESPONSE_VALUES.excellent * weightedQuestion.weight,
+                status: 'pending'
+              };
+              
+              moduleItems.push({
+                id: itemId,
+                titulo: item.title || 'Item sem título',
+                descricao: item.description,
+                ordem: item.order || iIdx + 1,
+                ncs: [nc],
+                pontuacaoAtual: 0,
+                pontuacaoMaxima: RESPONSE_VALUES.excellent * weightedQuestion.weight
+              });
+            });
+          }
+          
+          if (moduleItems.length > 0) {
+            newModules.push({
+              id: moduleId,
+              titulo: area.name || `Módulo ${mIdx + 1}`,
+              ordem: area.order || mIdx + 1,
+              itens: moduleItems
+            });
+          }
+        });
+      } else {
+        console.warn('⚠️ Preset sem estrutura reconhecida (nem topicos nem areas)');
+        toast.error('Preset com estrutura inválida');
+        return;
+      }
       
-      setEvaluatingAdequacy(null);
-      setRejectionReason('');
-      toast.success(`Adequação rejeitada. Cliente será notificado. Progresso: ${newProgress}%`);
+      console.log('✅ Conversão concluída:', {
+        modulosGerados: newModules.length,
+        totalItens: newModules.reduce((acc, m) => acc + m.itens.length, 0)
+      });
+      
+      if (newModules.length === 0) {
+        console.warn('⚠️ Nenhum módulo foi gerado');
+        toast.error('Preset vazio ou sem conteúdo válido');
+        return;
+      }
+      
+      // Sanitizar IDs duplicados antes de aplicar
+      const sanitizedModules = sanitizeDuplicateIds(newModules);
+      setModules(sanitizedModules);
+      
+      // Auto-selecionar primeiro item
+      if (sanitizedModules.length > 0 && sanitizedModules[0].itens.length > 0) {
+        setCurrentModuleId(sanitizedModules[0].id);
+        setCurrentItemId(sanitizedModules[0].itens[0].id);
+        setCurrentNcId(sanitizedModules[0].itens[0].ncs[0].id);
+        console.log('✅ Primeiro item selecionado automaticamente');
+      }
+      
+      setShowPresetModal(false);
+      setSelectedPresetId('');
+      console.log('🎉 Importação concluída com sucesso!');
+      toast.success('Preset importado com sucesso!');
     } catch (error) {
-      console.error('Erro ao rejeitar adequação:', error);
-      toast.error('Erro ao rejeitar adequação');
+      console.error('❌ Erro ao importar preset:', error);
+      toast.error('Erro ao importar preset');
+    } finally {
+      setImportingPreset(false);
     }
   };
 
-  const cancelEvaluation = () => {
-    setEvaluatingAdequacy(null);
-    setRejectionReason('');
+  // Abrir modal de preset
+  const handleOpenPresetModal = () => {
+    setShowPresetModal(true);
+    loadPresets();
   };
 
-  const openImageModal = (imageUrl: string) => {
-    setSelectedImage(imageUrl);
-    setImageModalOpen(true);
-  };
-
-  const closeImageModal = () => {
-    setSelectedImage(null);
-    setImageModalOpen(false);
-  };
-
-  // Função para alternar a aba de um subitem
-  const handleTabChange = (subId: string, tab: 'visualizacao' | 'adequacao') => {
-    setActiveTabs(prev => ({ ...prev, [subId]: tab }));
-  };
+  const currentModule = modules.find(m => m.id === currentModuleId);
+  const currentWeightedItem = currentModule?.itens.find(i => i.id === currentItemId);
+  const currentNC = currentWeightedItem?.ncs.find(nc => nc.id === currentNcId);
 
   if (loading) {
     return (
-      <div className="flex items-center justify-center h-full p-10">
-        <span className="text-sm text-gray-600">Carregando projeto...</span>
+      <div className="flex items-center justify-center min-h-screen">
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto mb-4"></div>
+          <p className="text-gray-600">Carregando projeto...</p>
+        </div>
       </div>
     );
   }
 
   if (!projectDetails) {
     return (
-      <div className="flex flex-col items-center justify-center h-full p-6 space-y-4">
-        <span className="text-lg font-medium text-gray-900">Projeto não encontrado</span>
-        <Button variant="outline" onClick={() => {
-          // Verificar se o usuário é cliente ou admin para redirecionar corretamente
-          const isClient = window.location.pathname.includes('/client-projects');
-          navigate(isClient ? "/client-projects" : "/projetos");
-        }} className="mt-2">
-          Voltar para a lista de projetos
-        </Button>
+      <div className="flex items-center justify-center min-h-screen">
+        <p className="text-gray-600">Projeto não encontrado</p>
       </div>
     );
   }
 
-  const totalSteps = projectSteps.length;
-  const currentItem = projectSteps[currentStep];
-
   return (
-    <div className="p-6 space-y-6">
+    <div className="flex h-screen -m-6 overflow-hidden pt-4 md:pt-6">
+      {/* Sidebar Hierárquica - Mobile: controlado externamente, Desktop: sidebar normal */}
+      <HierarchicalProjectSidebar
+        modules={modules}
+        currentModuleId={currentModuleId}
+        currentItemId={currentItemId}
+        currentNcId={currentNcId}
+        onNavigate={handleNavigate}
+        className="h-full flex-shrink-0"
+        showMobileButton={false}
+        isOpen={isSidebarOpen}
+        onOpenChange={setIsSidebarOpen}
+      />
+
+      {/* Conteúdo Principal */}
+      <div className="flex-1 overflow-hidden w-full">
+        {/* Área de Conteúdo */}
+        <div className="px-4 pt-2 pb-4 md:p-6 md:m-4 md:border md:border-gray-350 md:rounded-lg md:shadow-md bg-white h-[calc(100vh-3.5rem)] md:h-[calc(100vh-8rem)] overflow-y-auto">
+          {currentNC ? (
+            <div className="max-w-4xl mx-auto">
+              {/* Header Mobile - Verde com artigo atual */}
+              {currentWeightedItem && (
+                <div className="md:hidden -mx-4 -mt-4 mb-4 bg-versys-primary text-white px-4 py-3">
+                  <div className="flex items-start gap-3">
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      onClick={() => navigate("/projetos")}
+                      className="h-8 w-8 text-white hover:bg-white/20 flex-shrink-0 mt-0.5"
+                    >
+                      <ArrowLeft className="h-5 w-5" />
+                    </Button>
+                    <div className="flex-1 min-w-0">
+                      <h2 className="text-base font-semibold leading-snug">
+                        {currentWeightedItem.titulo}
+                      </h2>
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {/* Botão Flutuante da Estrutura do Projeto - Acompanha botões de ação */}
+              <Button
+                onClick={() => setIsSidebarOpen(true)}
+                className="md:hidden fixed right-0 z-50 h-16 w-10 rounded-l-full bg-versys-primary/60 hover:bg-versys-primary/80 backdrop-blur-sm shadow-lg p-0 flex items-center justify-center transition-all"
+                style={{ top: `${floatingButtonTop}px` }}
+              >
+                <ChevronLeft className="h-6 w-6 text-white" />
+              </Button>
+
+              {/* Header Desktop */}
+              <div className="hidden md:block bg-white p-4 rounded-lg shadow-sm border border-gray-200 mb-4">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-4">
       <Button
         variant="ghost"
         size="sm"
-        onClick={() => {
-          // Verificar se o usuário é cliente ou admin para redirecionar corretamente
-          const isClient = window.location.pathname.includes('/client-projects');
-          navigate(isClient ? "/client-projects" : "/projetos");
-        }}
-        className="flex items-center space-x-1 mb-4"
-      >
-        <ArrowLeft className="h-4 w-4" />
-        <span>Voltar</span>
+                      onClick={() => navigate("/projetos")}
+                    >
+                      <ArrowLeft className="h-4 w-4 mr-2" />
+                      Voltar
       </Button>
-
-      <div className="flex items-center justify-between">
-        <h1 className="text-2xl font-semibold flex-1 truncate pr-4">
-          {projectDetails.nome}
-        </h1>
-        <span className="px-3 py-1 rounded-full text-xs font-medium bg-purple-100 text-purple-800">
-          {projectDetails.status}
-        </span>
+                    <div className="flex-1 max-w-md">
+                      <Input
+                        value={projectDetails.nome}
+                        onChange={(e) => setProjectDetails({ ...projectDetails, nome: e.target.value })}
+                        placeholder="Digite o nome do projeto..."
+                        className="text-xl font-bold border-none p-0 h-auto bg-transparent focus-visible:ring-0 shadow-none"
+                      />
       </div>
-
-      <div>
-        <p className="text-sm mb-1 text-gray-600">Progresso geral</p>
-        <Progress value={projectDetails.progresso} />
-        <p className="text-xs text-right mt-1 text-gray-500">
-          {projectDetails.progresso}% concluído
-        </p>
       </div>
-
-      {totalSteps > 0 && (
-        <div className="flex flex-col items-center justify-center py-4">
-          <div className="flex items-center justify-center mb-2">
-            <div className="w-10 h-10 rounded-full bg-purple-600 text-white flex items-center justify-center text-sm font-medium shadow-lg">
-              {currentStep + 1}
+                  <div className="flex items-center gap-3">
+                    <div className="text-right">
+                      <div className="text-sm font-medium text-gray-700">Progresso Geral</div>
+                      <div className="text-2xl font-bold text-blue-600">{projectDetails.progresso}%</div>
             </div>
+                    <Progress value={projectDetails.progresso} className="w-32" />
+                    <Button onClick={handleSaveProject} disabled={saving}>
+                      <Save className="h-4 w-4 mr-2" />
+                      {saving ? "Salvando..." : "Salvar"}
+                    </Button>
           </div>
-          <p className="text-sm font-medium text-gray-700">
-            Passo {currentStep + 1} de {totalSteps}
-          </p>
-          <p className="text-xs text-gray-500 mt-1 text-center max-w-xs truncate" title={currentItem?.title}>
-            {currentItem?.title || 'Sem título'}
-          </p>
         </div>
-      )}
-
-      {/* Conteúdo do passo atual */}
-      {currentItem && (
-        <Card>
-          <CardHeader>
-            <CardTitle className="flex items-center space-x-2">
-              <span className="sm:hidden">
-                {currentItem.title.length > 25 
-                  ? currentItem.title.replace(/SÓCIOS\/PROPRIETÁRIOS\/REPRESENTANTES:/g, 'SÓCIOS/PROP./REPR.:')
-                                     .replace(/DOCUMENTAÇÃO\/PRELIMINAR/g, 'DOC./PRELIM.')
-                                     .replace(/INSTALAÇÃO PORTUÁRIA:/g, 'INST. PORT.:')
-                                     .substring(0, 35) + (currentItem.title.length > 35 ? '...' : '')
-                  : currentItem.title
-                }
-              </span>
-              <span className="hidden sm:inline">
-                {currentItem.title}
-              </span>
-              <Badge variant="secondary" className="uppercase">
-                {currentItem.category}
+              </div>
+              {/* Header do Módulo e Artigo - Apenas Desktop */}
+              {currentModule && currentWeightedItem && (
+                <div className="hidden md:block mb-4 bg-gradient-to-r from-versys-primary to-versys-secondary rounded-lg p-4 shadow-md text-white">
+                  <div className="flex items-center gap-2 mb-2">
+                    <Badge variant="secondary" className="bg-white/20 text-white border-white/30">
+                      Módulo
               </Badge>
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            {currentItem.subItems && currentItem.subItems.length > 0 ? (
-              <Accordion type="single" collapsible className="w-full">
-                {currentItem.subItems.map((sub: SubItem) => (
-                  <AccordionItem key={sub.id} value={sub.id}>
-                    <AccordionTrigger>
-                      <div className="flex items-center space-x-3">
-                        <span className="font-medium">{sub.title}</span>
-                        {formState[sub.id]?.evaluation === 'na' && <CheckCircle size={16} className="text-green-500" />}
+                    <h3 className="text-lg font-bold uppercase">{currentModule.titulo}</h3>
                       </div>
-                    </AccordionTrigger>
-                    <AccordionContent className="space-y-4">
-                      {/* View Toggle Buttons - Exactly like client view */}
-                      <div className="flex items-center justify-center mb-4">
-                        <div className="flex items-center space-x-2 bg-gray-100 rounded-full p-1">
-                          <button
-                            onClick={() => handleTabChange(sub.id, 'visualizacao')}
-                            className={`px-3 py-1 rounded-full text-sm font-medium transition-colors ${
-                              (!activeTabs[sub.id] || activeTabs[sub.id] === 'visualizacao')
-                                ? 'bg-white text-blue-600 shadow-sm' 
-                                : 'text-gray-600 hover:text-gray-800'
-                            }`}
-                          >
-                            Visualização
-                          </button>
-                          <button
-                            onClick={() => handleTabChange(sub.id, 'adequacao')}
-                            className={`px-3 py-1 rounded-full text-sm font-medium transition-colors ${
-                              activeTabs[sub.id] === 'adequacao'
-                                ? 'bg-white text-green-600 shadow-sm' 
-                                : 'text-gray-600 hover:text-gray-800'
-                            }`}
-                          >
-                            Adequação
-                          </button>
+                  <div className="flex items-start gap-3 mt-3 pl-4 border-l-2 border-white/30">
+                    <FileText className="h-5 w-5 flex-shrink-0 mt-0.5" />
+                    <div className="flex-1">
+                      <div className="text-sm font-semibold">{currentWeightedItem.titulo}</div>
+                      {currentWeightedItem.descricao && (
+                        <div className="text-xs text-white/80 mt-1">{currentWeightedItem.descricao}</div>
+                      )}
                         </div>
                       </div>
-                      
-                      {/* Conteúdo da aba Visualização */}
-                      {(!activeTabs[sub.id] || activeTabs[sub.id] === 'visualizacao') && (
-                        <div className="space-y-4">
-                          {/* Avaliação */}
-                          <div className="bg-gray-50 p-4 rounded-md space-y-2">
-                            <Label>Avaliação</Label>
-                            <RadioGroup
-                              value={formState[sub.id]?.evaluation || ''}
-                              onValueChange={val => handleChange(sub.id, 'evaluation', val)}
-                              className="flex flex-row space-x-4"
-                            >
-                              <RadioGroupItem value="nc" id={`nc-${sub.id}`} />
-                              <Label htmlFor={`nc-${sub.id}`}>NC</Label>
-                              <RadioGroupItem value="r" id={`r-${sub.id}`} />
-                              <Label htmlFor={`r-${sub.id}`}>R</Label>
-                              <RadioGroupItem value="na" id={`na-${sub.id}`} />
-                              <Label htmlFor={`na-${sub.id}`}>NA</Label>
-                            </RadioGroup>
                           </div>
-                          
-                          {/* Situação Atual */}
-                          <div className="bg-gray-50 p-4 rounded-md space-y-2">
-                            <div className="flex items-center justify-between">
-                              <Label>Situação atual</Label>
-                              <Button
-                                type="button"
-                                variant="outline"
-                                size="sm"
-                                onClick={isRecording[sub.id] ? () => stopRecording(sub.id) : () => startRecording(sub.id)}
-                                disabled={isTranscribing[sub.id] || !speechRecognition}
-                                className={`flex items-center space-x-2 ${
-                                  isRecording[sub.id] ? 'bg-red-50 border-red-300 text-red-700' : 'hover:bg-blue-50'
-                                }`}
-                              >
-                                {isRecording[sub.id] ? (
-                                  <MicOff className="h-4 w-4" />
-                                ) : (
-                                  <Mic className="h-4 w-4" />
-                                )}
-                                <span className="text-xs">
-                                  {isTranscribing[sub.id] ? 'Transcrevendo...' : isRecording[sub.id] ? 'Parar' : 'Gravar'}
-                                </span>
-                              </Button>
-                            </div>
-                            <Textarea
-                              value={formState[sub.id]?.currentSituation || ''}
-                              onChange={e => handleChange(sub.id, 'currentSituation', e.target.value)}
-                              placeholder="Situação atual..."
-                            />
-                            {!speechRecognition && (
-                              <p className="text-xs text-gray-500">Inicializando reconhecimento de voz...</p>
-                            )}
-                          </div>
-                          
-                          {/* Orientação para o Cliente */}
-                          <div className="bg-gray-50 p-4 rounded-md space-y-2">
-                            <Label>Orientação para o cliente</Label>
-                            <Textarea
-                              value={formState[sub.id]?.clientGuidance || ''}
-                              onChange={e => handleChange(sub.id, 'clientGuidance', e.target.value)}
-                              placeholder="Orientação para o cliente..."
-                            />
-                          </div>
-                          
-                          {/* Foto */}
-                          <div className="bg-gray-50 p-4 rounded-md space-y-2">
-                            <Label>Foto (opcional)</Label>
-                            {formState[sub.id]?.photoData?.url ? (
-                            <div className="border-2 border-dashed rounded-lg p-4 bg-gray-50 relative">
-                              <img 
-                                src={formState[sub.id].photoData.url} 
-                                alt="Foto do subitem" 
-                                className="max-h-40 rounded border mb-2 mx-auto block"
-                                onError={(e) => {
-                                  console.error('❌ Erro ao carregar imagem no ProjectWrite');
-                                  // Tentar URL do Firebase como fallback
-                                  if (formState[sub.id]?.photoData?.firebaseUrl) {
-                                    console.log('🔄 Tentando URL do Firebase como fallback');
-                                    (e.target as HTMLImageElement).src = formState[sub.id].photoData.firebaseUrl;
-                                  } else {
-                                    console.error('❌ Nenhum fallback disponível');
-                                  }
-                                }}
-                                onLoad={() => {
-                                  console.log('✅ Imagem carregada no ProjectWrite');
-                                }}
-                              />
-                              <div className="flex gap-2 justify-center mt-2">
+              )}
+
+              {/* Ações da NC */}
+              <div id="nc-actions-buttons" className="mb-6 flex gap-2 justify-start">
                                 <Button
-                                  type="button"
-                                  variant="outline"
-                                  size="sm"
-                                  onClick={() => {
-                                    document.getElementById(`camera-input-${sub.id}`)?.click();
-                                  }}
-                                  disabled={photoUploading[sub.id]}
+                                  variant="ghost"
+                                  size="icon"
+                  onClick={() => addNC(currentModuleId, currentItemId)}
                                 >
-                                  <Camera className="w-4 h-4 mr-2" />
-                                  Nova Foto
+                  <Plus className="h-4 w-4" />
                                 </Button>
+                {currentWeightedItem && currentWeightedItem.ncs.length > 1 && (
                                 <Button
-                                  type="button"
-                                  variant="outline"
-                                  size="sm"
-                                  onClick={() => {
-                                    const newFormState = { ...formState };
-                                    if (newFormState[sub.id]) {
-                                      newFormState[sub.id].photoData = null;
-                                    }
-                                    setFormState(newFormState);
-                                  }}
-                                  disabled={photoUploading[sub.id]}
-                                  className="text-red-600 border-red-600 hover:bg-red-50"
-                                >
-                                  Remover
+                    variant="ghost"
+                                  size="icon"
+                    onClick={() => removeNC(currentModuleId, currentItemId, currentNcId)}
+                  >
+                    <Trash2 className="h-4 w-4" />
                                 </Button>
-                              </div>
-                            </div>
-                          ) : (
-                            <div className="space-y-3">
-                              <div className="grid grid-cols-2 gap-3">
-                                <Button
-                                  type="button"
-                                  variant="outline"
-                                  className="h-20 flex flex-col items-center justify-center gap-2 border-2 border-dashed hover:border-purple-400 hover:bg-purple-50"
-                                  onClick={() => {
-                                    document.getElementById(`camera-input-${sub.id}`)?.click();
-                                  }}
-                                  disabled={photoUploading[sub.id]}
-                                >
-                                  <Camera className="w-6 h-6 text-purple-600" />
-                                  <span className="text-sm font-medium">Tirar Foto</span>
-                                </Button>
-                                <Button
-                                  type="button"
-                                  variant="outline"
-                                  className="h-20 flex flex-col items-center justify-center gap-2 border-2 border-dashed hover:border-blue-400 hover:bg-blue-50"
-                                  onClick={() => {
-                                    document.getElementById(`gallery-input-${sub.id}`)?.click();
-                                  }}
-                                  disabled={photoUploading[sub.id]}
-                                >
-                                  <svg className="w-6 h-6 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
-                                  </svg>
-                                  <span className="text-sm font-medium">Da Galeria</span>
-                                </Button>
+                )}
                               </div>
 
+              {/* Perguntas */}
+              {currentNC.perguntas && currentNC.perguntas.length > 0 && (
+                <div className="space-y-4">
+                  {currentNC.perguntas.map((question: WeightedQuestion, index: number) => (
+                    <Card key={question.id} className="shadow-sm">
+                      <CardHeader className="pb-4">
+                        {/* Título da NC - Editável inline */}
+                        <Input
+                          value={currentNC.ncTitulo}
+                          onChange={(e) => {
+                            setModules(prevModules =>
+                              prevModules.map(module => ({
+                                ...module,
+                                itens: module.itens.map(item => ({
+                                  ...item,
+                                  ncs: item.ncs.map(nc => 
+                                    nc.id === currentNcId ? { ...nc, ncTitulo: e.target.value } : nc
+                                  )
+                                }))
+                              }))
+                            );
+                          }}
+                          placeholder="Título da NC..."
+                          className="text-lg font-semibold border-none p-0 h-auto bg-transparent focus-visible:ring-0 shadow-none mb-3 hover:bg-gray-50 px-2 py-1 -mx-2 rounded transition-colors"
+                        />
+                        <div className="text-sm text-gray-600 font-normal">
+                          {question.text}
+                        </div>
+                      </CardHeader>
+                      <CardContent className="space-y-4">
+                        <div>
+                          <Label className="text-sm text-gray-600 mb-3 block">
+                            Selecione uma resposta:
+                          </Label>
+                          <div className="flex gap-3 flex-wrap justify-center">
+                            {/* Apenas 3 opções: NC, R, N/A */}
+                            <Button
+                              variant={question.response?.selectedOption === 'very_bad' ? 'default' : 'outline'}
+                              size="lg"
+                              onClick={() => handleWeightedResponseChange(question.id, 'very_bad')}
+                              className={question.response?.selectedOption === 'very_bad' ? 'bg-red-600 hover:bg-red-700 text-white' : ''}
+                            >
+                              NC
+                            </Button>
+                            <Button
+                              variant={question.response?.selectedOption === 'good' ? 'default' : 'outline'}
+                              size="lg"
+                              onClick={() => handleWeightedResponseChange(question.id, 'good')}
+                              className={question.response?.selectedOption === 'good' ? 'bg-yellow-600 hover:bg-yellow-700 text-white' : ''}
+                            >
+                              R
+                            </Button>
+                            <Button
+                              variant={question.response?.selectedOption === 'na' ? 'default' : 'outline'}
+                              size="lg"
+                              onClick={() => handleWeightedResponseChange(question.id, 'na')}
+                              className={question.response?.selectedOption === 'na' ? 'bg-gray-600 hover:bg-gray-700 text-white' : ''}
+                            >
+                              N/A
+                            </Button>
+                              </div>
+                            </div>
+
+                        {/* Área de foto anexada - Oculto no mobile, visível no desktop */}
+                        {questionPhotos[question.id] && (
+                          <div className="hidden md:block mt-4 p-3 bg-gray-50 rounded-lg border border-gray-200">
+                            <div className="flex items-start gap-3">
+                              <img 
+                                src={questionPhotos[question.id].url} 
+                                alt="Foto anexada" 
+                                className="w-24 h-24 object-cover rounded-lg cursor-pointer hover:opacity-80"
+                                onClick={() => window.open(questionPhotos[question.id].url, '_blank')}
+                              />
+                              <div className="flex-1 text-sm">
+                                <div className="flex items-center gap-2 text-gray-600 mb-1">
+                                  <Camera className="h-4 w-4" />
+                                  <span>Foto anexada</span>
+                            </div>
+                                {questionPhotos[question.id].latitude !== 0 && (
+                                  <div className="text-xs text-green-600">
+                                    📍 GPS: {questionPhotos[question.id].latitude.toFixed(6)}, {questionPhotos[question.id].longitude.toFixed(6)}
                             </div>
                           )}
-                          
-                          {/* Input para câmera - Múltiplas abordagens para compatibilidade */}
+                                <div className="text-xs text-gray-400 mt-1">
+                                  {new Date(questionPhotos[question.id].createdAt).toLocaleString('pt-BR')}
+                                </div>
+                                </div>
+                                  <Button
+                                variant="ghost" 
+                                    size="sm"
+                                onClick={() => setQuestionPhotos(prev => {
+                                  const newPhotos = { ...prev };
+                                  delete newPhotos[question.id];
+                                  return newPhotos;
+                                })}
+                              >
+                                <X className="h-4 w-4" />
+                                  </Button>
+                        </div>
+                      </div>
+                      )}
+
+                        {/* Comentário do Usuário (único) */}
+                        {question.response?.userComment && (
+                          <div className="mt-4">
+                            <div className="p-3 bg-blue-50 rounded-lg border border-blue-200">
+                              <div className="flex items-start gap-2">
+                                <MessageCircle className="h-4 w-4 text-blue-600 mt-0.5" />
+                                <div className="flex-1">
+                                  <p className="text-sm text-gray-800">{question.response.userComment}</p>
+                                  <div className="flex items-center gap-2 mt-1 text-xs text-gray-500">
+                                    <span>{question.response.userCommentBy || 'Usuário'}</span>
+                                    <span>•</span>
+                                    <span>{question.response.userCommentDate ? new Date(question.response.userCommentDate).toLocaleString('pt-BR') : ''}</span>
+                                  </div>
+                                </div>
+                              </div>
+                            </div>
+                          </div>
+                        )}
+
+                        {/* Situação Atual (editável) - Só aparece ao clicar em Comentar */}
+                        {showSituacaoAtual[question.id] === true && (
+                          <>
+                            <div className="mt-4">
+                              <div className="flex items-center justify-between mb-2">
+                                <Label className="text-sm font-medium text-gray-700">Situação Atual</Label>
+                                <Button
+                                  type="button"
+                                  variant="ghost"
+                                  size="icon"
+                                  onClick={() => handleGenerateGuidance(question.id)}
+                                  disabled={generatingGuidance[question.id] || !question.response?.currentSituation?.trim()}
+                                  className="h-8 w-8"
+                                >
+                                  {generatingGuidance[question.id] ? (
+                                    <Clock className="h-4 w-4 animate-spin" />
+                                  ) : (
+                                    <Sparkles className="h-4 w-4" />
+                                  )}
+                                </Button>
+                              </div>
+                              <Textarea
+                                id={`situacao-atual-${question.id}`}
+                                value={question.response?.currentSituation || ''}
+                                onChange={(e) => {
+                                  setModules(prevModules =>
+                                    prevModules.map(module => ({
+                                      ...module,
+                                      itens: module.itens.map(item => ({
+                                        ...item,
+                                        ncs: item.ncs.map(nc => ({
+                                          ...nc,
+                                          perguntas: nc.perguntas.map(q => {
+                                            if (q.id === question.id) {
+                                              return {
+                                                ...q,
+                                                response: {
+                                                  ...q.response,
+                                                  currentSituation: e.target.value
+                                                }
+                                              };
+                                            }
+                                            return q;
+                                          })
+                                        }))
+                                      }))
+                                    }))
+                                  );
+                                }}
+                                placeholder="Descreva a situação atual encontrada..."
+                                className="min-h-[80px] bg-amber-50 border-amber-200"
+                              />
+                            </div>
+
+                            {/* Orientação da IA */}
+                            {question.response?.aiGuidance && (
+                              <div className="mt-4">
+                                <div className="p-3 bg-purple-50 rounded-lg border border-purple-200">
+                                  <div className="flex items-start gap-2">
+                                    <Sparkles className="h-4 w-4 text-purple-600 mt-0.5" />
+                                    <div className="flex-1">
+                                      <p className="text-xs font-medium text-purple-900 mb-1">Orientação (IA)</p>
+                                      <p className="text-sm text-gray-800 whitespace-pre-wrap">{question.response.aiGuidance}</p>
+                                    </div>
+                                  </div>
+                                </div>
+                              </div>
+                            )}
+                          </>
+                        )}
+
+                        {/* Comentários antigos (compatibilidade) */}
+                        {question.response?.comments && question.response.comments.length > 0 && (
+                          <div className="mt-4 space-y-2">
+                            <p className="text-xs text-gray-500">Comentários antigos:</p>
+                            {question.response.comments.map((comment: any) => (
+                              <div key={comment.id} className="p-3 bg-gray-50 rounded-lg border border-gray-200">
+                                <div className="flex items-start gap-2">
+                                  <MessageCircle className="h-4 w-4 text-gray-600 mt-0.5" />
+                                  <div className="flex-1">
+                                    <p className="text-sm text-gray-800">{comment.text}</p>
+                                    <div className="flex items-center gap-2 mt-1 text-xs text-gray-500">
+                                      <span>{comment.createdByName || comment.author}</span>
+                                      <span>•</span>
+                                      <span>{new Date(comment.createdAt || comment.timestamp).toLocaleString('pt-BR')}</span>
+                                    </div>
+                                  </div>
+                                </div>
+                              </div>
+                            ))}
+                          </div>
+                        )}
+
+                        <div className="flex gap-2 pt-4 border-t border-gray-200 justify-center">
                           <input
-                            id={`camera-input-${sub.id}`}
                             type="file"
-                            accept="image/*,image/jpeg,image/png,image/gif,image/webp"
+                            id={`file-${question.id}`}
+                            accept="image/*"
                             capture="environment"
                             className="hidden"
-                            disabled={photoUploading[sub.id]}
-                            onChange={e => {
-                              if (e.target.files && e.target.files[0]) {
-                                handlePhoto(sub.id, e.target.files[0]);
-                              }
+                            onChange={(e) => {
+                              const file = e.target.files?.[0];
+                              if (file) handleQuestionPhoto(question.id, file);
                             }}
                           />
                           
-
-                          {/* Input para galeria */}
-                          <input
-                            id={`gallery-input-${sub.id}`}
-                            type="file"
-                            accept="image/*"
-                            className="hidden"
-                            disabled={photoUploading[sub.id]}
-                            onChange={e => {
-                              if (e.target.files && e.target.files[0]) {
-                                handlePhoto(sub.id, e.target.files[0]);
+                                      <Button
+                            variant="ghost" 
+                                        size="sm"
+                            onClick={() => {
+                              if (isMobile) {
+                                setPhotoDrawerOpen(question.id);
+                              } else {
+                                document.getElementById(`file-${question.id}`)?.click();
                               }
                             }}
-                          />
+                            disabled={questionPhotoUploading[question.id]}
+                          >
+                            {questionPhotoUploading[question.id] ? (
+                              <>
+                                <Clock className="h-4 w-4 mr-2 animate-spin" />
+                                Processando...
+                              </>
+                            ) : (
+                              <>
+                                <Paperclip className="h-4 w-4 mr-2" />
+                                Anexar Foto
+                              </>
+                            )}
+                                      </Button>
                           
-                          {/* Drag and drop area for gallery input */}
-
-                          
-                          {photoUploading[sub.id] && (
-                            <div className="text-xs text-center text-gray-500 mt-2">
-                              Enviando foto...
-                            </div>
-                          )}
-                          
-                          {formState[sub.id]?.photoData?.url && (
-                            <div className="text-xs text-gray-500 mt-2 p-2 bg-gray-50 rounded">
-                              <div>Latitude: {formState[sub.id].photoData.latitude}</div>
-                              <div>Longitude: {formState[sub.id].photoData.longitude}</div>
-                              <div>Data: {new Date(formState[sub.id].photoData.createdAt).toLocaleString('pt-BR')}</div>
+                                      <Button
+                            variant="ghost" 
+                                        size="sm"
+                            onClick={() => {
+                              // Alterna entre mostrar e ocultar
+                              if (showSituacaoAtual[question.id] === true) {
+                                setShowSituacaoAtual(prev => ({ ...prev, [question.id]: false }));
+                              } else {
+                                // Abre o campo
+                                setShowSituacaoAtual(prev => ({ ...prev, [question.id]: true }));
+                                
+                                // Focar no campo após um delay
+                                setTimeout(() => {
+                                  const situacaoAtualField = document.getElementById(`situacao-atual-${question.id}`);
+                                  if (situacaoAtualField) {
+                                    situacaoAtualField.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                                    setTimeout(() => situacaoAtualField.focus(), 300);
+                                  }
+                                }, 100);
+                              }
+                            }}
+                                      >
+                            <MessageCircle className="h-4 w-4 mr-2" />
+                            {showSituacaoAtual[question.id] === true ? 'Ocultar' : 'Comentar'}
+                                      </Button>
+                                    </div>
+                      </CardContent>
+                    </Card>
+                  ))}
+                                </div>
+                              )}
+                                </div>
+          ) : modules.length === 0 ? (
+            <div className="max-w-2xl mx-auto text-center py-12">
+              <FileText className="h-16 w-16 text-gray-300 mx-auto mb-6" />
+              <h3 className="text-xl font-semibold text-gray-700 mb-2">Projeto Vazio</h3>
+              <p className="text-gray-500 mb-6">
+                Comece importando um preset ou adicione artigos manualmente para estruturar seu projeto.
+              </p>
+              <div className="flex gap-4 justify-center">
+                <Button
+                  onClick={handleOpenPresetModal}
+                  className="bg-versys-primary hover:bg-versys-primary/90"
+                >
+                  <FileText className="h-4 w-4 mr-2" />
+                  Importar Preset
+                </Button>
+                <Button
+                  variant="outline"
+                  onClick={() => {
+                    toast.info("Funcionalidade de adicionar artigos manualmente em desenvolvimento");
+                  }}
+                >
+                  <Plus className="h-4 w-4 mr-2" />
+                  Adicionar Artigo
+                </Button>
+                                </div>
+            </div>
+          ) : (
+            <div className="text-center py-12">
+              <p className="text-gray-500">Selecione uma NC na sidebar para começar</p>
                             </div>
                           )}
                         </div>
-                      </div>
-                      )}
+        </div>
 
-                      {/* Conteúdo da aba Adequação */}
-                      {activeTabs[sub.id] === 'adequacao' && (
-                        <div className="space-y-6">
-                          {sub.adequacyReported ? (
-                            <>
-                              <div className="bg-blue-50 rounded-lg p-3 mb-4">
-                                <h5 className="font-medium text-blue-900 mb-2">Descrição da Adequação</h5>
-                                <p className="text-sm text-blue-800">{sub.adequacyDetails}</p>
-                              </div>
-                              {sub.adequacyImages && sub.adequacyImages.length > 0 && (
-                                <div className="mb-4">
-                                  <h5 className="font-medium text-gray-900 mb-2">Evidências ({sub.adequacyImages.length})</h5>
-                                  <div className="grid grid-cols-3 gap-2">
-                                    {sub.adequacyImages.map((image, index) => (
-                                      <div key={index} className="relative group">
-                                        <img
-                                          src={image}
-                                          alt={`Evidência ${index + 1}`}
-                                          className="w-full h-24 object-cover rounded border cursor-pointer hover:opacity-80 transition-opacity"
-                                          onClick={() => openImageModal(image)}
-                                        />
-                                        <div className="absolute inset-0 bg-black bg-opacity-0 group-hover:bg-opacity-20 transition-all duration-200 rounded flex items-center justify-center">
-                                          <div className="opacity-0 group-hover:opacity-100 transition-opacity">
-                                            <div className="bg-white rounded-full p-1">
-                                              <ZoomIn className="h-3 w-3 text-gray-600" />
-                                            </div>
-                                          </div>
-                                        </div>
-                                      </div>
-                                    ))}
-                                  </div>
-                                </div>
-                              )}
-                              {sub.adequacyDate && (
-                                <div className="text-xs text-blue-600 mb-2">
-                                  <Clock className="h-3 w-3 inline mr-1" />
-                                  Enviada em: {new Date(sub.adequacyDate).toLocaleDateString('pt-BR')} às {new Date(sub.adequacyDate).toLocaleTimeString('pt-BR')}
-                                </div>
-                              )}
-                              {sub.adequacyRevisionCount > 0 && (
-                                <div className="flex items-center space-x-2 text-orange-600 text-sm mb-2">
-                                  <AlertTriangle className="h-4 w-4" />
-                                  <span>{sub.adequacyRevisionCount} revisão{sub.adequacyRevisionCount > 1 ? 'ões' : 'ão'} anterior{sub.adequacyRevisionCount > 1 ? 'es' : ''}</span>
-                                </div>
-                              )}
-                              {/* Ações para adequações pendentes */}
-                              {sub.adequacyStatus === 'pending' && (
-                                <div className="flex items-center space-x-2 pt-3 border-t border-gray-100">
-                                  <Button
-                                    size="sm"
-                                    onClick={() => approveAdequacy(sub.id)}
-                                    className="bg-green-600 hover:bg-green-700"
-                                  >
-                                    <ThumbsUp className="h-4 w-4 mr-1" />
-                                    Aprovar
-                                  </Button>
-                                  <Button
-                                    size="sm"
-                                    variant="outline"
-                                    onClick={() => setEvaluatingAdequacy(sub.id)}
-                                    className="border-red-300 text-red-700 hover:bg-red-50"
-                                  >
-                                    <ThumbsDown className="h-4 w-4 mr-1" />
-                                    Rejeitar
-                                  </Button>
-                                </div>
-                              )}
-                              {/* Formulário de rejeição */}
-                              {evaluatingAdequacy === sub.id && (
-                                <div className="bg-red-50 rounded-lg p-3 mt-3 border border-red-200">
-                                  <h5 className="font-medium text-red-900 mb-2">Motivo da Rejeição</h5>
-                                  <div className="space-y-3">
-                                    <div>
-                                      <Label className="text-sm font-medium">Motivo da rejeição:</Label>
-                                      <Textarea
-                                        value={rejectionReason}
-                                        onChange={(e) => setRejectionReason(e.target.value)}
-                                        placeholder="Descreva o motivo da rejeição e orientações para correção..."
-                                        className="mt-1"
-                                        rows={3}
-                                      />
-                                    </div>
-                                    <div className="flex space-x-2">
-                                      <Button
-                                        size="sm"
-                                        onClick={() => rejectAdequacy(sub.id)}
-                                        disabled={!rejectionReason.trim()}
-                                        className="bg-red-600 hover:bg-red-700"
-                                      >
-                                        Confirmar Rejeição
-                                      </Button>
-                                      <Button
-                                        size="sm"
-                                        variant="outline"
-                                        onClick={cancelEvaluation}
-                                      >
-                                        Cancelar
-                                      </Button>
-                                    </div>
-                                  </div>
-                                </div>
-                              )}
-                              {/* Status de adequação aprovada/rejeitada */}
-                              {sub.adequacyStatus && sub.adequacyStatus !== 'pending' && (
-                                <div className={`rounded-lg p-3 mt-3 ${
-                                  sub.adequacyStatus === 'approved' ? 'bg-green-50 border border-green-200' : 'bg-red-50 border border-red-200'
-                                }`}>
-                                  <h5 className={`font-medium mb-2 ${
-                                    sub.adequacyStatus === 'approved' ? 'text-green-900' : 'text-red-900'
-                                  }`}>
-                                    {sub.adequacyStatus === 'approved' ? 'Adequação Aprovada' : 'Adequação Rejeitada'}
-                                  </h5>
-                                  {sub.adequacyStatus === 'rejected' && sub.adminRejectionReason && (
-                                    <p className="text-sm text-red-800">
-                                      <span className="font-medium">Motivo: </span>
-                                      {sub.adminRejectionReason}
-                                    </p>
-                                  )}
-                                </div>
-                              )}
-                            </>
-                          ) : (
-                            <div className="text-center py-8">
-                              <CheckCircle className="h-12 w-12 text-gray-400 mx-auto mb-4" />
-                              <h3 className="text-lg font-medium text-gray-900 mb-2">Nenhuma adequação encontrada</h3>
-                              <p className="text-gray-600">
-                                Não há adequações submetidas pelos clientes para este item.
-                              </p>
-                            </div>
-                          )}
-                        </div>
-                      )}
-                    </AccordionContent>
-                  </AccordionItem>
-                ))}
-              </Accordion>
+      {/* Modal de Importação de Preset */}
+      <Dialog open={showPresetModal} onOpenChange={setShowPresetModal}>
+        <DialogContent className="w-[90vw] max-w-[400px] sm:max-w-[450px] rounded-2xl p-4 sm:p-6">
+          <DialogHeader>
+            <DialogTitle className="text-base sm:text-lg">Importar Preset</DialogTitle>
+            <DialogDescription className="text-xs sm:text-sm">
+              Selecione um preset para importar a estrutura de avaliação
+            </DialogDescription>
+          </DialogHeader>
+          
+          <div className="py-3 sm:py-4">
+            {loadingPresets ? (
+              <div className="flex items-center justify-center py-6 sm:py-8">
+                <Clock className="h-6 w-6 sm:h-8 sm:w-8 animate-spin text-versys-primary" />
+              </div>
+            ) : availablePresets.length === 0 ? (
+              <div className="text-center py-6 sm:py-8 text-gray-500">
+                <FileText className="h-10 w-10 sm:h-12 sm:w-12 text-gray-300 mx-auto mb-2" />
+                <p className="text-sm">Nenhum preset disponível</p>
+              </div>
             ) : (
-              <p className="text-sm text-gray-500">Nenhum subitem encontrado.</p>
+              <div className="space-y-3 sm:space-y-4">
+                <Label htmlFor="preset-select" className="text-sm">Selecione um preset:</Label>
+                <Select value={selectedPresetId} onValueChange={setSelectedPresetId}>
+                  <SelectTrigger id="preset-select" className="h-9 sm:h-10">
+                    <SelectValue placeholder="Escolha um preset..." />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {availablePresets.map((preset) => (
+                      <SelectItem key={preset.id} value={preset.id} className="text-sm">
+                        {preset.nome || preset.title || 'Preset sem nome'}
+                        {preset.topicos && ` (${preset.topicos.length} tópicos)`}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
             )}
-          </CardContent>
-        </Card>
-      )}
-
-      {/* Botões de navegação e salvar */}
-      {totalSteps > 0 && (
-        <div className="flex items-center justify-between pt-4 border-t border-gray-100">
+          </div>
+          
+          <DialogFooter className="gap-2 sm:gap-0">
           <Button
             variant="outline"
             onClick={() => {
-              setCurrentStep(prev => Math.max(0, prev - 1));
-              setActiveTabs({}); // Resetar todas as abas para visualização ao navegar
+                setShowPresetModal(false);
+                setSelectedPresetId('');
             }}
-            disabled={currentStep === 0}
-            className="flex items-center space-x-2"
+            className="h-9 text-sm"
           >
-            <ArrowLeft size={16} />
-            <span>Anterior</span>
+              Cancelar
           </Button>
-
-          {/* Botão Salvar - aparece apenas na última etapa */}
-          {currentStep === totalSteps - 1 ? (
-            <AlertDialog open={showSaveConfirmation} onOpenChange={setShowSaveConfirmation}>
-              <AlertDialogTrigger asChild>
                 <Button
-                  onClick={handleSaveClick}
-                  disabled={saving}
-                  className="bg-purple-600 hover:bg-purple-700 text-white"
-                >
-                  {saving ? 'Salvando...' : 'Salvar'}
-                </Button>
-              </AlertDialogTrigger>
-              <AlertDialogContent>
-                <AlertDialogHeader>
-                  <AlertDialogTitle>Confirmar Salvamento</AlertDialogTitle>
-                <AlertDialogDescription>
-                  Tem certeza que deseja salvar todas as alterações do formulário? 
-                  Esta ação salvará todos os dados preenchidos e não poderá ser desfeita.
-                </AlertDialogDescription>
-              </AlertDialogHeader>
-              <AlertDialogFooter>
-                <AlertDialogCancel>Cancelar</AlertDialogCancel>
-                <AlertDialogAction onClick={handleSave} disabled={saving}>
-                  {saving ? 'Salvando...' : 'Confirmar Salvamento'}
-                </AlertDialogAction>
-              </AlertDialogFooter>
-            </AlertDialogContent>
-          </AlertDialog>
-        ) : (
-          <Button
-            onClick={() => {
-              setCurrentStep(prev => Math.min(totalSteps - 1, prev + 1));
-              setActiveTabs({}); // Resetar todas as abas para visualização ao navegar
-            }}
-            className="flex items-center space-x-2"
-          >
-            <span>Próximo</span>
-            <ArrowRight size={16} />
-          </Button>
-        )}
-      </div>
-    )}
-
-    {/* Botão de Download PDF - aparece após salvar */}
-    {showDownloadButton && (
-      <div className="flex justify-center pt-4 border-t border-gray-100">
-        <Button
-          onClick={generatePDF}
-          disabled={generatingPDF}
-          className="bg-green-600 hover:bg-green-700 text-white flex items-center space-x-2"
-        >
-          <Download size={16} />
-          <span>{generatingPDF ? 'Gerando PDF...' : 'Download PDF'}</span>
-        </Button>
-      </div>
-    )}
-
-      {/* Modal de Imagem */}
-      {imageModalOpen && selectedImage && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-75">
-          <div className="relative max-w-full max-h-full">
-            <img
-              src={selectedImage}
-              alt="Imagem ampliada"
-              className="max-w-full max-h-full object-contain"
-            />
-            <button
-              onClick={closeImageModal}
-              className="absolute top-4 right-4 bg-white p-2 rounded-full hover:bg-gray-200"
+              onClick={handleImportPreset}
+              disabled={!selectedPresetId || importingPreset}
+              className="bg-versys-primary hover:bg-versys-primary/90 h-9 text-sm"
             >
-              <X className="h-6 w-6 text-gray-800" />
-            </button>
+              {importingPreset ? (
+                <>
+                  <Clock className="h-4 w-4 mr-2 animate-spin" />
+                  Importando...
+                </>
+              ) : (
+                <>
+                  <FileText className="h-4 w-4 mr-2" />
+                  Importar
+                </>
+              )}
+        </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Drawer para Adicionar Fotos (Mobile) - Lateral Esquerdo */}
+      <Sheet open={photoDrawerOpen !== null} onOpenChange={(open) => !open && setPhotoDrawerOpen(null)}>
+        <SheetContent side="left" className="w-[85vw] p-6 top-14 h-[calc(100vh-3.5rem)] overflow-y-auto">
+          <SheetHeader>
+            <SheetTitle>Fotos Anexadas</SheetTitle>
+          </SheetHeader>
+          
+          <div className="mt-6 space-y-4">
+            {/* Exibir fotos já anexadas */}
+            {photoDrawerOpen && questionPhotos[photoDrawerOpen] && (
+              <div className="space-y-2">
+                <h4 className="text-sm font-medium text-gray-700">Fotos anexadas:</h4>
+                <div className="flex items-start gap-3 p-3 bg-gray-50 rounded-lg border border-gray-200">
+                  {/* Foto à esquerda */}
+                  <div className="relative rounded-lg overflow-hidden border border-gray-200 w-[100px] h-[100px] flex-shrink-0">
+                    <img 
+                      src={questionPhotos[photoDrawerOpen].url} 
+                      alt="Foto anexada" 
+                      className="w-full h-full object-cover cursor-pointer"
+                      onClick={() => window.open(questionPhotos[photoDrawerOpen].url, '_blank')}
+                    />
+                  </div>
+                  
+                  {/* Informações à direita */}
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center justify-between mb-2">
+                      <div className="flex items-center gap-2 text-gray-600">
+                        <Camera className="h-4 w-4" />
+                        <span className="text-sm">Foto anexada</span>
+                      </div>
+                      
+                      {/* Dropdown de ações */}
+                      <DropdownMenu>
+                        <DropdownMenuTrigger asChild>
+                          <button className="p-1 hover:bg-gray-100 rounded-full transition-colors">
+                            <MoreVertical className="h-4 w-4 text-gray-600" />
+                          </button>
+                        </DropdownMenuTrigger>
+                        <DropdownMenuContent align="end">
+                          <DropdownMenuItem
+                            className="text-red-600 focus:text-red-600 focus:bg-red-50"
+                            onClick={() => {
+                              setQuestionPhotos(prev => {
+                                const updated = { ...prev };
+                                delete updated[photoDrawerOpen];
+                                return updated;
+                              });
+                            }}
+                          >
+                            <Trash2 className="h-4 w-4 mr-2" />
+                            Remover Foto
+                          </DropdownMenuItem>
+                        </DropdownMenuContent>
+                      </DropdownMenu>
+                    </div>
+                    
+                    {questionPhotos[photoDrawerOpen].latitude !== 0 && (
+                      <div className="text-xs text-green-600 mb-2">
+                        📍 GPS: {questionPhotos[photoDrawerOpen].latitude.toFixed(6)}, {questionPhotos[photoDrawerOpen].longitude.toFixed(6)}
+                      </div>
+                    )}
+                    
+                    <div className="text-xs text-gray-400">
+                      {new Date(questionPhotos[photoDrawerOpen].createdAt).toLocaleString('pt-BR')}
+                    </div>
+                  </div>
+                </div>
+              </div>
+            )}
+            
+            {/* Botão para adicionar nova foto */}
+            <div className="flex justify-center">
+              <Button
+                size="lg"
+                className="rounded-full h-16 w-16 bg-versys-primary hover:bg-versys-primary/90"
+                onClick={() => {
+                  if (photoDrawerOpen) {
+                    document.getElementById(`file-${photoDrawerOpen}`)?.click();
+                  }
+                }}
+                disabled={photoDrawerOpen ? questionPhotoUploading[photoDrawerOpen] : false}
+              >
+                {photoDrawerOpen && questionPhotoUploading[photoDrawerOpen] ? (
+                  <Clock className="h-8 w-8 animate-spin" />
+                ) : (
+                  <Plus className="h-8 w-8" />
+                )}
+              </Button>
+            </div>
           </div>
-        </div>
-      )}
+        </SheetContent>
+      </Sheet>
     </div>
   );
 };

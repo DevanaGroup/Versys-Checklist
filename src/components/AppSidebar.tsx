@@ -110,15 +110,28 @@ export function AppSidebar() {
 
   const getUserDisplayName = () => {
     if (!userData) return "Usuário";
+    
+    // Remover prefixo de cargo do displayName (ex: "Administrador DEVANA" -> "DEVANA")
+    let displayName = userData.displayName || "";
+    
+    // Remover prefixos comuns de cargo
+    const prefixes = ["Administrador ", "Colaborador ", "Cliente "];
+    for (const prefix of prefixes) {
+      if (displayName.startsWith(prefix)) {
+        displayName = displayName.substring(prefix.length);
+        break;
+      }
+    }
+    
     switch (userData.type) {
       case "admin":
-        return userData.displayName || "Admin";
+        return displayName || "Admin";
       case "colaborador":
-        return userData.displayName || "Colaborador";
+        return displayName || "Colaborador";
       case "client":
-        return userData.company || userData.displayName || "Cliente";
+        return userData.company || displayName || "Cliente";
       default:
-        return userData.displayName || "Usuário";
+        return displayName || "Usuário";
     }
   };
 
@@ -210,27 +223,28 @@ export function AppSidebar() {
               </SidebarGroupContent>
             </SidebarGroup>
 
-
-
-            {/* Informações de Localização */}
-            {!isCollapsed && <LocationInfo />}
           </SidebarContent>
 
-          {/* Footer com botão de sair - responsivo */}
-          <SidebarFooter className="p-3 md:p-4 border-t border-white/10 mt-auto">
-            <Button 
-              variant="ghost" 
-              onClick={handleLogout} 
-              className="
-                w-full h-9 md:h-10 px-2 md:px-3 py-2 rounded-lg
-                justify-start gap-2 md:gap-3
-                text-white/80 hover:bg-white/10 hover:text-white
-                transition-all duration-200
-              "
-            >
-              <LogOut className="h-4 w-4 flex-shrink-0" />
-              {!isCollapsed && <span className="truncate text-sm md:text-base">Sair</span>}
-            </Button>
+          {/* Footer com localização e botão de sair - fixo na parte inferior */}
+          <SidebarFooter className="mt-auto border-t border-white/10">
+            {/* Informações de Localização */}
+            {!isCollapsed && <LocationInfo />}
+            
+            <div className="p-3 md:p-4">
+              <Button 
+                variant="ghost" 
+                onClick={handleLogout} 
+                className="
+                  w-full h-9 md:h-10 px-2 md:px-3 py-2 rounded-lg
+                  justify-start gap-2 md:gap-3
+                  text-white/80 hover:bg-white/10 hover:text-white
+                  transition-all duration-200
+                "
+              >
+                <LogOut className="h-4 w-4 flex-shrink-0" />
+                {!isCollapsed && <span className="truncate text-sm md:text-base">Sair</span>}
+              </Button>
+            </div>
           </SidebarFooter>
         </div>
       </Sidebar>

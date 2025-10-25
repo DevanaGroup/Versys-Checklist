@@ -7,6 +7,7 @@ import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
+import { usePageTitle } from '@/contexts/PageTitleContext';
 import { 
   BarChart, 
   Bar, 
@@ -69,6 +70,7 @@ const COLORS = ['#0088FE', '#00C49F', '#FFBB28', '#FF8042', '#8884D8'];
 
 const Dashboard = () => {
   const { userData } = useAuthContext();
+  const { setPageTitle } = usePageTitle();
   const [stats, setStats] = useState({
     projetosAtivos: 0,
     totalProjetos: 0,
@@ -78,6 +80,11 @@ const Dashboard = () => {
   const [loading, setLoading] = useState(true);
   const [artigosStats, setArtigosStats] = useState<ArtigoStats[]>([]);
   const [produtividadeData, setProdutividadeData] = useState<ProdutividadeData[]>([]);
+
+  // Limpar título do header mobile
+  useEffect(() => {
+    setPageTitle('');
+  }, [setPageTitle]);
   const [tempoMedioAdequacao, setTempoMedioAdequacao] = useState(0);
   const [adequacoesPendentes, setAdequacoesPendentes] = useState(0);
   const [adequacoesAprovadas, setAdequacoesAprovadas] = useState(0);

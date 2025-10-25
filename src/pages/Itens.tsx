@@ -6,12 +6,18 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog";
 import { Badge } from "@/components/ui/badge";
-import { Plus, Edit2, Trash2, Eye, Save, X, Settings, ChevronRight, ChevronDown, ArrowLeft, ArrowRight, CheckCircle, Grid, List, Package } from "lucide-react";
+import { Plus, Edit2, Trash2, Eye, Save, X, Settings, ChevronRight, ChevronDown, ArrowLeft, ArrowRight, CheckCircle, Grid, List, Package, MoreVertical } from "lucide-react";
 import { toast } from "sonner";
 import { collection, addDoc, getDocs, deleteDoc, doc, updateDoc } from "firebase/firestore";
 import { db } from "@/lib/firebase";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Switch } from "@/components/ui/switch";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 
 interface Item {
   id: string;
@@ -394,19 +400,17 @@ const Itens = () => {
         <div className="flex items-center gap-2">
           <Button
             variant={displayMode === 'list' ? 'default' : 'outline'}
-            size="sm"
+            size="icon"
             onClick={() => setDisplayMode('list')}
           >
-            <List className="h-4 w-4 mr-2" />
-            Lista
+            <List className="h-4 w-4" />
           </Button>
           <Button
             variant={displayMode === 'card' ? 'default' : 'outline'}
-            size="sm"
+            size="icon"
             onClick={() => setDisplayMode('card')}
           >
-            <Grid className="h-4 w-4 mr-2" />
-            Cards
+            <Grid className="h-4 w-4" />
           </Button>
           <Button onClick={openCreateMode}>
             <Plus className="h-4 w-4 mr-2" />
@@ -436,72 +440,84 @@ const Itens = () => {
           </CardContent>
         </Card>
       ) : displayMode === 'list' ? (
-        <div className="space-y-4">
-          {itens.map((item) => (
-            <Card key={item.id} className="hover:shadow-md transition-shadow">
-              <CardContent className="p-6">
-                <div className="flex items-center justify-between">
-                  <div className="flex-1">
-                    <div className="flex items-center gap-3 mb-2">
-                      <h3 className="text-lg font-semibold">{item.nome}</h3>
-                      <Badge variant="outline">{item.atributos.length} atributos</Badge>
+        <div className="bg-white rounded-lg border border-gray-200 overflow-hidden">
+          <table className="w-full">
+            <thead className="bg-gray-50 border-b border-gray-200">
+              <tr>
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  Nome do Item
+                </th>
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  Atributos
+                </th>
+                <th className="px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  Total
+                </th>
+                <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  Ações
+                </th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-gray-200">
+              {itens.map((item) => (
+                <tr key={item.id} className="hover:bg-gray-50 transition-colors">
+                  <td className="px-6 py-4">
+                    <div className="flex items-center">
+                      <Package className="h-5 w-5 text-versys-primary mr-3 flex-shrink-0" />
+                      <div className="text-sm font-medium text-gray-900">
+                        {item.nome}
+                      </div>
                     </div>
-                    
-                    <div className="flex flex-wrap gap-2">
+                  </td>
+                  <td className="px-6 py-4">
+                    <div className="flex flex-wrap gap-1">
                       {item.atributos.slice(0, 3).map((atributo) => (
-                        <Badge key={atributo.id} variant="secondary">
-                          {atributo.nome} ({atributo.tipo})
+                        <Badge key={atributo.id} variant="secondary" className="text-xs">
+                          {atributo.nome}
                         </Badge>
                       ))}
                       {item.atributos.length > 3 && (
-                        <Badge variant="secondary">
-                          +{item.atributos.length - 3} mais
+                        <Badge variant="secondary" className="text-xs">
+                          +{item.atributos.length - 3}
                         </Badge>
                       )}
                     </div>
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      onClick={() => openViewMode(item)}
-                    >
-                      <Eye className="h-4 w-4" />
-                    </Button>
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      onClick={() => openEditMode(item)}
-                    >
-                      <Edit2 className="h-4 w-4" />
-                    </Button>
-                    <AlertDialog>
-                      <AlertDialogTrigger asChild>
+                  </td>
+                  <td className="px-6 py-4 text-center">
+                    <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800">
+                      {item.atributos.length}
+                    </span>
+                  </td>
+                  <td className="px-6 py-4 text-right">
+                    <DropdownMenu>
+                      <DropdownMenuTrigger asChild>
                         <Button variant="ghost" size="sm">
-                          <Trash2 className="h-4 w-4" />
+                          <MoreVertical className="h-4 w-4" />
                         </Button>
-                      </AlertDialogTrigger>
-                      <AlertDialogContent>
-                        <AlertDialogHeader>
-                          <AlertDialogTitle>Excluir Item</AlertDialogTitle>
-                          <AlertDialogDescription>
-                            Tem certeza que deseja excluir o item "{item.nome}"? 
-                            Esta ação não pode ser desfeita.
-                          </AlertDialogDescription>
-                        </AlertDialogHeader>
-                        <AlertDialogFooter>
-                          <AlertDialogCancel>Cancelar</AlertDialogCancel>
-                          <AlertDialogAction onClick={() => handleDeleteItem(item)}>
-                            Excluir
-                          </AlertDialogAction>
-                        </AlertDialogFooter>
-                      </AlertDialogContent>
-                    </AlertDialog>
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
-          ))}
+                      </DropdownMenuTrigger>
+                      <DropdownMenuContent align="end">
+                        <DropdownMenuItem onClick={() => openViewMode(item)}>
+                          <Eye className="h-4 w-4 mr-2" />
+                          Visualizar
+                        </DropdownMenuItem>
+                        <DropdownMenuItem onClick={() => openEditMode(item)}>
+                          <Edit2 className="h-4 w-4 mr-2" />
+                          Editar
+                        </DropdownMenuItem>
+                        <DropdownMenuItem 
+                          onClick={() => handleDeleteItem(item)}
+                          className="text-red-600 focus:text-red-600 focus:bg-red-50"
+                        >
+                          <Trash2 className="h-4 w-4 mr-2" />
+                          Excluir
+                        </DropdownMenuItem>
+                      </DropdownMenuContent>
+                    </DropdownMenu>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
         </div>
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">

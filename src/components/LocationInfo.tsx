@@ -27,7 +27,7 @@ export function LocationInfo() {
   }
 
   return (
-    <div className="px-4 py-3 border-t border-white/10 space-y-2">
+    <div className="px-4 py-3 border-t border-white/10 space-y-2 mt-auto">
       <div className="text-white/80 text-xs font-medium mb-2">Localização</div>
       
       {/* Cidade e País */}

@@ -17,11 +17,12 @@ import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigge
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Plus, Building, Calendar, User, FileText, CheckCircle, Clock, AlertCircle, ArrowLeft, Send, Download, CheckCircle2, XCircle, AlertTriangle, Eye, ClipboardCheck, Trash2, MoreVertical, Edit, Grid, List, ChevronRight, ChevronLeft, PauseCircle, RotateCcw, FileTextIcon, MessageSquare, CheckSquare, X, Globe, BarChart3 } from "lucide-react";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
-import { collection, getDocs, query, orderBy, doc, updateDoc, deleteDoc, where } from "firebase/firestore";
+import { collection, getDocs, query, orderBy, doc, updateDoc, deleteDoc, where, addDoc, getDoc } from "firebase/firestore";
 import { db } from "@/lib/firebase";
 import { useAuthContext } from "@/contexts/AuthContext";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { toast } from "sonner";
+import { usePageTitle } from '@/contexts/PageTitleContext';
 
 interface SubItem {
   id: string;
@@ -112,6 +113,7 @@ const Projetos = () => {
   const navigate = useNavigate();
   const { userData } = useAuthContext();
   const isMobile = useIsMobile();
+  const { setPageTitle } = usePageTitle();
   const [projetos, setProjetos] = useState<ProjectDetails[]>([]);
   const [clientes, setClientes] = useState<Cliente[]>([]);
   const [loading, setLoading] = useState(true);
@@ -120,6 +122,11 @@ const Projetos = () => {
   const [selectedClient, setSelectedClient] = useState<Cliente | null>(null);
   const [viewMode, setViewMode] = useState<'client-selection' | 'project-list'>('client-selection');
   const [listView, setListView] = useState<'cards' | 'list'>('list');
+
+  // Limpar título do header mobile
+  useEffect(() => {
+    setPageTitle('');
+  }, [setPageTitle]);
   
   // Estados para o sistema de passos
   const [currentStep, setCurrentStep] = useState(0);
@@ -130,15 +137,21 @@ const Projetos = () => {
   const [deletingProject, setDeletingProject] = useState<string | null>(null);
   const [showNewProjectModal, setShowNewProjectModal] = useState(false);
   const [selectedClienteForNew, setSelectedClienteForNew] = useState<string>('none');
-  const [selectedPreset, setSelectedPreset] = useState<string>('none');
-  const [presets, setPresets] = useState<any[]>([]);
 
   const isAdmin = userData?.type === 'admin';
 
   useEffect(() => {
+    console.log('📊 Estados do Projetos.tsx:', {
+      viewMode,
+      listView,
+      showNewProjectModal,
+      isAdmin
+    });
+  }, [viewMode, listView, showNewProjectModal, isAdmin]);
+
+  useEffect(() => {
     loadClientes();
     loadProjetos();
-    loadPresets();
   }, []);
 
   // Força visualização de cards no mobile
@@ -186,43 +199,51 @@ const Projetos = () => {
     }
   };
 
-  const loadPresets = async () => {
-    try {
-      const presetsRef = collection(db, 'presets');
-      const querySnapshot = await getDocs(presetsRef);
-      
-      const presetsData = querySnapshot.docs.map(doc => ({
-        id: doc.id,
-        ...doc.data()
-      }));
-      
-      setPresets(presetsData);
-    } catch (error) {
-      console.error('Erro ao carregar presets:', error);
-      toast.error('Erro ao carregar presets');
-    }
-  };
 
-  const handleCreateNewProject = () => {
-    let url = '/projetos/new';
-    const params = new URLSearchParams();
+  const handleCreateNewProject = async () => {
+    console.log('🆕 Criando novo projeto...');
+    console.log('Cliente selecionado:', selectedClienteForNew);
     
-    if (selectedClienteForNew && selectedClienteForNew !== 'none') {
-      params.append('clienteId', selectedClienteForNew);
+    try {
+      // Criar um projeto vazio no Firestore
+      const newProjectData: any = {
+        nome: 'Novo Projeto',
+        clienteId: selectedClienteForNew && selectedClienteForNew !== 'none' ? selectedClienteForNew : null,
+        criadoEm: new Date().toISOString(),
+        atualizadoEm: new Date().toISOString(),
+        criadoPor: userData?.uid || '',
+        status: 'draft',
+        weightedModules: [], // Iniciar com a estrutura ponderada vazia
+      };
+
+      // Se há cliente selecionado, buscar dados do cliente
+      if (newProjectData.clienteId) {
+        const clienteRef = doc(db, 'users', newProjectData.clienteId);
+        const clienteSnap = await getDoc(clienteRef);
+        if (clienteSnap.exists()) {
+          const clienteData = clienteSnap.data();
+          newProjectData.cliente = {
+            id: clienteSnap.id,
+            nome: clienteData.displayName || clienteData.nome || 'Cliente',
+            email: clienteData.email || '',
+            empresa: clienteData.empresa || clienteData.company || '',
+          };
+        }
+      }
+
+      // Criar documento no Firestore
+      const docRef = await addDoc(collection(db, 'projetos'), newProjectData);
+      console.log('✅ Projeto criado:', docRef.id);
+
+      // Fechar modal e redirecionar para o novo layout ponderado
+      setShowNewProjectModal(false);
+      setSelectedClienteForNew('none');
+      toast.success('Projeto criado! Redirecionando...');
+      navigate(`/projetos/write/${docRef.id}`);
+    } catch (error) {
+      console.error('❌ Erro ao criar projeto:', error);
+      toast.error('Erro ao criar projeto');
     }
-    
-    if (selectedPreset && selectedPreset !== 'none') {
-      params.append('presetId', selectedPreset);
-    }
-    
-    if (params.toString()) {
-      url += '?' + params.toString();
-    }
-    
-    setShowNewProjectModal(false);
-    setSelectedClienteForNew('none');
-    setSelectedPreset('none');
-    navigate(url);
   };
 
   const loadProjetos = async () => {
@@ -1058,21 +1079,17 @@ const Projetos = () => {
           <div className="hidden md:flex items-center space-x-2">
             <Button
               variant={listView === 'cards' ? 'default' : 'outline'}
-              size="sm"
+              size="icon"
               onClick={() => setListView('cards')}
-              className="flex items-center space-x-2"
             >
               <Grid className="h-4 w-4" />
-              <span>Cards</span>
             </Button>
             <Button
               variant={listView === 'list' ? 'default' : 'outline'}
-              size="sm"
+              size="icon"
               onClick={() => setListView('list')}
-              className="flex items-center space-x-2"
             >
               <List className="h-4 w-4" />
-              <span>Lista</span>
             </Button>
           </div>
         )}
@@ -1103,9 +1120,9 @@ const Projetos = () => {
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
 
 
-              {/* Card Projetos Sem Cliente */}
+              {/* Card Projetos Sem Cliente - Oculto no mobile */}
               <Card 
-                className="border-2 border-dashed border-gray-300 hover:border-versys-primary transition-colors cursor-pointer group"
+                className="hidden md:flex border-2 border-dashed border-gray-300 hover:border-versys-primary transition-colors cursor-pointer group"
                 onClick={() => setViewMode('project-list')}
               >
                 <CardContent className="flex flex-col items-center justify-center h-48 text-center">
@@ -1177,7 +1194,10 @@ const Projetos = () => {
               {/* Botão Novo Projeto - oculto no mobile */}
               <div className="hidden md:flex justify-start">
                 <Button
-                  onClick={() => setShowNewProjectModal(true)}
+                  onClick={() => {
+                    console.log('🖱️ Botão "Novo Projeto" clicado!');
+                    setShowNewProjectModal(true);
+                  }}
                   className="flex items-center space-x-2 bg-versys-primary hover:bg-versys-secondary"
                 >
                   <Plus className="h-4 w-4" />
@@ -1212,9 +1232,9 @@ const Projetos = () => {
                         </TableRow>
                       </TableHeader>
                       <TableBody>
-                        {/* Linha para Projetos Sem Cliente */}
+                        {/* Linha para Projetos Sem Cliente - Oculta no mobile */}
                         <TableRow 
-                          className="cursor-pointer hover:bg-versys-secondary/5 border-t-2 border-gray-200"
+                          className="hidden md:table-row cursor-pointer hover:bg-versys-secondary/5 border-t-2 border-gray-200"
                           onClick={() => setViewMode('project-list')}
                         >
                           <TableCell className="font-medium">
@@ -1341,7 +1361,7 @@ const Projetos = () => {
                              {isAdmin && (
                                <DropdownMenuItem onClick={(e) => {
                                  e.stopPropagation();
-                                 navigate(`/projetos/edit/${projeto.id}?clienteId=${projeto.clienteId}`);
+                                 navigate(`/projetos/write/${projeto.id}`);
                                }}>
                                  <Edit className="h-4 w-4 mr-2" />
                                  Editar Projeto
@@ -1359,16 +1379,19 @@ const Projetos = () => {
                                      {deletingProject === projeto.id ? 'Deletando...' : 'Excluir Projeto'}
                                    </DropdownMenuItem>
                                  </AlertDialogTrigger>
-                                 <AlertDialogContent>
-                                   <AlertDialogHeader>
-                                     <AlertDialogTitle>Confirmar Exclusão</AlertDialogTitle>
-                                     <AlertDialogDescription>
+                                 <AlertDialogContent className="w-[90vw] max-w-[400px] rounded-2xl p-4 sm:p-6">
+                                   <AlertDialogHeader className="space-y-2">
+                                     <AlertDialogTitle className="text-base sm:text-lg">Confirmar Exclusão</AlertDialogTitle>
+                                     <AlertDialogDescription className="text-xs sm:text-sm">
                                        Tem certeza que deseja excluir o projeto "{projeto.nome}"? 
                                        Esta ação não pode ser desfeita e todos os dados relacionados ao projeto serão perdidos permanentemente.
                                      </AlertDialogDescription>
                                    </AlertDialogHeader>
-                                   <AlertDialogFooter>
-                                     <AlertDialogCancel onClick={(e) => e.stopPropagation()}>
+                                   <AlertDialogFooter className="gap-2 sm:gap-0">
+                                     <AlertDialogCancel 
+                                       onClick={(e) => e.stopPropagation()}
+                                       className="h-9 text-sm sm:h-10"
+                                     >
                                        Cancelar
                                      </AlertDialogCancel>
                                      <AlertDialogAction
@@ -1376,7 +1399,7 @@ const Projetos = () => {
                                          e.stopPropagation();
                                          handleDeleteProject(projeto.id);
                                        }}
-                                       className="bg-red-600 hover:bg-red-700"
+                                       className="bg-red-600 hover:bg-red-700 h-9 text-sm sm:h-10"
                                      >
                                        Confirmar Exclusão
                                      </AlertDialogAction>
@@ -1549,7 +1572,7 @@ const Projetos = () => {
                                         {isAdmin && (
                                           <DropdownMenuItem onClick={(e) => {
                                             e.stopPropagation();
-                                            navigate(`/projetos/edit/${projeto.id}?clienteId=${projeto.clienteId}`);
+                                            navigate(`/projetos/write/${projeto.id}`);
                                           }}>
                                             <Edit className="h-4 w-4 mr-2" />
                                             Editar Projeto
@@ -1567,16 +1590,19 @@ const Projetos = () => {
                                                 {deletingProject === projeto.id ? 'Deletando...' : 'Excluir Projeto'}
                                               </DropdownMenuItem>
                                             </AlertDialogTrigger>
-                                            <AlertDialogContent>
-                                              <AlertDialogHeader>
-                                                <AlertDialogTitle>Confirmar Exclusão</AlertDialogTitle>
-                                                <AlertDialogDescription>
+                                            <AlertDialogContent className="w-[90vw] max-w-[400px] rounded-2xl p-4 sm:p-6">
+                                              <AlertDialogHeader className="space-y-2">
+                                                <AlertDialogTitle className="text-base sm:text-lg">Confirmar Exclusão</AlertDialogTitle>
+                                                <AlertDialogDescription className="text-xs sm:text-sm">
                                                   Tem certeza que deseja excluir o projeto "{projeto.nome}"? 
                                                   Esta ação não pode ser desfeita e todos os dados relacionados ao projeto serão perdidos permanentemente.
                                                 </AlertDialogDescription>
                                               </AlertDialogHeader>
-                                              <AlertDialogFooter>
-                                                <AlertDialogCancel onClick={(e) => e.stopPropagation()}>
+                                              <AlertDialogFooter className="gap-2 sm:gap-0">
+                                                <AlertDialogCancel 
+                                                  onClick={(e) => e.stopPropagation()}
+                                                  className="h-9 text-sm sm:h-10"
+                                                >
                                                   Cancelar
                                                 </AlertDialogCancel>
                                                 <AlertDialogAction
@@ -1584,7 +1610,7 @@ const Projetos = () => {
                                                     e.stopPropagation();
                                                     handleDeleteProject(projeto.id);
                                                   }}
-                                                  className="bg-red-600 hover:bg-red-700"
+                                                  className="bg-red-600 hover:bg-red-700 h-9 text-sm sm:h-10"
                                                 >
                                                   Confirmar Exclusão
                                                 </AlertDialogAction>
@@ -1708,7 +1734,7 @@ const Projetos = () => {
                                       {isAdmin && (
                                         <DropdownMenuItem onClick={(e) => {
                                           e.stopPropagation();
-                                          navigate(`/projetos/edit/${projeto.id}?clienteId=${projeto.clienteId}`);
+                                          navigate(`/projetos/write/${projeto.id}`);
                                         }}>
                                           <Edit className="h-4 w-4 mr-2" />
                                           Editar Projeto
@@ -1726,15 +1752,18 @@ const Projetos = () => {
                                               {deletingProject === projeto.id ? 'Deletando...' : 'Excluir'}
                                             </DropdownMenuItem>
                                           </AlertDialogTrigger>
-                                          <AlertDialogContent>
-                                            <AlertDialogHeader>
-                                              <AlertDialogTitle>Confirmar Exclusão</AlertDialogTitle>
-                                              <AlertDialogDescription>
+                                          <AlertDialogContent className="w-[90vw] max-w-[400px] rounded-2xl p-4 sm:p-6">
+                                            <AlertDialogHeader className="space-y-2">
+                                              <AlertDialogTitle className="text-base sm:text-lg">Confirmar Exclusão</AlertDialogTitle>
+                                              <AlertDialogDescription className="text-xs sm:text-sm">
                                                 Tem certeza que deseja excluir o projeto "{projeto.nome}"?
                                               </AlertDialogDescription>
                                             </AlertDialogHeader>
-                                            <AlertDialogFooter>
-                                              <AlertDialogCancel onClick={(e) => e.stopPropagation()}>
+                                            <AlertDialogFooter className="gap-2 sm:gap-0">
+                                              <AlertDialogCancel 
+                                                onClick={(e) => e.stopPropagation()}
+                                                className="h-9 text-sm sm:h-10"
+                                              >
                                                 Cancelar
                                               </AlertDialogCancel>
                                               <AlertDialogAction
@@ -1742,7 +1771,7 @@ const Projetos = () => {
                                                   e.stopPropagation();
                                                   handleDeleteProject(projeto.id);
                                                 }}
-                                                className="bg-red-600 hover:bg-red-700"
+                                                className="bg-red-600 hover:bg-red-700 h-9 text-sm sm:h-10"
                                               >
                                                 Confirmar
                                               </AlertDialogAction>
@@ -1769,29 +1798,29 @@ const Projetos = () => {
       
       {/* Modal de Novo Projeto */}
       <Dialog open={showNewProjectModal} onOpenChange={setShowNewProjectModal}>
-        <DialogContent className="sm:max-w-[500px]">
+        <DialogContent className="w-[90vw] max-w-[400px] sm:max-w-[450px] rounded-2xl p-4 sm:p-6">
           <DialogHeader>
-            <DialogTitle className="flex items-center space-x-2">
-              <Plus className="h-5 w-5" />
+            <DialogTitle className="flex items-center space-x-2 text-base sm:text-lg">
+              <Plus className="h-4 w-4 sm:h-5 sm:w-5" />
               <span>Criar Novo Projeto</span>
             </DialogTitle>
-            <DialogDescription>
+            <DialogDescription className="text-xs sm:text-sm">
               Configure as opções iniciais para o novo projeto
             </DialogDescription>
           </DialogHeader>
           
-          <div className="space-y-6 py-4">
+          <div className="space-y-4 sm:space-y-6 py-3 sm:py-4">
             {/* Seleção de Cliente */}
             <div className="space-y-2">
               <Label className="text-sm font-medium">Cliente (Opcional)</Label>
               <Select value={selectedClienteForNew} onValueChange={setSelectedClienteForNew}>
-                <SelectTrigger>
+                <SelectTrigger className="h-9 sm:h-10">
                   <SelectValue placeholder="Selecione um cliente ou deixe em branco" />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="none">Nenhum cliente selecionado</SelectItem>
+                  <SelectItem value="none" className="text-sm">Nenhum cliente selecionado</SelectItem>
                   {clientes.map((cliente) => (
-                    <SelectItem key={cliente.id} value={cliente.id}>
+                    <SelectItem key={cliente.id} value={cliente.id} className="text-sm">
                       <div className="flex items-center space-x-2">
                         <Building className="h-4 w-4" />
                         <span>{cliente.nome} - {cliente.empresa}</span>
@@ -1802,52 +1831,22 @@ const Projetos = () => {
               </Select>
             </div>
             
-            {/* Seleção de Preset */}
-            <div className="space-y-2">
-              <Label className="text-sm font-medium">Preset/Template (Opcional)</Label>
-              <Select value={selectedPreset} onValueChange={setSelectedPreset}>
-                <SelectTrigger>
-                  <SelectValue placeholder="Selecione um preset ou comece do zero" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="none">Começar do zero</SelectItem>
-                  {presets.map((preset) => (
-                    <SelectItem key={preset.id} value={preset.id}>
-                      <div className="flex items-center space-x-2">
-                        <ClipboardCheck className="h-4 w-4" />
-                        <div>
-                          <div className="font-medium">{preset.nome}</div>
-                          {preset.descricao && (
-                            <div className="text-xs text-muted-foreground">{preset.descricao}</div>
-                          )}
-                        </div>
-                      </div>
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-              {selectedPreset && (
-                <div className="text-xs text-muted-foreground">
-                  💡 O preset selecionado será usado como base para estruturar o projeto
-                </div>
-              )}
-            </div>
           </div>
           
-          <DialogFooter>
+          <DialogFooter className="gap-2 sm:gap-0">
             <Button 
               variant="outline" 
               onClick={() => {
                 setShowNewProjectModal(false);
                 setSelectedClienteForNew('none');
-                setSelectedPreset('none');
               }}
+              className="h-9 text-sm"
             >
               Cancelar
             </Button>
             <Button 
               onClick={handleCreateNewProject}
-              className="bg-versys-primary hover:bg-versys-secondary"
+              className="bg-versys-primary hover:bg-versys-secondary h-9 text-sm"
             >
               <Plus className="h-4 w-4 mr-2" />
               Criar Projeto

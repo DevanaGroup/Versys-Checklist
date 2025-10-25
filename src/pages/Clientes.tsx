@@ -6,13 +6,21 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Badge } from '@/components/ui/badge';
-import { Plus, Edit, Trash2, UserX, UserCheck, Search, Eye, EyeOff } from 'lucide-react';
+import { Plus, Edit, Trash2, UserX, UserCheck, Search, Eye, EyeOff, MoreVertical } from 'lucide-react';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from '@/components/ui/alert-dialog';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { toast } from 'sonner';
 import { collection, addDoc, getDocs, doc, updateDoc, deleteDoc, query, orderBy, where, setDoc } from 'firebase/firestore';
 import { db } from '@/lib/firebase';
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+  DropdownMenuSeparator,
+} from "@/components/ui/dropdown-menu";
+import { usePageTitle } from '@/contexts/PageTitleContext';
 
 interface Cliente {
   id: string;
@@ -28,6 +36,7 @@ interface Cliente {
 }
 
 const Clientes = () => {
+  const { setPageTitle } = usePageTitle();
   const [clientes, setClientes] = useState<Cliente[]>([]);
   const [loading, setLoading] = useState(true);
   const [criandoCliente, setCriandoCliente] = useState(false);
@@ -49,12 +58,9 @@ const Clientes = () => {
   useEffect(() => {
     carregarClientes();
     
-    // Definir título da página no header mobile
-    const headerTitle = document.querySelector('header h1');
-    if (headerTitle) {
-      headerTitle.textContent = 'Clientes';
-    }
-  }, []);
+    // Limpar título do header mobile
+    setPageTitle('');
+  }, [setPageTitle]);
 
   // Aplicar estilos fullscreen no modal quando abrir no mobile
   useEffect(() => {
@@ -724,76 +730,93 @@ const Clientes = () => {
                           <p className="text-sm text-gray-500 truncate">{cliente.telefone}</p>
                         )}
                       </div>
-                      <div className="flex flex-col items-end gap-2 ml-2 flex-shrink-0">
-                        <div className="status-badge">
-                          {getStatusBadge(cliente.status)}
+                      <div className="flex items-start gap-2 ml-2 flex-shrink-0">
+                        <div className="flex flex-col items-end gap-2">
+                          <div className="status-badge">
+                            {getStatusBadge(cliente.status)}
+                          </div>
+                          <span className="projects-count text-xs text-gray-500 bg-gray-100 px-2 py-1 rounded whitespace-nowrap">
+                            {cliente.projetos} projeto{cliente.projetos !== 1 ? 's' : ''}
+                          </span>
                         </div>
-                        <span className="projects-count text-xs text-gray-500 bg-gray-100 px-2 py-1 rounded whitespace-nowrap">
-                          {cliente.projetos} projeto{cliente.projetos !== 1 ? 's' : ''}
-                        </span>
-                      </div>
-                    </div>
-                    
-                    <div className="flex justify-between items-center pt-3 border-t border-gray-200">
-                      <span className="text-xs text-gray-500">
-                        Criado em {new Date(cliente.dataCriacao).toLocaleDateString('pt-BR')}
-                      </span>
-                      <div className="action-buttons flex gap-2">
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          onClick={() => {
-                            setClienteEditando({ ...cliente });
-                            setDialogEdicaoAberto(true);
-                          }}
-                          className="h-8 w-8 p-0"
-                        >
-                          <Edit className="h-4 w-4" />
-                        </Button>
-                        {cliente.status === 'ativo' ? (
-                          <Button
-                            variant="outline"
-                            size="sm"
-                            onClick={() => handleAlterarStatus(cliente.id, 'suspenso')}
-                            className="h-8 w-8 p-0 text-orange-600 border-orange-600 hover:bg-orange-50"
-                          >
-                            <UserX className="h-4 w-4" />
-                          </Button>
-                        ) : (
-                          <Button
-                            variant="outline"
-                            size="sm"
-                            onClick={() => handleAlterarStatus(cliente.id, 'ativo')}
-                            className="h-8 w-8 p-0 text-green-600 border-green-600 hover:bg-green-50"
-                          >
-                            <UserCheck className="h-4 w-4" />
-                          </Button>
-                        )}
+                        
+                        {/* Dropdown de ações - Mobile */}
+                        <DropdownMenu>
+                          <DropdownMenuTrigger asChild>
+                            <button className="p-1 hover:bg-gray-100 rounded-full transition-colors">
+                              <MoreVertical className="h-5 w-5 text-gray-600" />
+                            </button>
+                          </DropdownMenuTrigger>
+                          <DropdownMenuContent align="end" className="w-48">
+                            <DropdownMenuItem
+                              onClick={() => {
+                                setClienteEditando({ ...cliente });
+                                setDialogEdicaoAberto(true);
+                              }}
+                            >
+                              <Edit className="h-4 w-4 mr-2" />
+                              Editar
+                            </DropdownMenuItem>
+                            
+                            <DropdownMenuSeparator />
+                            
+                            {cliente.status === 'ativo' ? (
+                              <DropdownMenuItem
+                                onClick={() => handleAlterarStatus(cliente.id, 'suspenso')}
+                                className="text-orange-600"
+                              >
+                                <UserX className="h-4 w-4 mr-2" />
+                                Suspender
+                              </DropdownMenuItem>
+                            ) : (
+                              <DropdownMenuItem
+                                onClick={() => handleAlterarStatus(cliente.id, 'ativo')}
+                                className="text-green-600"
+                              >
+                                <UserCheck className="h-4 w-4 mr-2" />
+                                Ativar
+                              </DropdownMenuItem>
+                            )}
+                            
+                            <DropdownMenuSeparator />
+                            
+                            <DropdownMenuItem
+                              onClick={() => {
+                                if (cliente.projetos === 0) {
+                                  const deleteButton = document.querySelector(`[data-delete-client="${cliente.id}"]`) as HTMLElement;
+                                  deleteButton?.click();
+                                }
+                              }}
+                              disabled={cliente.projetos > 0}
+                              className="text-red-600"
+                            >
+                              <Trash2 className="h-4 w-4 mr-2" />
+                              Deletar
+                            </DropdownMenuItem>
+                          </DropdownMenuContent>
+                        </DropdownMenu>
+                        
+                        {/* Hidden AlertDialog trigger */}
                         <AlertDialog>
                           <AlertDialogTrigger asChild>
-                            <Button
-                              variant="outline"
-                              size="sm"
-                              className="h-8 w-8 p-0 text-red-600 border-red-600 hover:bg-red-50"
-                              disabled={cliente.projetos > 0}
-                              title={cliente.projetos > 0 ? 'Não é possível deletar cliente com projetos ativos' : 'Deletar cliente'}
-                            >
-                              <Trash2 className="h-4 w-4" />
-                            </Button>
+                            <button
+                              data-delete-client={cliente.id}
+                              className="hidden"
+                            />
                           </AlertDialogTrigger>
-                          <AlertDialogContent>
+                          <AlertDialogContent className="w-[90vw] max-w-[400px] sm:max-w-[450px] rounded-2xl p-4 sm:p-6">
                             <AlertDialogHeader>
-                              <AlertDialogTitle>Confirmar Exclusão</AlertDialogTitle>
-                              <AlertDialogDescription>
+                              <AlertDialogTitle className="text-base sm:text-lg">Confirmar Exclusão</AlertDialogTitle>
+                              <AlertDialogDescription className="text-xs sm:text-sm">
                                 Tem certeza que deseja deletar o cliente "{cliente.nome}"?
                                 Esta ação não pode ser desfeita e também removerá o acesso do usuário ao sistema.
                               </AlertDialogDescription>
                             </AlertDialogHeader>
-                            <AlertDialogFooter>
-                              <AlertDialogCancel>Cancelar</AlertDialogCancel>
+                            <AlertDialogFooter className="gap-2 sm:gap-0">
+                              <AlertDialogCancel className="h-9 text-sm">Cancelar</AlertDialogCancel>
                               <AlertDialogAction
                                 onClick={() => handleDeletarCliente(cliente.id)}
-                                className="bg-red-600 hover:bg-red-700"
+                                className="bg-red-600 hover:bg-red-700 h-9 text-sm"
                               >
                                 Deletar
                               </AlertDialogAction>
@@ -801,6 +824,12 @@ const Clientes = () => {
                           </AlertDialogContent>
                         </AlertDialog>
                       </div>
+                    </div>
+                    
+                    <div className="pt-3 border-t border-gray-200">
+                      <span className="text-xs text-gray-500">
+                        Criado em {new Date(cliente.dataCriacao).toLocaleDateString('pt-BR')}
+                      </span>
                     </div>
                   </div>
                 ))}
@@ -832,68 +861,71 @@ const Clientes = () => {
                         <TableCell>{cliente.projetos}</TableCell>
                         <TableCell>{new Date(cliente.dataCriacao).toLocaleDateString('pt-BR')}</TableCell>
                         <TableCell className="text-center">
-                          <div className="flex justify-center gap-2">
-                            <Button
-                              variant="outline"
-                              size="sm"
-                              onClick={() => {
+                          <DropdownMenu>
+                            <DropdownMenuTrigger asChild>
+                              <Button variant="ghost" size="sm">
+                                <MoreVertical className="h-4 w-4" />
+                              </Button>
+                            </DropdownMenuTrigger>
+                            <DropdownMenuContent align="end">
+                              <DropdownMenuItem onClick={() => {
                                 setClienteEditando({ ...cliente });
                                 setDialogEdicaoAberto(true);
-                              }}
-                            >
-                              <Edit className="h-4 w-4" />
-                            </Button>
-                            {cliente.status === 'ativo' ? (
-                              <Button
-                                variant="outline"
-                                size="sm"
-                                onClick={() => handleAlterarStatus(cliente.id, 'suspenso')}
-                                className="text-orange-600 border-orange-600 hover:bg-orange-50"
-                              >
-                                <UserX className="h-4 w-4" />
-                              </Button>
-                            ) : (
-                              <Button
-                                variant="outline"
-                                size="sm"
-                                onClick={() => handleAlterarStatus(cliente.id, 'ativo')}
-                                className="text-green-600 border-green-600 hover:bg-green-50"
-                              >
-                                <UserCheck className="h-4 w-4" />
-                              </Button>
-                            )}
-                            <AlertDialog>
-                              <AlertDialogTrigger asChild>
-                                <Button
-                                  variant="outline"
-                                  size="sm"
-                                  className="text-red-600 border-red-600 hover:bg-red-50"
-                                  disabled={cliente.projetos > 0}
-                                  title={cliente.projetos > 0 ? 'Não é possível deletar cliente com projetos ativos' : 'Deletar cliente'}
+                              }}>
+                                <Edit className="h-4 w-4 mr-2" />
+                                Editar
+                              </DropdownMenuItem>
+                              <DropdownMenuSeparator />
+                              {cliente.status === 'ativo' ? (
+                                <DropdownMenuItem 
+                                  onClick={() => handleAlterarStatus(cliente.id, 'suspenso')}
+                                  className="text-orange-600 focus:text-orange-600 focus:bg-orange-50"
                                 >
-                                  <Trash2 className="h-4 w-4" />
-                                </Button>
-                              </AlertDialogTrigger>
-                              <AlertDialogContent>
-                                <AlertDialogHeader>
-                                  <AlertDialogTitle>Confirmar Exclusão</AlertDialogTitle>
-                                  <AlertDialogDescription>
-                                    Tem certeza que deseja deletar o cliente "{cliente.nome}"?
-                                    Esta ação não pode ser desfeita e também removerá o acesso do usuário ao sistema.
-                                  </AlertDialogDescription>
-                                </AlertDialogHeader>
-                                <AlertDialogFooter>
-                                  <AlertDialogCancel>Cancelar</AlertDialogCancel>
-                                  <AlertDialogAction
-                                    onClick={() => handleDeletarCliente(cliente.id)}
-                                    className="bg-red-600 hover:bg-red-700"
+                                  <UserX className="h-4 w-4 mr-2" />
+                                  Suspender
+                                </DropdownMenuItem>
+                              ) : (
+                                <DropdownMenuItem 
+                                  onClick={() => handleAlterarStatus(cliente.id, 'ativo')}
+                                  className="text-green-600 focus:text-green-600 focus:bg-green-50"
+                                >
+                                  <UserCheck className="h-4 w-4 mr-2" />
+                                  Ativar
+                                </DropdownMenuItem>
+                              )}
+                              <DropdownMenuSeparator />
+                              <AlertDialog>
+                                <AlertDialogTrigger asChild>
+                                  <DropdownMenuItem
+                                    disabled={cliente.projetos > 0}
+                                    onSelect={(e) => e.preventDefault()}
+                                    className="text-red-600 focus:text-red-600 focus:bg-red-50"
                                   >
-                                    Deletar
-                                  </AlertDialogAction>
-                                </AlertDialogFooter>
-                              </AlertDialogContent>
-                            </AlertDialog>
-                          </div>
+                                    <Trash2 className="h-4 w-4 mr-2" />
+                                    Excluir
+                                  </DropdownMenuItem>
+                                </AlertDialogTrigger>
+                                <AlertDialogContent>
+                                  <AlertDialogHeader>
+                                    <AlertDialogTitle>Confirmar Exclusão</AlertDialogTitle>
+                                    <AlertDialogDescription>
+                                      Tem certeza que deseja deletar o cliente "{cliente.nome}"?
+                                      Esta ação não pode ser desfeita e também removerá o acesso do usuário ao sistema.
+                                    </AlertDialogDescription>
+                                  </AlertDialogHeader>
+                                  <AlertDialogFooter>
+                                    <AlertDialogCancel>Cancelar</AlertDialogCancel>
+                                    <AlertDialogAction
+                                      onClick={() => handleDeletarCliente(cliente.id)}
+                                      className="bg-red-600 hover:bg-red-700"
+                                    >
+                                      Deletar
+                                    </AlertDialogAction>
+                                  </AlertDialogFooter>
+                                </AlertDialogContent>
+                              </AlertDialog>
+                            </DropdownMenuContent>
+                          </DropdownMenu>
                         </TableCell>
                       </TableRow>
                     ))}

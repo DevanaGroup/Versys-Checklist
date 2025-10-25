@@ -123,6 +123,7 @@ const App = () => (
               </ProtectedRoute>
             }>
               <Route index element={<Presets />} />
+              <Route path=":presetId" element={<Presets />} />
             </Route>
             <Route path="/itens" element={
               <ProtectedRoute requiredType="admin">
