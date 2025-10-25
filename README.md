@@ -32,9 +32,24 @@ cd <YOUR_PROJECT_NAME>
 # Step 3: Install the necessary dependencies.
 npm i
 
-# Step 4: Start the development server with auto-reloading and an instant preview.
+# Step 4: Configure environment variables (create a .env file).
+# See "Environment Variables" section below for required variables.
+
+# Step 5: Start the development server with auto-reloading and an instant preview.
 npm run dev
 ```
+
+## Environment Variables
+
+This project requires the following environment variables to be set in a `.env` file at the root of the project:
+
+```env
+# OpenAI Configuration (required for AI-powered features)
+VITE_OPENAI_API_KEY=your_openai_api_key_here
+VITE_OPENAI_ASSISTANT_ID=your_openai_assistant_id_here
+```
+
+**Important**: Never commit your `.env` file to the repository. The `.env` file is already included in `.gitignore` for your security.
 
 ## Image Upload Functionality
 
