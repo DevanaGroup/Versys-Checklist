@@ -5,6 +5,12 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Progress } from "@/components/ui/progress";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import { 
   Building, 
   User,
@@ -14,13 +20,17 @@ import {
   Eye,
   ChevronRight,
   Globe,
-  BarChart3
+  BarChart3,
+  MoreVertical
 } from "lucide-react";
 import { toast } from "sonner";
 import { useAuthContext } from "@/contexts/AuthContext";
 import { collection, query, orderBy, getDocs } from "firebase/firestore";
 import { db } from "@/lib/firebase";
 import { RelatorioService } from '@/lib/relatorioService';
+import { calculateProjectScore, getScoreBgColor, getPerformanceLabel } from '@/lib/weightedScoreService';
+import { ProjectModule } from '@/lib/types';
+import { usePageTitle } from "@/contexts/PageTitleContext";
 
 interface ProjectDetail {
   id: string;
@@ -43,13 +53,44 @@ interface ProjectDetail {
     items: any[];
   }>;
   itens?: any[];
+  modules?: ProjectModule[];
+  // Pontuação ponderada
+  pontuacaoAtual?: number;
+  pontuacaoMaxima?: number;
+  percentualPontuacao?: number;
+  ncsCompleted?: number;
+  ncsTotal?: number;
 }
 
 const ClientProjects = () => {
   const navigate = useNavigate();
   const { userData } = useAuthContext();
+  const { setPageTitle } = usePageTitle();
   const [projectDetails, setProjectDetails] = useState<ProjectDetail[]>([]);
   const [loading, setLoading] = useState(true);
+
+  // Função auxiliar para formatar datas
+  const formatDate = (date: any): string => {
+    if (!date) return 'Não definida';
+    
+    try {
+      // Se for um Timestamp do Firebase
+      if (date?.toDate && typeof date.toDate === 'function') {
+        return date.toDate().toLocaleDateString('pt-BR');
+      }
+      
+      // Se for uma string ou número
+      const dateObj = new Date(date);
+      if (isNaN(dateObj.getTime())) {
+        return 'Data inválida';
+      }
+      
+      return dateObj.toLocaleDateString('pt-BR');
+    } catch (error) {
+      console.error('Erro ao formatar data:', error);
+      return 'Data inválida';
+    }
+  };
 
   useEffect(() => {
     if (!userData) {
@@ -64,6 +105,14 @@ const ClientProjects = () => {
 
     loadClientProjects();
   }, [navigate, userData]);
+
+  // Definir o título da página
+  useEffect(() => {
+    setPageTitle('Meus Projetos');
+    return () => {
+      setPageTitle('');
+    };
+  }, [setPageTitle]);
 
   const loadClientProjects = async () => {
     if (!userData?.uid) {
@@ -120,18 +169,51 @@ const ClientProjects = () => {
           // Usar o progresso salvo no projeto ou calcular baseado nos accordions
           const progresso = data.progresso || calculateProgress(data.customAccordions || data.itens || []);
           
+          // Calcular pontuação ponderada se o projeto tiver módulos
+          let pontuacaoData = {
+            pontuacaoAtual: 0,
+            pontuacaoMaxima: 0,
+            percentualPontuacao: 0,
+            ncsCompleted: 0,
+            ncsTotal: 0
+          };
+          
+          if (data.modules && Array.isArray(data.modules) && data.modules.length > 0) {
+            const scoreResult = calculateProjectScore(data.modules);
+            pontuacaoData = {
+              pontuacaoAtual: scoreResult.pontuacaoAtual,
+              pontuacaoMaxima: scoreResult.pontuacaoMaxima,
+              percentualPontuacao: scoreResult.percentual,
+              ncsCompleted: scoreResult.ncsCompleted,
+              ncsTotal: scoreResult.ncsTotal
+            };
+          }
+          
+          // Debug: verificar formato das datas
+          console.log('📅 Datas do projeto:', {
+            id: doc.id,
+            dataInicio: data.dataInicio,
+            criadoEm: data.criadoEm,
+            dataInicioType: typeof data.dataInicio,
+            criadoEmType: typeof data.criadoEm,
+            previsaoConclusao: data.previsaoConclusao,
+            previsaoConclusaoType: typeof data.previsaoConclusao
+          });
+
           return {
             id: doc.id,
             nome: data.nome,
             status: data.status || 'Iniciado',
             progresso: progresso,
-            dataInicio: data.dataInicio,
+            dataInicio: data.dataInicio || data.criadoEm || new Date().toISOString(),
             previsaoConclusao: data.previsaoConclusao,
             consultor: data.consultor || 'Não definido',
             cliente: data.cliente,
             observacoes: data.observacoes || '',
             customAccordions: data.customAccordions || [],
-            itens: data.itens || []
+            itens: data.itens || [],
+            modules: data.modules || [],
+            ...pontuacaoData
           };
         }) as ProjectDetail[];
       
@@ -197,8 +279,8 @@ const ClientProjects = () => {
 
   return (
     <div className="space-y-6">
-      {/* Header */}
-      <div className="flex items-center justify-between">
+      {/* Header - apenas desktop */}
+      <div className="hidden md:flex items-center justify-between">
         <div>
           <h2 className="text-3xl font-bold text-versys-primary">Meus Projetos</h2>
           <p className="text-gray-600 mt-2">
@@ -238,10 +320,8 @@ const ClientProjects = () => {
                     <TableRow>
                       <TableHead>Nome do Projeto</TableHead>
                       <TableHead>Status</TableHead>
-                      <TableHead>Consultor</TableHead>
                       <TableHead>Progresso</TableHead>
                       <TableHead>Data de Início</TableHead>
-                      <TableHead>Previsão de Conclusão</TableHead>
                       <TableHead className="text-center">Ações</TableHead>
                     </TableRow>
                   </TableHeader>
@@ -276,12 +356,6 @@ const ClientProjects = () => {
                           </Badge>
                         </TableCell>
                         <TableCell>
-                          <div className="flex items-center space-x-1">
-                            <User className="h-3 w-3" />
-                            <span>{project.consultor}</span>
-                          </div>
-                        </TableCell>
-                        <TableCell>
                           <div className="flex items-center space-x-2">
                             <div className="flex-1 max-w-[80px]">
                               <Progress value={project.progresso} className="h-2" />
@@ -294,49 +368,42 @@ const ClientProjects = () => {
                         <TableCell>
                           <div className="flex items-center space-x-1">
                             <Calendar className="h-3 w-3" />
-                            <span>{new Date(project.dataInicio).toLocaleDateString('pt-BR')}</span>
+                            <span>{formatDate(project.dataInicio)}</span>
                           </div>
                         </TableCell>
                         <TableCell>
-                          <div className="flex items-center space-x-1">
-                            <Clock className="h-3 w-3" />
-                            <span>
-                              {project.previsaoConclusao 
-                                ? new Date(project.previsaoConclusao).toLocaleDateString('pt-BR')
-                                : 'Não definida'
-                              }
-                            </span>
-                          </div>
-                        </TableCell>
-                        <TableCell>
-                          <div className="flex items-center justify-center space-x-2">
-                            {/* Botão de visualizar mapa */}
-                            <Button
-                              variant="ghost"
-                              className="h-8 w-8 p-0"
-                              title="Visualizar locais no mapa"
-                              onClick={e => {
-                                e.stopPropagation();
-                                navigate(`/client-projects/map/${project.id}`);
-                              }}
-                            >
-                              <Globe className="h-5 w-5 text-blue-600" />
-                            </Button>
-                            
-                            {/* Button for report */}
-                            <Button
-                              variant="ghost"
-                              className="h-8 w-8 p-0"
-                              title="Visualizar relatório do projeto"
-                              onClick={(e) => {
-                                e.preventDefault();
-                                e.stopPropagation();
-                                // Navegar diretamente para a página de relatórios
-                                navigate(`/relatorios?projectId=${project.id}`);
-                              }}
-                            >
-                              <BarChart3 className="h-5 w-5 text-purple-600" />
-                            </Button>
+                          <div className="flex items-center justify-center">
+                            <DropdownMenu>
+                              <DropdownMenuTrigger asChild>
+                                <Button
+                                  variant="ghost"
+                                  className="h-8 w-8 p-0"
+                                  onClick={(e) => e.stopPropagation()}
+                                >
+                                  <MoreVertical className="h-4 w-4" />
+                                </Button>
+                              </DropdownMenuTrigger>
+                              <DropdownMenuContent align="end">
+                                <DropdownMenuItem
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    navigate(`/client-projects/map/${project.id}`);
+                                  }}
+                                >
+                                  <Globe className="h-4 w-4 mr-2 text-blue-600" />
+                                  Visualizar Mapa
+                                </DropdownMenuItem>
+                                <DropdownMenuItem
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    navigate(`/relatorios?projectId=${project.id}`);
+                                  }}
+                                >
+                                  <BarChart3 className="h-4 w-4 mr-2 text-purple-600" />
+                                  Ver Relatório
+                                </DropdownMenuItem>
+                              </DropdownMenuContent>
+                            </DropdownMenu>
                           </div>
                         </TableCell>
                       </TableRow>
@@ -350,12 +417,48 @@ const ClientProjects = () => {
                 {projectDetails.map((project) => (
                   <Card 
                     key={project.id} 
-                    className="cursor-pointer hover:shadow-md transition-shadow"
+                    className="cursor-pointer hover:shadow-md transition-shadow relative"
                     onClick={() => handleProjectClick(project.id)}
                   >
                     <CardContent className="p-4">
+                      {/* Dropdown no canto superior direito */}
+                      <div className="absolute top-2 right-2">
+                        <DropdownMenu>
+                          <DropdownMenuTrigger asChild>
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              className="h-8 w-8 p-0 hover:bg-gray-100"
+                              onClick={(e) => e.stopPropagation()}
+                            >
+                              <MoreVertical className="h-4 w-4 text-gray-500" />
+                            </Button>
+                          </DropdownMenuTrigger>
+                          <DropdownMenuContent align="end">
+                            <DropdownMenuItem
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                navigate(`/client-projects/map/${project.id}`);
+                              }}
+                            >
+                              <Globe className="h-4 w-4 mr-2 text-blue-600" />
+                              Visualizar Mapa
+                            </DropdownMenuItem>
+                            <DropdownMenuItem
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                navigate(`/relatorios?projectId=${project.id}`);
+                              }}
+                            >
+                              <BarChart3 className="h-4 w-4 mr-2 text-purple-600" />
+                              Ver Relatório
+                            </DropdownMenuItem>
+                          </DropdownMenuContent>
+                        </DropdownMenu>
+                      </div>
+
                       {/* Header do Card */}
-                      <div className="flex items-start justify-between mb-3">
+                      <div className="flex items-start justify-between mb-3 pr-8">
                         <div className="flex items-center space-x-3 flex-1">
                           <Building className="h-5 w-5 text-versys-primary flex-shrink-0" />
                           <div className="min-w-0 flex-1">
@@ -397,55 +500,47 @@ const ClientProjects = () => {
                           <Progress value={project.progresso} className="h-2" />
                         </div>
 
+                        {/* Pontuação Ponderada */}
+                        {project.pontuacaoMaxima && project.pontuacaoMaxima > 0 && (
+                          <div className="p-3 bg-gray-50 rounded-lg space-y-2">
+                            <div className="flex items-center justify-between">
+                              <span className="text-sm font-medium text-gray-700">Pontuação</span>
+                              <span className="text-sm font-bold">
+                                {project.pontuacaoAtual}/{project.pontuacaoMaxima}
+                              </span>
+                            </div>
+                            <div className="flex items-center justify-between">
+                              <Badge className={`text-xs ${getScoreBgColor(project.percentualPontuacao || 0)}`}>
+                                {getPerformanceLabel(project.percentualPontuacao || 0)}
+                              </Badge>
+                              <span className="text-sm font-medium">
+                                {project.percentualPontuacao?.toFixed(1)}%
+                              </span>
+                            </div>
+                            {project.ncsTotal && project.ncsTotal > 0 && (
+                              <div className="text-xs text-gray-500">
+                                {project.ncsCompleted} de {project.ncsTotal} NCs concluídas
+                              </div>
+                            )}
+                          </div>
+                        )}
+
                         {/* Datas */}
                         <div className="grid grid-cols-1 gap-2">
                           <div className="flex items-center space-x-2">
                             <Calendar className="h-4 w-4 text-gray-400" />
                             <span className="text-sm text-gray-600">Início:</span>
                             <span className="text-sm">
-                              {new Date(project.dataInicio).toLocaleDateString('pt-BR')}
+                              {formatDate(project.dataInicio)}
                             </span>
                           </div>
                           <div className="flex items-center space-x-2">
                             <Clock className="h-4 w-4 text-gray-400" />
                             <span className="text-sm text-gray-600">Previsão:</span>
                             <span className="text-sm">
-                              {project.previsaoConclusao 
-                                ? new Date(project.previsaoConclusao).toLocaleDateString('pt-BR')
-                                : 'Não definida'
-                              }
+                              {formatDate(project.previsaoConclusao)}
                             </span>
                           </div>
-                        </div>
-
-                        {/* Ações */}
-                        <div className="flex items-center justify-end space-x-2 pt-2 border-t">
-                          <Button
-                            variant="outline"
-                            size="sm"
-                            className="flex items-center space-x-2"
-                            onClick={e => {
-                              e.stopPropagation();
-                              navigate(`/client-projects/map/${project.id}`);
-                            }}
-                          >
-                            <Globe className="h-4 w-4 text-blue-600" />
-                            <span>Mapa</span>
-                          </Button>
-                          
-                          <Button
-                            variant="outline"
-                            size="sm"
-                            className="flex items-center space-x-2 bg-purple-50 hover:bg-purple-100 border-purple-200"
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              // Navegar diretamente para a página de relatórios
-                              navigate(`/relatorios?projectId=${project.id}`);
-                            }}
-                          >
-                            <BarChart3 className="h-4 w-4 text-purple-600" />
-                            <span className="text-purple-700">Relatório</span>
-                          </Button>
                         </div>
                       </div>
                     </CardContent>

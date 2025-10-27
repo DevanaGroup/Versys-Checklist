@@ -1,39 +1,47 @@
 import { useState, useEffect } from "react";
 import { useNavigate, useParams } from "react-router-dom";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Progress } from "@/components/ui/progress";
-import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion";
-import { ArrowLeft, ArrowRight, Edit, CheckCircle, XCircle, AlertTriangle } from "lucide-react";
+import { ArrowLeft, Camera, FileText, MessageSquare, MapPin, ChevronLeft, AlertCircle, Sparkles } from "lucide-react";
 import { toast } from "sonner";
 import { db } from "@/lib/firebase";
 import { doc, getDoc } from "firebase/firestore";
+import { ProjectModule, ProjectItem, NC, WeightedQuestion } from "@/lib/types";
+import { HierarchicalProjectSidebar } from "@/components/HierarchicalProjectSidebar";
+import { usePageTitle } from "@/contexts/PageTitleContext";
+import { useHeaderActions } from "@/contexts/HeaderActionsContext";
 
-interface SubItem {
-  id: string;
-  title: string;
-  evaluation: "nc" | "r" | "na" | "";
-  currentSituation?: string;
-  clientGuidance?: string;
-  photos?: {
-    id: string;
-    url: string;
-    createdAt: string;
-    latitude: number;
-    longitude: number;
-  }[];
-  completed?: boolean;
-}
+// Função para gerar IDs únicos
+const generateUniqueId = (prefix: string) => {
+  return `${prefix}_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+};
 
-interface ProjectItem {
-  id: string;
-  title: string;
-  category: string;
-  subItems: SubItem[];
-  isExpanded?: boolean;
-  completed?: boolean;
-}
+// Função para sanitizar IDs duplicados
+const sanitizeDuplicateIds = (modules: ProjectModule[]): ProjectModule[] => {
+  const seenQuestionIds = new Set<string>();
+  
+  return modules.map(module => ({
+    ...module,
+    itens: module.itens.map(item => ({
+      ...item,
+      ncs: item.ncs.map(nc => ({
+        ...nc,
+        perguntas: nc.perguntas.map(q => {
+          // Se o ID já foi visto, gerar um novo ID único
+          if (seenQuestionIds.has(q.id)) {
+            console.warn(`⚠️ ID duplicado detectado: ${q.id}. Gerando novo ID.`);
+            const newId = generateUniqueId('question');
+            seenQuestionIds.add(newId);
+            return { ...q, id: newId };
+          }
+          seenQuestionIds.add(q.id);
+          return q;
+        })
+      }))
+    }))
+  }));
+};
 
 interface ProjectDetail {
   id: string;
@@ -50,26 +58,47 @@ interface ProjectDetail {
     empresa: string;
   };
   observacoes?: string;
-  customAccordions?: Array<{
-    id: string;
-    title: string;
-    items: ProjectItem[];
-  }>;
+  modules?: ProjectModule[];
 }
 
 const ClientProjectView = () => {
   const navigate = useNavigate();
   const { projectId } = useParams<{ projectId: string }>();
+  const { setPageTitle } = usePageTitle();
+  const { setRightAction } = useHeaderActions();
   const [projectDetails, setProjectDetails] = useState<ProjectDetail | null>(null);
   const [loading, setLoading] = useState(true);
-  const [currentStep, setCurrentStep] = useState(0);
-  const [projectSteps, setProjectSteps] = useState<ProjectItem[]>([]);
+  const [modules, setModules] = useState<ProjectModule[]>([]);
+  
+  // Estados de navegação
+  const [currentModuleId, setCurrentModuleId] = useState<string>('');
+  const [currentItemId, setCurrentItemId] = useState<string>('');
+  const [currentNcId, setCurrentNcId] = useState<string>('');
+  const [isSidebarOpen, setIsSidebarOpen] = useState(false);
 
   useEffect(() => {
     if (projectId) {
       loadProject();
     }
   }, [projectId]);
+
+  // Atualizar título do header quando o módulo mudar
+  useEffect(() => {
+    if (currentModuleId && modules.length > 0) {
+      const currentModule = modules.find(m => m.id === currentModuleId);
+      if (currentModule) {
+        setPageTitle(currentModule.titulo);
+      }
+    }
+  }, [currentModuleId, modules, setPageTitle]);
+
+  // Limpar ação do header e título ao desmontar
+  useEffect(() => {
+    return () => {
+      setRightAction(null);
+      setPageTitle('');
+    };
+  }, [setRightAction, setPageTitle]);
 
   const loadProject = async () => {
     try {
@@ -84,63 +113,182 @@ const ClientProjectView = () => {
       }
 
       const projectData = projectDoc.data();
+      console.log('=== DADOS DO PROJETO (CLIENT VIEW MODE) ===', projectData);
+      console.log('projectData.weightedModules:', projectData.weightedModules);
+      console.log('projectData.modules:', projectData.modules);
+      console.log('projectData.customAccordions:', projectData.customAccordions);
       
-      const accordions = projectData.customAccordions || [];
-      const steps: ProjectItem[] = [];
-
-      // Converter accordions para steps para navegação
-      accordions.forEach((accordion: any) => {
-        if (accordion.items && Array.isArray(accordion.items)) {
-          accordion.items.forEach((item: any) => {
-            // Converter subItems corretamente
-            const convertedSubItems = item.subItems ? item.subItems.map((subItem: any) => {
-              const converted = {
-                id: subItem.id,
-                title: subItem.title,
-                evaluation: subItem.evaluation || '',
-                currentSituation: subItem.currentSituation || '',
-                clientGuidance: subItem.clientGuidance || subItem.adminFeedback || '', // Buscar ambos os campos
-                photos: Array.isArray(subItem.photos) 
-                  ? subItem.photos.map(photo => typeof photo === 'string' ? photo : (photo as any)?.url || '')
-                  : [],
-                completed: subItem.completed || false
+      // Priorizar weightedModules (novo formato de avaliação ponderada)
+      let loadedModules: ProjectModule[] = [];
+      
+      if (projectData.weightedModules && Array.isArray(projectData.weightedModules) && projectData.weightedModules.length > 0) {
+        console.log('✅ Carregando do campo weightedModules (novo formato de avaliação ponderada)');
+        loadedModules = projectData.weightedModules;
+      } else if (projectData.modules && Array.isArray(projectData.modules) && projectData.modules.length > 0) {
+        console.log('✅ Carregando do campo modules (formato intermediário)');
+        loadedModules = projectData.modules;
+      } else if (projectData.customAccordions && Array.isArray(projectData.customAccordions)) {
+        console.log('⚠️ Convertendo de customAccordions (formato antigo) para modules');
+        
+        // Agrupar itens por categoria (módulo) - mesma lógica do ProjectView.tsx
+        const itemsByCategory = new Map<string, any[]>();
+        
+        projectData.customAccordions.forEach((accordion: any) => {
+          (accordion.items || []).forEach((item: any) => {
+            const category = item.category || accordion.title || 'SEM CATEGORIA';
+            if (!itemsByCategory.has(category)) {
+              itemsByCategory.set(category, []);
+            }
+            itemsByCategory.get(category)!.push(item);
+          });
+        });
+        
+        // Criar módulos a partir das categorias agrupadas
+        let moduleIndex = 0;
+        itemsByCategory.forEach((items, categoryName) => {
+          const module: ProjectModule = {
+            id: `module_${moduleIndex}`,
+            titulo: categoryName,
+            ordem: moduleIndex,
+            itens: []
+          };
+          
+          items.forEach((item: any, itemIndex: number) => {
+            const hierItem: any = {
+              id: `item_${moduleIndex}_${itemIndex}`,
+              titulo: item.title,
+              descricao: item.category,
+              ordem: itemIndex,
+              ncs: [],
+              pontuacaoAtual: 0,
+              pontuacaoMaxima: 0
+            };
+            
+            // Criar uma NC para cada subItem (1 subItem = 1 NC com 1 pergunta)
+            (item.subItems || []).forEach((subItem: any, ncIndex: number) => {
+              // Converter evaluation antiga (nc/r/na) para nova estrutura de response
+              let selectedOption: any = null;
+              let score = 0;
+              
+              if (subItem.evaluation) {
+                switch (subItem.evaluation.toLowerCase()) {
+                  case 'nc':
+                    selectedOption = 'very_bad';
+                    score = 0;
+                    break;
+                  case 'r':
+                    selectedOption = 'good';
+                    score = 15;
+                    break;
+                  case 'na':
+                    selectedOption = 'na';
+                    score = 0;
+                    break;
+                }
+              }
+              
+              // Converter fotos antigas para novo formato
+              const mediaAttachments = [];
+              if (subItem.photos && Array.isArray(subItem.photos)) {
+                mediaAttachments.push(...subItem.photos.map((photo: any) => ({
+                  id: photo.id || generateUniqueId('photo'),
+                  type: 'image' as const,
+                  url: photo.url,
+                  createdAt: photo.createdAt || new Date().toISOString(),
+                  latitude: photo.latitude,
+                  longitude: photo.longitude
+                })));
+              } else if (subItem.photoData) {
+                mediaAttachments.push({
+                  id: generateUniqueId('photo'),
+                  type: 'image' as const,
+                  url: subItem.photoData.url,
+                  createdAt: subItem.photoData.createdAt || new Date().toISOString(),
+                  latitude: subItem.photoData.latitude,
+                  longitude: subItem.photoData.longitude
+                });
+              }
+              
+              // Manter campos antigos como campos próprios
+              const currentSituation = subItem.currentSituation || '';
+              const aiGuidance = subItem.clientGuidance || subItem.adminFeedback || '';
+              
+              const nc: NC = {
+                id: `nc_${moduleIndex}_${itemIndex}_${ncIndex}`,
+                numero: ncIndex + 1,
+                ncTitulo: `NC ${ncIndex + 1}`,
+                descricao: `Não Conformidade ${ncIndex + 1}`,
+                perguntas: [{
+                  id: `question_${moduleIndex}_${itemIndex}_${ncIndex}_0`,
+                  text: subItem.title,
+                  weight: 2,
+                  required: true,
+                  responseOptions: ['na', 'very_bad', 'good'] as any[],
+                  response: selectedOption ? {
+                    selectedOption,
+                    score,
+                    respondedAt: new Date().toISOString(),
+                    respondedBy: 'legacy',
+                    mediaAttachments,
+                    currentSituation,
+                    aiGuidance
+                  } : undefined,
+                  order: 0
+                }],
+                pontuacaoAtual: 0,
+                pontuacaoMaxima: 20,
+                status: 'pending' as const
               };
               
-              return converted;
-            }) : [];
-
-            steps.push({
-              id: item.id || `step-${Date.now()}`,
-              title: item.title,
-              category: item.category || accordion.title,
-              subItems: convertedSubItems,
-              isExpanded: false,
-              completed: false
+              hierItem.ncs.push(nc);
             });
+            
+            hierItem.pontuacaoMaxima = hierItem.ncs.reduce((sum: number, nc: NC) => sum + nc.pontuacaoMaxima, 0);
+            module.itens.push(hierItem);
           });
+          
+          loadedModules.push(module);
+          moduleIndex++;
+        });
+        
+        console.log('✅ Conversão concluída:', loadedModules);
+      } else {
+        console.log('❌ Nenhum dado de avaliação encontrado');
+      }
+      
+      console.log('loadedModules final:', loadedModules);
+      
+      // Sanitizar IDs duplicados antes de carregar
+      const sanitizedModules = sanitizeDuplicateIds(loadedModules);
+      setModules(sanitizedModules);
+
+      // Inicializar navegação com o primeiro módulo/item/nc disponível
+      if (sanitizedModules.length > 0) {
+        const firstModule = sanitizedModules[0];
+        setCurrentModuleId(firstModule.id);
+        
+        if (firstModule.itens && firstModule.itens.length > 0) {
+          const firstItem = firstModule.itens[0];
+          setCurrentItemId(firstItem.id);
+          
+          if (firstItem.ncs && firstItem.ncs.length > 0) {
+            setCurrentNcId(firstItem.ncs[0].id);
+          }
         }
-      });
-      
-      setProjectSteps(steps);
-      
-      // Usar o progresso salvo no projeto ou calcular baseado nos accordions
-      const calculatedProgress = projectData.progresso || calculateProgress(accordions);
-      
-      const projectDetail: ProjectDetail = {
+      }
+
+      setProjectDetails({
         id: projectDoc.id,
-        nome: projectData.nome || 'Projeto sem nome',
+        nome: projectData.nome,
         status: projectData.status || 'Iniciado',
-        progresso: calculatedProgress, // SEMPRE usar o cálculo, nunca o valor salvo
-        dataInicio: projectData.dataInicio || projectData.createdAt || new Date().toISOString(),
+        progresso: projectData.progresso || 0,
+        dataInicio: projectData.dataInicio,
         previsaoConclusao: projectData.previsaoConclusao,
         consultor: projectData.consultor || 'Não definido',
         cliente: projectData.cliente,
         observacoes: projectData.observacoes || '',
-        customAccordions: accordions
-      };
-
-      setProjectDetails(projectDetail);
-      
+        modules: loadedModules
+      });
     } catch (error) {
       console.error('Erro ao carregar projeto:', error);
       toast.error('Erro ao carregar projeto');
@@ -150,67 +298,59 @@ const ClientProjectView = () => {
     }
   };
 
-  const calculateProgress = (accordions: any[]): number => {
-    if (!accordions || accordions.length === 0) return 0;
-    
-    // Agora o progresso é calculado baseado nos itens concluídos pelo cliente
-    let totalItems = 0;
-    let completedItems = 0;
-    
-    accordions.forEach((accordion, accordionIndex) => {
-      if (accordion.items) {
-        accordion.items.forEach((item: any, itemIndex: number) => {
-          if (item.subItems) {
-            item.subItems.forEach((subItem: any, subIndex: number) => {
-              totalItems++;
-              // Conta como progresso se o item foi marcado como concluído
-              if (subItem.status === 'completed' || subItem.completed === true) {
-                completedItems++;
-              }
-            });
-          }
-        });
-      }
-    });
-    
-    const progress = totalItems > 0 ? Math.round((completedItems / totalItems) * 100) : 0;
-    
-    return progress;
+  const handleNavigate = (moduleId: string, itemId: string, ncId?: string) => {
+    setCurrentModuleId(moduleId);
+    setCurrentItemId(itemId);
+    if (ncId) {
+      setCurrentNcId(ncId);
+    }
   };
 
   const getStatusColor = (status: string) => {
-    switch (status) {
-      case "Concluído": return "bg-green-100 text-green-800";
-      case "Em Andamento": return "bg-blue-100 text-blue-800";
-      case "Aguardando Documentos": return "bg-yellow-100 text-yellow-800";
-      case "Em Revisão": return "bg-purple-100 text-purple-800";
-      case "Iniciado": return "bg-gray-100 text-gray-800";
-      default: return "bg-gray-100 text-gray-800";
+    switch (status.toLowerCase()) {
+      case 'concluído':
+        return 'bg-green-100 text-green-800';
+      case 'em andamento':
+        return 'bg-blue-100 text-blue-800';
+      case 'iniciado':
+        return 'bg-purple-100 text-purple-800';
+      case 'pendente':
+        return 'bg-yellow-100 text-yellow-800';
+      default:
+        return 'bg-gray-100 text-gray-800';
     }
   };
 
-  const getEvaluationIcon = (evaluation: string) => {
-    switch (evaluation) {
-      case "nc": return <XCircle className="h-5 w-5 text-red-500" />;
-      case "r": return <AlertTriangle className="h-5 w-5 text-yellow-500" />;
-      case "na": return <CheckCircle className="h-5 w-5 text-green-500" />;
-      default: return <AlertTriangle className="h-5 w-5 text-gray-400" />;
+  const getResponseText = (option: string | null | undefined) => {
+    switch (option) {
+      case 'very_bad': return 'NC';
+      case 'good': return 'R';
+      case 'na': return 'N/A';
+      default: return 'Não Respondida';
     }
   };
 
-  const getEvaluationText = (evaluation: string) => {
-    switch (evaluation) {
-      case "nc": return "Não Conforme";
-      case "r": return "Requer Atenção";
-      case "na": return "Não Aplicável";
-      default: return "Não Avaliado";
+  const getResponseColor = (option: string | null | undefined) => {
+    switch (option) {
+      case 'very_bad': return 'bg-red-100 text-red-800 border-red-200';
+      case 'good': return 'bg-yellow-100 text-yellow-800 border-yellow-200';
+      case 'na': return 'bg-gray-100 text-gray-800 border-gray-200';
+      default: return 'bg-gray-50 text-gray-600 border-gray-200';
     }
   };
+
+  // Encontrar módulo, item e NC atual
+  const currentModule = modules.find(m => m.id === currentModuleId);
+  const currentItem = currentModule?.itens.find(i => i.id === currentItemId);
+  const currentNC = currentItem?.ncs.find(nc => nc.id === currentNcId);
 
   if (loading) {
     return (
       <div className="flex items-center justify-center min-h-screen">
-        <div className="animate-spin rounded-full h-32 w-32 border-b-2 border-versys-primary"></div>
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-32 w-32 border-b-2 border-versys-primary mx-auto"></div>
+          <p className="mt-4 text-gray-600">Carregando projeto...</p>
+        </div>
       </div>
     );
   }
@@ -228,199 +368,248 @@ const ClientProjectView = () => {
     );
   }
 
-  const totalSteps = projectSteps.length;
-  const currentStepData = projectSteps[currentStep];
-
   return (
-    <div className="container mx-auto px-4 py-6 max-w-4xl">
-      {/* Header */}
-      <div className="flex items-center justify-between mb-6">
-        <div className="flex items-center space-x-4">
+    <div className="flex h-screen -m-6 overflow-hidden pt-14 md:pt-16">
+      {/* Sidebar Hierárquica - Mobile: controlado externamente, Desktop: sidebar normal */}
+      <HierarchicalProjectSidebar
+        modules={modules}
+        currentModuleId={currentModuleId}
+        currentItemId={currentItemId}
+        currentNcId={currentNcId}
+        onNavigate={handleNavigate}
+        className="h-full flex-shrink-0"
+        showMobileButton={false}
+        isOpen={isSidebarOpen}
+        onOpenChange={setIsSidebarOpen}
+      />
+
+      {/* Conteúdo Principal */}
+      <div className="flex-1 overflow-hidden w-full">
+        {/* Conteúdo */}
+        <div className="p-4 md:p-6 md:m-4 md:border md:border-gray-350 md:rounded-lg md:shadow-md bg-white h-[calc(100vh-3.5rem)] md:h-[calc(100vh-8rem)] overflow-y-auto">
+          {currentNC && currentItem && currentModule ? (
+            <div className="max-w-5xl mx-auto space-y-4 md:space-y-6">
+              {/* Header Mobile - Verde com artigo atual */}
+              <div className="md:hidden -mx-4 -mt-4 mb-4 bg-versys-primary text-white px-4 py-3">
+                <div className="flex items-start gap-3">
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    onClick={() => navigate("/client-projects")}
+                    className="h-8 w-8 text-white hover:bg-white/20 flex-shrink-0 mt-0.5"
+                  >
+                    <ArrowLeft className="h-5 w-5" />
+                  </Button>
+                  <div className="flex-1 min-w-0">
+                    <h2 className="text-base font-semibold leading-snug">
+                      {currentItem.titulo}
+                    </h2>
+                  </div>
+                </div>
+              </div>
+
+              {/* Botão Flutuante da Estrutura do Projeto - Posição central */}
+              <Button
+                onClick={() => setIsSidebarOpen(true)}
+                className="md:hidden fixed right-0 top-[30%] -translate-y-1/2 z-50 h-16 w-10 rounded-l-full bg-versys-primary/60 hover:bg-versys-primary/80 backdrop-blur-sm shadow-lg p-0 flex items-center justify-center transition-all"
+              >
+                <ChevronLeft className="h-6 w-6 text-white" />
+              </Button>
+
+              {/* Header Desktop */}
+              <div className="hidden md:block bg-white p-4 rounded-lg shadow-sm border border-gray-200 mb-4">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-4">
       <Button
         variant="ghost"
         size="sm"
         onClick={() => navigate("/client-projects")}
-            className="flex items-center space-x-2"
       >
-            <ArrowLeft size={16} />
-        <span>Voltar</span>
+                      <ArrowLeft className="h-4 w-4 mr-2" />
+                      Voltar
       </Button>
           <div>
-            <h1 className="text-2xl font-bold text-gray-900">{projectDetails.nome}</h1>
-            <Badge className={getStatusColor(projectDetails.status)}>
-            {projectDetails.status}
-            </Badge>
+                      <h1 className="text-xl font-bold text-gray-900">{projectDetails.nome}</h1>
           </div>
         </div>
+                  <div className="flex items-center gap-3">
+                    <div className="text-right">
+                      <div className="text-sm font-medium text-gray-700">Progresso Geral</div>
+                      <div className="text-2xl font-bold text-blue-600">{projectDetails.progresso}%</div>
       </div>
-
-      {/* Progresso do Projeto */}
-      <Card className="mb-6">
-        <CardContent className="p-6">
-          <div>
-            <p className="text-sm text-gray-500 mb-2">Progresso Geral</p>
-            <div className="flex items-center space-x-3">
-              <Progress value={projectDetails.progresso} className="flex-1" />
-              <span className="text-sm font-medium">{projectDetails.progresso}% concluído</span>
+                    <Progress
+                      value={projectDetails.progresso}
+                      className="w-32 h-4"
+                    />
             </div>
           </div>
-        </CardContent>
-      </Card>
+              </div>
 
-      {/* Navegação por Steps */}
-      {totalSteps > 0 && (
-        <>
-          {/* Indicador de Progresso */}
-          <div className="flex items-center justify-center mb-6">
-            <div className="flex items-center space-x-2">
-              <div className="bg-purple-600 text-white rounded-full w-8 h-8 flex items-center justify-center text-sm font-medium">
-              {currentStep + 1}
+              {/* Header do Módulo e Item (Artigo) - Apenas Desktop */}
+              <div className="hidden md:block bg-white rounded-lg p-6 shadow-sm border border-gray-200">
+                <div className="mb-4">
+                  <Badge variant="outline" className="mb-2">
+                    {currentModule.titulo}
+                  </Badge>
+                  <h2 className="text-xl font-bold text-gray-900">{currentItem.titulo}</h2>
+                  {currentItem.descricao && (
+                    <p className="text-gray-600 mt-2">{currentItem.descricao}</p>
+                  )}
+                </div>
               </div>
-              <div className="text-sm text-gray-600">
-                Passo {currentStep + 1} de {totalSteps}
-              </div>
-            </div>
+
+              {/* Perguntas */}
+              <div className="space-y-4">
+                {currentNC.perguntas && currentNC.perguntas.length > 0 ? (
+                  currentNC.perguntas.map((question: WeightedQuestion, index: number) => (
+                    <div
+                      key={question.id}
+                      className="bg-white rounded-lg p-6 shadow-sm border border-gray-200"
+                    >
+                      {/* Cabeçalho da NC e Pergunta */}
+                      <div className="mb-4">
+                        <h3 className="text-lg font-bold text-gray-900 mb-2">
+                          {currentNC.ncTitulo}
+                        </h3>
+                        <p className="text-sm text-gray-600">
+                          {question.text}
+                        </p>
           </div>
 
-          {/* Título do Step Atual */}
-          <div className="text-center mb-6">
-            <h2 className="text-lg font-semibold text-gray-900 mb-2">
-              {currentStepData.title}
-            </h2>
-            <Badge variant="outline" className="text-xs">
-              {currentStepData.category}
+                      {/* Resposta */}
+                      {question.response ? (
+                        <div className="space-y-3">
+                          {/* Opção Selecionada */}
+                          <div className="flex items-center gap-3">
+                            <span className="text-sm text-gray-600">Resposta:</span>
+                            <Badge
+                              className={`text-sm px-3 py-1 border font-semibold ${getResponseColor(question.response.selectedOption)}`}
+                            >
+                              {getResponseText(question.response.selectedOption)}
             </Badge>
         </div>
 
-          {/* Conteúdo do Step */}
-          <Card className="mb-6">
-            <CardContent className="p-6">
-              {currentStepData.subItems && currentStepData.subItems.length > 0 ? (
-              <Accordion type="single" collapsible className="w-full">
-                  {currentStepData.subItems.map((subItem, index) => (
-                    <AccordionItem key={subItem.id} value={`item-${index}`}>
-                      <AccordionTrigger className="text-left">
-                      <div className="flex items-center space-x-3">
-                          {getEvaluationIcon(subItem.evaluation)}
-                          <span className="font-medium">{subItem.title}</span>
-                          <Badge variant="outline" className="text-xs">
-                            {getEvaluationText(subItem.evaluation)}
-                          </Badge>
+                          {/* Fotos */}
+                          {question.response.mediaAttachments && question.response.mediaAttachments.length > 0 && (
+                            <div className="border-t pt-3">
+                              <div className="flex items-center gap-2 mb-2">
+                                <Camera className="h-4 w-4 text-gray-500" />
+                                <span className="text-sm font-medium text-gray-700">Fotos Anexadas</span>
+                              </div>
+                              <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
+                                {question.response.mediaAttachments.map((media, idx) => (
+                                  <div key={idx} className="relative">
+                                    <img
+                                      src={media.url}
+                                      alt={`Foto ${idx + 1}`}
+                                      className="w-full h-32 object-cover rounded-lg border border-gray-200 cursor-pointer hover:opacity-90 transition-opacity"
+                                      onClick={() => window.open(media.url, '_blank')}
+                                    />
+                                    {media.latitude && media.longitude && (
+                                      <a
+                                        href={`https://www.google.com/maps?q=${media.latitude},${media.longitude}`}
+                                        target="_blank"
+                                        rel="noopener noreferrer"
+                                        className="absolute bottom-2 right-2 bg-white rounded-full p-1.5 shadow-md hover:bg-gray-100"
+                                        title="Ver localização no mapa"
+                                      >
+                                        <MapPin className="h-3 w-3 text-blue-600" />
+                                      </a>
+                                    )}
+                                  </div>
+                                ))}
+                              </div>
+                            </div>
+                          )}
+
+                          {/* Comentário do Usuário */}
+                          {question.response.userComment && (
+                            <div className="border-t pt-3">
+                              <div className="flex items-center gap-2 mb-2">
+                                <MessageSquare className="h-4 w-4 text-blue-500" />
+                                <span className="text-sm font-medium text-gray-700">Comentário</span>
+                              </div>
+                              <div className="bg-blue-50 rounded-lg p-3 border border-blue-200">
+                                <p className="text-sm text-gray-800">{question.response.userComment}</p>
+                                <p className="text-xs text-gray-500 mt-1">
+                                  {question.response.userCommentBy} • {question.response.userCommentDate ? new Date(question.response.userCommentDate).toLocaleString('pt-BR') : ''}
+                                </p>
+                              </div>
                         </div>
-                      </AccordionTrigger>
-                      <AccordionContent>
-                        <div className="space-y-4 pt-4">
+                          )}
+
                           {/* Situação Atual */}
-                          {subItem.currentSituation && (
-                            <div>
-                              <h4 className="font-medium text-gray-900 mb-2">Situação Atual</h4>
-                              <div className="bg-gray-50 p-3 rounded-lg">
-                                <p className="text-sm text-gray-700">{subItem.currentSituation}</p>
+                          {question.response.currentSituation && (
+                            <div className="border-t pt-3">
+                              <div className="flex items-center gap-2 mb-2">
+                                <AlertCircle className="h-4 w-4 text-amber-500" />
+                                <span className="text-sm font-medium text-gray-700">Situação Atual</span>
+                              </div>
+                              <div className="bg-amber-50 rounded-lg p-3 border border-amber-200">
+                                <p className="text-sm text-gray-800">{question.response.currentSituation}</p>
                               </div>
                                 </div>
                               )}
                               
-                          {/* Orientação para o Cliente */}
-                          {subItem.clientGuidance && (
-                            <div>
-                              <h4 className="font-medium text-gray-900 mb-2">Orientação para o Cliente</h4>
-                              <div className="bg-blue-50 p-3 rounded-lg">
-                                <p className="text-sm text-gray-700">{subItem.clientGuidance}</p>
+                          {/* Orientação (IA) */}
+                          {question.response.aiGuidance && (
+                            <div className="border-t pt-3">
+                              <div className="flex items-center gap-2 mb-2">
+                                <Sparkles className="h-4 w-4 text-purple-500" />
+                                <span className="text-sm font-medium text-gray-700">Orientação</span>
+                              </div>
+                              <div className="bg-purple-50 rounded-lg p-3 border border-purple-200">
+                                <p className="text-sm text-gray-800 whitespace-pre-wrap">{question.response.aiGuidance}</p>
                                   </div>
                                 </div>
                               )}
                               
-                          {/* Fotos */}
-                          {subItem.photos && subItem.photos.length > 0 && (
-                            <div>
-                              <h4 className="font-medium text-gray-900 mb-2">📸 Fotos</h4>
-                              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                                {subItem.photos.map((photo) => (
-                                  <div key={photo.id} className="bg-gray-50 p-2 rounded-lg">
-                                    <img
-                                      src={photo.url}
-                                      alt="Foto do local"
-                                      className="w-full h-32 object-cover rounded-lg cursor-pointer hover:opacity-90 transition-opacity shadow-sm"
-                                      onClick={() => window.open(photo.url, '_blank')}
-                                    />
-                                    <div className="text-xs text-gray-500 mt-2 space-y-1">
-                                      <p>📅 Capturada em: {new Date(photo.createdAt).toLocaleString('pt-BR')}</p>
-                                      {photo.latitude && photo.longitude && 
-                                       photo.latitude !== 0 && photo.longitude !== 0 && (
-                                    <div>
-                                          <p>📍 Localização: {photo.latitude.toFixed(6)}, {photo.longitude.toFixed(6)}</p>
-                                          <a 
-                                            href={`https://www.google.com/maps?q=${photo.latitude},${photo.longitude}`}
-                                            target="_blank"
-                                            rel="noopener noreferrer"
-                                            className="text-blue-600 hover:text-blue-800 underline text-xs"
-                                          >
-                                            🗺️ Ver no Google Maps
-                                          </a>
+                          {/* Comentários antigos (compatibilidade) */}
+                          {question.response.comments && question.response.comments.length > 0 && (
+                            <div className="border-t pt-3">
+                              <div className="flex items-center gap-2 mb-2">
+                                <MessageSquare className="h-4 w-4 text-gray-500" />
+                                <span className="text-sm font-medium text-gray-700">Comentários (sistema antigo)</span>
                                     </div>
-                                  )}
-                                      {(!photo.latitude || !photo.longitude || 
-                                        (photo.latitude === 0 && photo.longitude === 0)) && (
-                                          <p className="text-orange-600 text-xs">⚠️ Foto sem localização GPS</p>
-                                      )}
-                                    </div>
+                              <div className="space-y-2">
+                                {question.response.comments.map((comment: any, idx) => (
+                                  <div key={idx} className="bg-gray-50 rounded-lg p-3">
+                                    <p className="text-sm text-gray-800">{comment.text}</p>
+                                    <p className="text-xs text-gray-500 mt-1">
+                                      {comment.createdByName || comment.author || 'Sistema'} • {new Date(comment.createdAt || comment.timestamp).toLocaleString('pt-BR')}
+                                    </p>
                                       </div>
                                     ))}
                               </div>
                           </div>
                         )}
                       </div>
-                    </AccordionContent>
-                  </AccordionItem>
-                ))}
-              </Accordion>
-            ) : (
-                <div className="text-center py-8">
-                  <p className="text-gray-500">Nenhum item encontrado para este passo.</p>
+                      ) : (
+                        <div className="text-center py-4 text-gray-500 bg-gray-50 rounded-lg">
+                          <p className="text-sm">Esta pergunta ainda não foi respondida</p>
+                        </div>
+                      )}
+                    </div>
+                  ))
+                ) : (
+                  <div className="text-center py-8 text-gray-500">
+                    <p>Nenhuma pergunta cadastrada para esta NC</p>
                 </div>
             )}
-          </CardContent>
-        </Card>
-
-          {/* Navegação */}
-          <div className="flex items-center justify-between">
-          <Button
-            variant="outline"
-              onClick={() => setCurrentStep(prev => Math.max(0, prev - 1))}
-            disabled={currentStep === 0}
-            className="flex items-center space-x-2"
-          >
-            <ArrowLeft size={16} />
-            <span>Anterior</span>
-          </Button>
-
-          <div className="text-sm text-gray-500">
-              Visualização - Somente Leitura
+              </div>
+            </div>
+          ) : (
+            <div className="flex items-center justify-center h-full">
+              <div className="text-center">
+                <FileText className="h-16 w-16 text-gray-300 mx-auto mb-4" />
+                <p className="text-gray-500">
+                  Selecione uma NC na sidebar para visualizar seu conteúdo
+                </p>
+              </div>
           </div>
-
-          <Button
-              onClick={() => setCurrentStep(prev => Math.min(totalSteps - 1, prev + 1))}
-              disabled={currentStep === totalSteps - 1}
-            className="flex items-center space-x-2"
-          >
-            <span>Próximo</span>
-            <ArrowRight size={16} />
-          </Button>
+          )}
         </div>
-        </>
-      )}
-
-      {/* Observações */}
-      {projectDetails.observacoes && (
-        <Card className="mt-6">
-          <CardHeader>
-            <CardTitle>Observações</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <p className="text-gray-700">{projectDetails.observacoes}</p>
-          </CardContent>
-        </Card>
-      )}
+      </div>
     </div>
   );
 };
