@@ -447,9 +447,6 @@ const Itens = () => {
                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                   Nome do Item
                 </th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                  Atributos
-                </th>
                 <th className="px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">
                   Total
                 </th>
@@ -467,20 +464,6 @@ const Itens = () => {
                       <div className="text-sm font-medium text-gray-900">
                         {item.nome}
                       </div>
-                    </div>
-                  </td>
-                  <td className="px-6 py-4">
-                    <div className="flex flex-wrap gap-1">
-                      {item.atributos.slice(0, 3).map((atributo) => (
-                        <Badge key={atributo.id} variant="secondary" className="text-xs">
-                          {atributo.nome}
-                        </Badge>
-                      ))}
-                      {item.atributos.length > 3 && (
-                        <Badge variant="secondary" className="text-xs">
-                          +{item.atributos.length - 3}
-                        </Badge>
-                      )}
                     </div>
                   </td>
                   <td className="px-6 py-4 text-center">

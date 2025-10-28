@@ -6,7 +6,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Badge } from '@/components/ui/badge';
-import { Plus, Edit, Trash2, UserX, UserCheck, Search, Eye, EyeOff, MoreVertical } from 'lucide-react';
+import { Plus, Edit, Trash2, UserX, UserCheck, Search, Eye, EyeOff, MoreVertical, Filter, X } from 'lucide-react';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from '@/components/ui/alert-dialog';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
@@ -46,6 +46,8 @@ const Clientes = () => {
   const [filtroNome, setFiltroNome] = useState('');
   const [filtroStatus, setFiltroStatus] = useState('todos');
   const [mostrarSenha, setMostrarSenha] = useState(false);
+  const [buscaExpandida, setBuscaExpandida] = useState(false);
+  const [filtroExpandido, setFiltroExpandido] = useState(false);
   const [novoCliente, setNovoCliente] = useState({
     nome: '',
     email: '',
@@ -503,6 +505,28 @@ const Clientes = () => {
     }
   };
 
+  const formatarTelefone = (telefone: string) => {
+    if (!telefone) return '-';
+    
+    // Remove tudo que não é número
+    const numeroLimpo = telefone.replace(/\D/g, '');
+    
+    // Formata de acordo com o tamanho
+    if (numeroLimpo.length === 11) {
+      // Celular: (XX) XXXXX-XXXX
+      return `(${numeroLimpo.slice(0, 2)}) ${numeroLimpo.slice(2, 7)}-${numeroLimpo.slice(7)}`;
+    } else if (numeroLimpo.length === 10) {
+      // Fixo: (XX) XXXX-XXXX
+      return `(${numeroLimpo.slice(0, 2)}) ${numeroLimpo.slice(2, 6)}-${numeroLimpo.slice(6)}`;
+    } else if (numeroLimpo.length === 13) {
+      // Internacional com DDI: +XX (XX) XXXXX-XXXX
+      return `+${numeroLimpo.slice(0, 2)} (${numeroLimpo.slice(2, 4)}) ${numeroLimpo.slice(4, 9)}-${numeroLimpo.slice(9)}`;
+    }
+    
+    // Retorna o número original se não se encaixar em nenhum formato
+    return telefone;
+  };
+
   const gerarSenhaAleatoria = () => {
     const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789!@#$%^&*';
     let senha = '';
@@ -533,7 +557,7 @@ const Clientes = () => {
 
 
   return (
-    <div className="container mx-auto p-3 sm:p-6 space-y-4 sm:space-y-6">
+    <div className="container mx-auto p-3 sm:p-6 space-y-4 sm:space-y-6 overflow-x-hidden">
       <div className="page-header flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
         <div className="flex-1 min-w-0">
           <h1 className="text-2xl sm:text-3xl font-bold text-gray-900">Gerenciar Clientes</h1>
@@ -664,45 +688,98 @@ const Clientes = () => {
         </div>
       </div>
 
-      {/* Filtros */}
-      <Card>
-        <CardContent className="p-4">
-          <div className="filters-container flex flex-col sm:flex-row gap-4 items-end">
-            <div className="search-container flex-1 min-w-0">
-              <Label htmlFor="filtro-nome">Buscar</Label>
+      {/* Lista de Clientes */}
+      <Card className="overflow-hidden">
+        <CardHeader className="pb-4 overflow-x-clip">
+          <div className="flex items-center justify-between gap-4">
+            <CardTitle>Lista de Clientes ({clientesFiltrados.length})</CardTitle>
+            
+            <div className="flex items-center gap-2 relative">
+              {/* Botão de Busca */}
               <div className="relative">
-                <Search className="absolute left-3 top-3 h-4 w-4 text-gray-400" />
-                <Input
-                  id="filtro-nome"
-                  placeholder="Buscar por nome, empresa ou email"
-                  value={filtroNome}
-                  onChange={(e) => setFiltroNome(e.target.value)}
-                  className="search-input pl-10"
-                />
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => setBuscaExpandida(true)}
+                  className={`h-9 w-9 p-0 transition-opacity ${buscaExpandida ? 'opacity-0 pointer-events-none' : 'opacity-100'}`}
+                >
+                  <Search className="h-5 w-5" />
+                </Button>
+                
+                {buscaExpandida && (
+                  <div className="absolute right-0 top-0 z-50 animate-in slide-in-from-right duration-200">
+                    <div className="relative bg-white rounded-md shadow-lg border border-gray-200">
+                      <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400 pointer-events-none" />
+                      <Input
+                        placeholder="Buscar..."
+                        value={filtroNome}
+                        onChange={(e) => setFiltroNome(e.target.value)}
+                        className="w-48 sm:w-64 pl-10 pr-10 h-9 border-0 focus-visible:ring-0"
+                        autoFocus
+                      />
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => {
+                          setBuscaExpandida(false);
+                          setFiltroNome('');
+                        }}
+                        className="absolute right-0 top-1/2 -translate-y-1/2 h-9 w-9 p-0 hover:bg-gray-100"
+                      >
+                        <X className="h-4 w-4" />
+                      </Button>
+                    </div>
+                  </div>
+                )}
               </div>
-            </div>
-            <div className="status-container w-full sm:w-auto">
-              <Label htmlFor="filtro-status">Status</Label>
-              <select
-                id="filtro-status"
-                value={filtroStatus}
-                onChange={(e) => setFiltroStatus(e.target.value)}
-                className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background"
-              >
-                <option value="todos">Todos</option>
-                <option value="ativo">Ativo</option>
-                <option value="suspenso">Suspenso</option>
-                <option value="inativo">Inativo</option>
-              </select>
+
+              {/* Filtro de Status */}
+              <DropdownMenu open={filtroExpandido} onOpenChange={setFiltroExpandido}>
+                <DropdownMenuTrigger asChild>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    className="h-9 w-9 p-0 relative"
+                  >
+                    <Filter className="h-5 w-5" />
+                    {filtroStatus !== 'todos' && (
+                      <span className="absolute -top-1 -right-1 h-3 w-3 bg-versys-primary rounded-full" />
+                    )}
+                  </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="end" className="w-40">
+                  <DropdownMenuItem
+                    onClick={() => setFiltroStatus('todos')}
+                    className={filtroStatus === 'todos' ? 'bg-gray-100' : ''}
+                  >
+                    Todos
+                  </DropdownMenuItem>
+                  <DropdownMenuSeparator />
+                  <DropdownMenuItem
+                    onClick={() => setFiltroStatus('ativo')}
+                    className={filtroStatus === 'ativo' ? 'bg-green-50 text-green-700' : ''}
+                  >
+                    <span className="h-2 w-2 rounded-full bg-green-500 mr-2" />
+                    Ativo
+                  </DropdownMenuItem>
+                  <DropdownMenuItem
+                    onClick={() => setFiltroStatus('suspenso')}
+                    className={filtroStatus === 'suspenso' ? 'bg-yellow-50 text-yellow-700' : ''}
+                  >
+                    <span className="h-2 w-2 rounded-full bg-yellow-500 mr-2" />
+                    Suspenso
+                  </DropdownMenuItem>
+                  <DropdownMenuItem
+                    onClick={() => setFiltroStatus('inativo')}
+                    className={filtroStatus === 'inativo' ? 'bg-red-50 text-red-700' : ''}
+                  >
+                    <span className="h-2 w-2 rounded-full bg-red-500 mr-2" />
+                    Inativo
+                  </DropdownMenuItem>
+                </DropdownMenuContent>
+              </DropdownMenu>
             </div>
           </div>
-        </CardContent>
-      </Card>
-
-      {/* Lista de Clientes */}
-      <Card>
-        <CardHeader>
-          <CardTitle>Lista de Clientes ({clientesFiltrados.length})</CardTitle>
         </CardHeader>
         <CardContent>
           {loading ? (
@@ -727,7 +804,7 @@ const Clientes = () => {
                         <p className="text-sm text-gray-600 mt-1 truncate">{cliente.empresa}</p>
                         <p className="text-sm text-gray-500 truncate">{cliente.email}</p>
                         {cliente.telefone && (
-                          <p className="text-sm text-gray-500 truncate">{cliente.telefone}</p>
+                          <p className="text-sm text-gray-500 truncate">{formatarTelefone(cliente.telefone)}</p>
                         )}
                       </div>
                       <div className="flex items-start gap-2 ml-2 flex-shrink-0">
@@ -840,27 +917,28 @@ const Clientes = () => {
                 <Table>
                   <TableHeader>
                     <TableRow>
-                      <TableHead>Nome</TableHead>
-                      <TableHead>Empresa</TableHead>
-                      <TableHead>E-mail</TableHead>
-                      <TableHead>Telefone</TableHead>
-                      <TableHead>Status</TableHead>
-                      <TableHead>Projetos</TableHead>
-                      <TableHead>Data Criação</TableHead>
-                      <TableHead className="text-center">Ações</TableHead>
+                      <TableHead className="text-center p-2">Nome</TableHead>
+                      <TableHead className="p-2">Empresa</TableHead>
+                      <TableHead className="text-center p-2">Telefone</TableHead>
+                      <TableHead className="text-center p-2">Projetos</TableHead>
+                      <TableHead className="text-center p-2">Criação</TableHead>
+                      <TableHead className="text-center p-2">Ações</TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
                     {clientesFiltrados.map((cliente) => (
                       <TableRow key={cliente.id}>
-                        <TableCell className="font-medium">{cliente.nome}</TableCell>
-                        <TableCell>{cliente.empresa}</TableCell>
-                        <TableCell>{cliente.email}</TableCell>
-                        <TableCell>{cliente.telefone || '-'}</TableCell>
-                        <TableCell>{getStatusBadge(cliente.status)}</TableCell>
-                        <TableCell>{cliente.projetos}</TableCell>
-                        <TableCell>{new Date(cliente.dataCriacao).toLocaleDateString('pt-BR')}</TableCell>
-                        <TableCell className="text-center">
+                        <TableCell className="p-2">
+                          <div>
+                            <div className="font-medium">{cliente.nome}</div>
+                            <div className="text-sm text-gray-500">{cliente.email}</div>
+                          </div>
+                        </TableCell>
+                        <TableCell className="p-2">{cliente.empresa}</TableCell>
+                        <TableCell className="text-center p-2">{formatarTelefone(cliente.telefone)}</TableCell>
+                        <TableCell className="text-center p-2">{cliente.projetos}</TableCell>
+                        <TableCell className="text-center p-2">{new Date(cliente.dataCriacao).toLocaleDateString('pt-BR')}</TableCell>
+                        <TableCell className="text-center p-2">
                           <DropdownMenu>
                             <DropdownMenuTrigger asChild>
                               <Button variant="ghost" size="sm">

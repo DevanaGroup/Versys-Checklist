@@ -35,7 +35,8 @@ export const useGeolocation = () => {
       try {
         setState(prev => ({ ...prev, loading: true, error: null }));
         
-        const locationData = await getLocationWithFallback();
+        // Primeira tentativa: GPS fresco (sem cache)
+        const locationData = await getLocationWithFallback(false);
         
         if (!isMounted) return;
         
@@ -86,17 +87,17 @@ export const useGeolocation = () => {
         },
         {
           enableHighAccuracy: true,
-          timeout: 10000,
-          maximumAge: 300000, // 5 minutos
+          timeout: 30000, // 30 segundos
+          maximumAge: 60000, // 1 minuto (permite usar cache recente no watch)
         }
       );
 
-      // Atualização periódica a cada 30 segundos
+      // Atualização periódica a cada 2 minutos (pode usar cache)
       intervalIdRef.current = setInterval(async () => {
         if (!isMounted) return;
         
         try {
-          const locationData = await getLocationWithFallback();
+          const locationData = await getLocationWithFallback(true); // Permite cache
           if (isMounted) {
             setState(prev => ({
               ...prev,
@@ -109,7 +110,7 @@ export const useGeolocation = () => {
         } catch (error) {
           console.warn('Erro na atualização periódica de localização:', error);
         }
-      }, 30000); // 30 segundos
+      }, 120000); // 2 minutos
     }
 
     return () => {
@@ -129,7 +130,8 @@ export const useGeolocation = () => {
     try {
       setState(prev => ({ ...prev, loading: true, error: null }));
       
-      const locationData = await getLocationWithFallback();
+      // Refresh sempre busca GPS fresco (sem cache)
+      const locationData = await getLocationWithFallback(false);
       
       setState({
         location: locationData,

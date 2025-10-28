@@ -3,7 +3,9 @@ import { useNavigate, useParams } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Progress } from "@/components/ui/progress";
-import { ArrowLeft, Edit, CheckCircle, Camera, FileText, MessageSquare, MapPin, ChevronRight, ChevronLeft, AlertCircle, Sparkles } from "lucide-react";
+import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
+import { ArrowLeft, Edit, CheckCircle, Camera, FileText, MessageSquare, MapPin, ChevronRight, ChevronLeft, AlertCircle, Sparkles, Image as ImageIcon, X, Clock, MoreVertical, ExternalLink } from "lucide-react";
 import { toast } from "sonner";
 import { db } from "@/lib/firebase";
 import { doc, getDoc } from "firebase/firestore";
@@ -11,6 +13,7 @@ import { ProjectModule, ProjectItem, NC, WeightedQuestion } from "@/lib/types";
 import { HierarchicalProjectSidebar } from "@/components/HierarchicalProjectSidebar";
 import { usePageTitle } from "@/contexts/PageTitleContext";
 import { useHeaderActions } from "@/contexts/HeaderActionsContext";
+import { useIsMobile } from "@/hooks/use-mobile";
 
 // Função para gerar IDs únicos
 const generateUniqueId = (prefix: string) => {
@@ -66,6 +69,7 @@ const ProjectView = () => {
   const { id } = useParams<{ id: string }>();
   const { setPageTitle } = usePageTitle();
   const { setRightAction } = useHeaderActions();
+  const isMobile = useIsMobile();
   const [projectDetails, setProjectDetails] = useState<ProjectDetail | null>(null);
   const [loading, setLoading] = useState(true);
   const [modules, setModules] = useState<ProjectModule[]>([]);
@@ -75,6 +79,7 @@ const ProjectView = () => {
   const [currentItemId, setCurrentItemId] = useState<string>('');
   const [currentNcId, setCurrentNcId] = useState<string>('');
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
+  const [mediaDrawerOpen, setMediaDrawerOpen] = useState(false);
 
   useEffect(() => {
     if (id) {
@@ -129,15 +134,15 @@ const ProjectView = () => {
       console.log('projectData.modules:', projectData.modules);
       console.log('projectData.customAccordions:', projectData.customAccordions);
       
-      // Priorizar weightedModules (novo formato de avaliação ponderada)
+      // PRIORIZAR MODULES (campo correto onde ProjectWrite.tsx salva!)
       let loadedModules: ProjectModule[] = [];
       
-      if (projectData.weightedModules && Array.isArray(projectData.weightedModules) && projectData.weightedModules.length > 0) {
-        console.log('✅ Carregando do campo weightedModules (novo formato de avaliação ponderada)');
-        loadedModules = projectData.weightedModules;
-      } else if (projectData.modules && Array.isArray(projectData.modules) && projectData.modules.length > 0) {
-        console.log('✅ Carregando do campo modules (formato intermediário)');
+      if (projectData.modules && Array.isArray(projectData.modules) && projectData.modules.length > 0) {
+        console.log('✅ Carregando do campo MODULES (campo correto)');
         loadedModules = projectData.modules;
+      } else if (projectData.weightedModules && Array.isArray(projectData.weightedModules) && projectData.weightedModules.length > 0) {
+        console.log('✅ Carregando do campo weightedModules (fallback)');
+        loadedModules = projectData.weightedModules;
       } else if (projectData.customAccordions && Array.isArray(projectData.customAccordions)) {
         console.log('⚠️ Convertendo de customAccordions (formato antigo) para modules');
         
@@ -198,32 +203,39 @@ const ProjectView = () => {
                 }
               }
               
-              // Converter fotos antigas para novo formato
-              const mediaAttachments = [];
-              if (subItem.photos && Array.isArray(subItem.photos)) {
-                mediaAttachments.push(...subItem.photos.map((photo: any) => ({
-                  type: 'photo' as const,
+              // Converter fotos antigas para novo formato OU usar mediaAttachments existente
+              let mediaAttachments = [];
+              
+              // PRIORIDADE 1: Se já tem mediaAttachments (formato novo), usar direto!
+              if (subItem.mediaAttachments && Array.isArray(subItem.mediaAttachments) && subItem.mediaAttachments.length > 0) {
+                console.log(`        ✅ ENCONTRADO ${subItem.mediaAttachments.length} mídia(s) já salva(s)!`);
+                mediaAttachments = subItem.mediaAttachments;
+              }
+              // PRIORIDADE 2: Converter de photos (formato antigo)
+              else if (subItem.photos && Array.isArray(subItem.photos)) {
+                console.log(`        📸 Convertendo ${subItem.photos.length} fotos do formato antigo`);
+                mediaAttachments = subItem.photos.map((photo: any) => ({
+                  id: photo.id || Date.now().toString(),
+                  type: 'image',
                   url: photo.url,
-                  timestamp: photo.createdAt || new Date().toISOString(),
-                  uploadedBy: 'legacy',
-                  location: (photo.latitude && photo.longitude) ? {
-                    latitude: photo.latitude,
-                    longitude: photo.longitude,
-                    timestamp: photo.createdAt || new Date().toISOString()
-                  } : undefined
-                })));
-              } else if (subItem.photoData) {
-                mediaAttachments.push({
-                  type: 'photo' as const,
+                  createdAt: photo.createdAt || new Date().toISOString(),
+                  latitude: photo.latitude,
+                  longitude: photo.longitude
+                }));
+              }
+              // PRIORIDADE 3: Converter de photoData (formato mais antigo)
+              else if (subItem.photoData) {
+                console.log(`        📸 Convertendo 1 foto (photoData) do formato antigo`);
+                mediaAttachments = [{
+                  id: Date.now().toString(),
+                  type: 'image',
                   url: subItem.photoData.url,
-                  timestamp: subItem.photoData.createdAt || new Date().toISOString(),
-                  uploadedBy: 'legacy',
-                  location: (subItem.photoData.latitude && subItem.photoData.longitude) ? {
-                    latitude: subItem.photoData.latitude,
-                    longitude: subItem.photoData.longitude,
-                    timestamp: subItem.photoData.createdAt || new Date().toISOString()
-                  } : undefined
-                });
+                  createdAt: subItem.photoData.createdAt || new Date().toISOString(),
+                  latitude: subItem.photoData.latitude,
+                  longitude: subItem.photoData.longitude
+                }];
+              } else {
+                console.log(`        ⚠️ Nenhuma mídia encontrada para este subItem`);
               }
               
               // Manter campos antigos como campos próprios
@@ -425,13 +437,36 @@ const ProjectView = () => {
                 </div>
               </div>
 
-              {/* Botão Flutuante da Estrutura do Projeto - Posição central */}
+              {/* Botão Flutuante da Estrutura do Projeto - Posição central direita */}
               <Button
                 onClick={() => setIsSidebarOpen(true)}
                 className="md:hidden fixed right-0 top-[30%] -translate-y-1/2 z-50 h-16 w-10 rounded-l-full bg-versys-primary/60 hover:bg-versys-primary/80 backdrop-blur-sm shadow-lg p-0 flex items-center justify-center transition-all"
               >
                 <ChevronLeft className="h-6 w-6 text-white" />
               </Button>
+
+              {/* Botão Flutuante de Mídias - Posição central esquerda (MOBILE) */}
+              {(() => {
+                // Verificar se a NC atual tem mídias
+                let totalMedias = 0;
+                if (currentNC && currentNC.perguntas) {
+                  currentNC.perguntas.forEach(q => {
+                    totalMedias += q.response?.mediaAttachments?.length || 0;
+                  });
+                }
+                
+                if (totalMedias > 0) {
+                  return (
+                    <Button
+                      onClick={() => setMediaDrawerOpen(true)}
+                      className="md:hidden fixed left-0 top-[30%] -translate-y-1/2 z-50 h-16 w-10 rounded-r-full bg-versys-primary/60 hover:bg-versys-primary/80 backdrop-blur-lg shadow-lg p-0 flex items-center justify-center transition-all"
+                    >
+                      <Camera className="h-6 w-6 text-white" />
+                    </Button>
+                  );
+                }
+                return null;
+              })()}
 
               {/* Header Desktop */}
               <div className="hidden md:block bg-white p-4 rounded-lg shadow-sm border border-gray-200 mb-4">
@@ -511,12 +546,12 @@ const ProjectView = () => {
                             </Badge>
                                 </div>
 
-                          {/* Fotos */}
+                          {/* Fotos - Desktop */}
                           {question.response.mediaAttachments && question.response.mediaAttachments.length > 0 && (
-                            <div className="border-t pt-3">
+                            <div className="border-t pt-3 hidden md:block">
                               <div className="flex items-center gap-2 mb-2">
                                 <Camera className="h-4 w-4 text-gray-500" />
-                                <span className="text-sm font-medium text-gray-700">Fotos Anexadas</span>
+                                <span className="text-sm font-medium text-gray-700">Fotos Anexadas ({question.response.mediaAttachments.length})</span>
                               </div>
                               <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
                                 {question.response.mediaAttachments.map((media, idx) => (
@@ -645,6 +680,120 @@ const ProjectView = () => {
       )}
         </div>
       </div>
+
+      {/* Drawer de Mídias da NC (Mobile) - Lateral Esquerda */}
+      <Sheet open={mediaDrawerOpen} onOpenChange={setMediaDrawerOpen}>
+        <SheetContent side="left" className="w-[90vw] sm:w-96 p-0 top-14 h-[calc(100vh-3.5rem)] [&>button]:hidden">
+          <SheetHeader className="p-4 border-b bg-blue-50">
+            <div className="flex items-center gap-2">
+              <Camera className="h-5 w-5 text-blue-600" />
+              <SheetTitle>Mídias da NC</SheetTitle>
+            </div>
+            {currentNC && (
+              <p className="text-sm text-gray-600 text-left mt-2">
+                {currentNC.ncTitulo}
+              </p>
+            )}
+          </SheetHeader>
+          
+          <div className="p-4 overflow-y-auto h-[calc(100%-5rem)]">
+            {currentNC && currentNC.perguntas && (() => {
+              // Coletar todas as mídias da NC
+              const allMedias: Array<{
+                media: any;
+                pergunta: string;
+                idx: number;
+              }> = [];
+              
+              currentNC.perguntas.forEach(q => {
+                if (q.response?.mediaAttachments && q.response.mediaAttachments.length > 0) {
+                  q.response.mediaAttachments.forEach((media, idx) => {
+                    allMedias.push({
+                      media,
+                      pergunta: q.text,
+                      idx
+                    });
+                  });
+                }
+              });
+              
+              if (allMedias.length === 0) {
+                return (
+                  <div className="text-center py-8 text-gray-500">
+                    <Camera className="h-12 w-12 mx-auto mb-2 text-gray-300" />
+                    <p>Nenhuma mídia anexada nesta NC</p>
+                  </div>
+                );
+              }
+              
+              return (
+                <div className="space-y-2">
+                  <h4 className="text-sm font-medium text-gray-700">
+                    {allMedias.length} foto(s) anexada(s):
+                  </h4>
+                  
+                  {allMedias.map((item, globalIdx) => (
+                    <div key={globalIdx} className="flex items-start gap-3 p-3 bg-gray-50 rounded-lg border border-gray-200">
+                      {/* Foto à esquerda - 100x100px */}
+                      <div className="relative rounded-lg overflow-hidden border border-gray-200 w-[100px] h-[100px] flex-shrink-0">
+                        <img 
+                          src={item.media.url}
+                          alt={`Foto ${globalIdx + 1}`}
+                          className="w-full h-full object-cover cursor-pointer"
+                          onClick={() => window.open(item.media.url, '_blank')}
+                        />
+                      </div>
+                      
+                      {/* Informações à direita */}
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center justify-between mb-2">
+                          <div className="flex items-center gap-2 text-gray-600">
+                            <Camera className="h-4 w-4" />
+                            <span className="text-sm">Foto {globalIdx + 1}</span>
+                          </div>
+                          
+                          {/* Dropdown de ações */}
+                          <DropdownMenu>
+                            <DropdownMenuTrigger asChild>
+                              <button className="p-1 hover:bg-gray-100 rounded-full transition-colors">
+                                <MoreVertical className="h-4 w-4 text-gray-600" />
+                              </button>
+                            </DropdownMenuTrigger>
+                            <DropdownMenuContent align="end">
+                              <DropdownMenuItem onClick={() => window.open(item.media.url, '_blank')}>
+                                <ExternalLink className="h-4 w-4 mr-2" />
+                                Abrir em Nova Aba
+                              </DropdownMenuItem>
+                              {item.media.latitude && item.media.longitude && (
+                                <DropdownMenuItem
+                                  onClick={() => window.open(`https://www.google.com/maps?q=${item.media.latitude},${item.media.longitude}`, '_blank')}
+                                >
+                                  <MapPin className="h-4 w-4 mr-2" />
+                                  Ver no Mapa
+                                </DropdownMenuItem>
+                              )}
+                            </DropdownMenuContent>
+                          </DropdownMenu>
+                        </div>
+                        
+                        {item.media.latitude && item.media.latitude !== 0 && (
+                          <div className="text-xs text-green-600 mb-2">
+                            📍 GPS: {item.media.latitude.toFixed(6)}, {item.media.longitude.toFixed(6)}
+                          </div>
+                        )}
+                        
+                        <div className="text-xs text-gray-400">
+                          {new Date(item.media.createdAt).toLocaleString('pt-BR')}
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              );
+            })()}
+          </div>
+        </SheetContent>
+      </Sheet>
     </div>
   );
 };

@@ -1,11 +1,8 @@
 // Tipos para relatórios
+
+// Item individual do relatório (NC ou subItem)
 export interface RelatorioItem {
-  id: string;
-  projectId: string;
-  projectName: string;
-  clientId: string;
-  clientName: string;
-  clientEmail: string;
+  id: string; // ID único do item
   category: string;
   itemTitle: string;
   subItemId: string;
@@ -25,12 +22,37 @@ export interface RelatorioItem {
   adequacyDetails?: string;
   adequacyImages?: string[];
   adequacyDate?: string;
-  changesDescription?: string; // O que foi alterado
-  treatmentDeadline?: string; // Prazo para tratar
+  changesDescription?: string;
+  treatmentDeadline?: string;
+  updatedAt: string;
+  updatedBy: string;
+}
+
+// Documento principal do relatório (1 por projeto)
+export interface Relatorio {
+  id: string; // = projectId
+  projectId: string;
+  projectName: string;
+  clientId: string;
+  clientName: string;
+  clientEmail: string;
+  
+  // Todos os itens do relatório dentro de um array
+  itens: RelatorioItem[];
+  
+  // Estatísticas calculadas
+  statistics: {
+    totalItems: number;
+    completedItems: number;
+    pendingItems: number;
+    inProgressItems: number;
+  };
+  
+  // Metadata
   createdAt: string;
   updatedAt: string;
-  createdBy: string; // ID do usuário que criou
-  updatedBy: string; // ID do usuário que atualizou
+  createdBy: string;
+  updatedBy: string;
 }
 
 export interface RelatorioSummary {

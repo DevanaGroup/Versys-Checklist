@@ -41,6 +41,7 @@ interface PresetItem {
   title: string;
   description: string;
   order: number;
+  isExpanded?: boolean;
 }
 
 interface Preset {
@@ -60,6 +61,8 @@ const Presets = () => {
   const [viewMode, setViewMode] = useState<'list' | 'create' | 'edit'>('list');
   const [selectedPreset, setSelectedPreset] = useState<Preset | null>(null);
   const [presetToDelete, setPresetToDelete] = useState<Preset | null>(null);
+  const [areaToDelete, setAreaToDelete] = useState<string | null>(null);
+  const [itemToDelete, setItemToDelete] = useState<{ areaId: string; itemId: string } | null>(null);
   
   // Estados do formulário
   const [formData, setFormData] = useState({
@@ -126,7 +129,11 @@ const Presets = () => {
     setFormData({
       nome: preset.nome,
       descricao: preset.descricao,
-      areas: preset.areas.map(area => ({ ...area, isExpanded: true }))
+      areas: preset.areas.map(area => ({ 
+        ...area, 
+        isExpanded: false,
+        items: area.items.map(item => ({ ...item, isExpanded: false }))
+      }))
     });
     setSelectedPreset(preset);
     setActiveTab('dados');
@@ -212,7 +219,7 @@ const Presets = () => {
       name: `Área ${formData.areas.length + 1}`,
       items: [],
       order: formData.areas.length,
-      isExpanded: true
+      isExpanded: false
     };
     setFormData({
       ...formData,
@@ -239,9 +246,14 @@ const Presets = () => {
   const toggleArea = (areaId: string) => {
     setFormData({
       ...formData,
-      areas: formData.areas.map(area =>
-        area.id === areaId ? { ...area, isExpanded: !area.isExpanded } : area
-      )
+      areas: formData.areas.map(area => {
+        // Se for a área clicada, inverte o estado
+        if (area.id === areaId) {
+          return { ...area, isExpanded: !area.isExpanded };
+        }
+        // Se não for a área clicada, retrai (comportamento de acordeão)
+        return { ...area, isExpanded: false };
+      })
     });
   };
 
@@ -255,7 +267,8 @@ const Presets = () => {
             id: `item-${Date.now()}`,
             title: "",
             description: "",
-            order: area.items.length
+            order: area.items.length,
+            isExpanded: false
           };
           return {
             ...area,
@@ -292,6 +305,23 @@ const Presets = () => {
           return {
             ...area,
             items: area.items.filter(item => item.id !== itemId)
+          };
+        }
+        return area;
+      })
+    });
+  };
+
+  const toggleItem = (areaId: string, itemId: string) => {
+    setFormData({
+      ...formData,
+      areas: formData.areas.map(area => {
+        if (area.id === areaId) {
+          return {
+            ...area,
+            items: area.items.map(item =>
+              item.id === itemId ? { ...item, isExpanded: !item.isExpanded } : item
+            )
           };
         }
         return area;
@@ -340,9 +370,6 @@ const Presets = () => {
                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                   Nome do Preset
                 </th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                  Descrição
-                </th>
                 <th className="px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">
                   Áreas
                 </th>
@@ -366,11 +393,6 @@ const Presets = () => {
                       </div>
                                 </div>
                               </div>
-                  </td>
-                  <td className="px-6 py-4">
-                    <div className="text-sm text-gray-500 line-clamp-2 max-w-md">
-                      {preset.descricao || '-'}
-                          </div>
                   </td>
                   <td className="px-6 py-4 text-center">
                     <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800">
@@ -415,7 +437,7 @@ const Presets = () => {
 
   // Renderização do formulário (criar/editar) - estilo da foto
   const renderForm = () => (
-    <div className="space-y-6">
+    <div className="space-y-6 min-h-[calc(100vh-200px)]">
       {/* Header */}
       <div className="flex items-center gap-4 pb-4 border-b">
                                   <Button
@@ -434,12 +456,6 @@ const Presets = () => {
           </h1>
           <p className="text-sm text-gray-500">Checklist / Configurar Preset</p>
                                 </div>
-                    <Button
-                          variant="ghost"
-          size="icon"
-                        >
-          <MoreVertical className="h-5 w-5" />
-                    </Button>
                   </div>
 
       {/* Tabs */}
@@ -468,7 +484,7 @@ const Presets = () => {
 
       {/* Conteúdo da Aba DADOS CADASTRAIS */}
       {activeTab === 'dados' && (
-        <div className="space-y-6">
+        <div className="space-y-6 min-h-[calc(100vh-350px)]">
           <Card>
           <CardHeader>
               <CardTitle className="text-lg">Informações do Preset</CardTitle>
@@ -503,24 +519,14 @@ const Presets = () => {
             </div>
           </CardContent>
         </Card>
-
-          {/* Botão para próxima etapa */}
-          <div className="flex justify-end">
-            <Button
-              onClick={() => setActiveTab('estrutura')}
-                className="bg-versys-primary hover:bg-versys-secondary"
-              >
-              Próximo: Configurar Estrutura
-              </Button>
-          </div>
         </div>
       )}
 
       {/* Conteúdo da Aba ESTRUTURA */}
       {activeTab === 'estrutura' && (
-        <div className="space-y-4">
+        <div className="flex flex-col min-h-[calc(100vh-350px)]">
         {/* Lista de Áreas */}
-        <div className="space-y-4">
+        <div className="space-y-4 flex-1 overflow-y-auto max-h-[calc(100vh-380px)] pr-2">
           {formData.areas.map((area, areaIndex) => (
             <div key={area.id} className="bg-white border border-gray-200 rounded-lg shadow-sm relative">
               {/* Área Header - PEQUENO canto verde (como na imagem) */}
@@ -535,9 +541,13 @@ const Presets = () => {
                     <ChevronDown className="h-4 w-4" />
                   )}
                 </button>
-                <span className="text-white text-sm font-medium truncate block">
-                  {area.name || `Área ${areaIndex + 1}`}
-                </span>
+                <Input
+                  value={area.name}
+                  onChange={(e) => updateArea(area.id, 'name', e.target.value)}
+                  placeholder={`Área ${areaIndex + 1}`}
+                  className="text-white text-sm font-medium bg-transparent border-0 px-0 py-0 focus-visible:ring-0 h-auto shadow-none placeholder:text-white/70"
+                  style={{ width: `${Math.max((area.name?.length || 10) * 9, 100)}px` }}
+                />
       </div>
 
               {/* Botões de ação no canto superior direito */}
@@ -554,33 +564,57 @@ const Presets = () => {
             <Button
                   variant="ghost"
                   size="icon"
-                  onClick={() => deleteArea(area.id)}
-                  className="text-gray-400 hover:text-gray-600 h-7 w-7"
+                  onClick={() => setAreaToDelete(area.id)}
+                  className="text-red-400 hover:text-red-600 hover:bg-red-50 h-7 w-7"
                 >
-                  <MoreVertical className="h-4 w-4" />
+                  <Trash2 className="h-4 w-4" />
             </Button>
         </div>
 
               {/* Conteúdo da Área */}
-              <div className="pt-16 p-6">
+              <div className="pt-12 p-6">
                 {/* Itens da Área */}
                 {area.isExpanded && (
-    <div className="space-y-6">
+    <div className="space-y-4">
                     {area.items.length === 0 ? (
                       <div className="text-sm text-gray-400 italic py-8 text-center">
                         Nenhum item adicionado. Clique em "NOVO ITEM" para adicionar.
         </div>
                     ) : (
                       area.items.map((item, itemIndex) => (
-                        <div key={item.id} className="space-y-2 group">
-                          <div className="flex items-start justify-between gap-4">
-                            <div className="flex-1 space-y-2">
-                              <Input
-                                value={item.title}
-                                onChange={(e) => updateItem(area.id, item.id, 'title', e.target.value)}
-                                placeholder={`${areaIndex + 1}.${itemIndex + 1} - TÍTULO DO ITEM`}
-                                className="text-lg font-bold text-gray-900 uppercase border-0 px-0 focus-visible:ring-0 h-auto shadow-none"
-                              />
+                        <div key={item.id} className="bg-gray-50/80 border border-gray-200 rounded-lg shadow-sm relative min-h-[72px]">
+                          {/* Item Header - abinha verde */}
+                          <div className="absolute top-0 left-0 right-0 bg-versys-primary rounded-lg px-3 py-2 flex items-start gap-2 min-h-[40px] max-h-[72px] overflow-hidden">
+                            <button
+                              onClick={() => toggleItem(area.id, item.id)}
+                              className="text-white hover:opacity-80 transition-opacity flex-shrink-0 mt-0.5"
+                            >
+                              {item.isExpanded ? (
+                                <X className="h-3 w-3" />
+                              ) : (
+                                <ChevronDown className="h-3 w-3" />
+                              )}
+                            </button>
+                            <Textarea
+                              value={item.title}
+                              onChange={(e) => updateItem(area.id, item.id, 'title', e.target.value)}
+                              placeholder={`${areaIndex + 1}.${itemIndex + 1} - TÍTULO DO ITEM`}
+                              rows={3}
+                              className="text-white text-xs font-medium bg-transparent border-0 px-0 py-0 focus-visible:ring-0 shadow-none placeholder:text-white/70 resize-none overflow-y-auto max-h-[56px] !min-h-0 flex-1 w-0 min-w-0 max-w-full"
+                            />
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              onClick={() => setItemToDelete({ areaId: area.id, itemId: item.id })}
+                              className="text-white/70 hover:text-white hover:bg-white/20 h-6 w-6 flex-shrink-0"
+                            >
+                              <Trash2 className="h-3 w-3" />
+                            </Button>
+                          </div>
+
+                          {/* Conteúdo do Item */}
+                          {item.isExpanded && (
+                            <div className="pt-20 p-4">
                               <Textarea
                                 value={item.description}
                                 onChange={(e) => updateItem(area.id, item.id, 'description', e.target.value)}
@@ -588,17 +622,9 @@ const Presets = () => {
                                 rows={2}
                                 className="text-sm text-gray-600 resize-none border-0 px-0 focus-visible:ring-0 shadow-none"
                               />
-      </div>
-          <Button
-                              variant="ghost"
-                              size="icon"
-                              onClick={() => deleteItem(area.id, item.id)}
-                              className="opacity-0 group-hover:opacity-100 transition-opacity text-red-600 hover:text-red-700 hover:bg-red-50 flex-shrink-0 h-8 w-8"
-                            >
-                              <Trash2 className="h-4 w-4" />
-          </Button>
-        </div>
-      </div>
+                            </div>
+                          )}
+                        </div>
                       ))
                     )}
         </div>
@@ -615,7 +641,7 @@ const Presets = () => {
                   </div>
 
         {/* Botões de Ação - estilo da foto */}
-        <div className="flex justify-center pt-6">
+        <div className="flex justify-center mt-auto pt-4">
                     <Button
             onClick={addArea}
                       variant="outline"
@@ -628,7 +654,7 @@ const Presets = () => {
       )}
 
       {/* Footer com botões Cancelar/Salvar */}
-      <div className="flex justify-end gap-3 pt-6 border-t">
+      <div className="flex justify-end gap-2 pt-2 border-t">
                         <Button
                           variant="ghost"
           onClick={() => {
@@ -651,7 +677,7 @@ const Presets = () => {
     );
 
   return (
-    <div className="container mx-auto py-6 px-4 max-w-7xl">
+    <div className="container mx-auto py-2 px-2 max-w-7xl">
       {viewMode === 'list' && renderList()}
       {(viewMode === 'create' || viewMode === 'edit') && renderForm()}
 
@@ -676,6 +702,60 @@ const Presets = () => {
                           </AlertDialogFooter>
                         </AlertDialogContent>
                       </AlertDialog>
+
+      {/* Diálogo de confirmação para deletar área */}
+      <AlertDialog open={!!areaToDelete} onOpenChange={() => setAreaToDelete(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Excluir Área</AlertDialogTitle>
+            <AlertDialogDescription>
+              Tem certeza que deseja excluir esta área e todos os seus itens?
+              Esta ação não pode ser desfeita.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancelar</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={() => {
+                if (areaToDelete) {
+                  deleteArea(areaToDelete);
+                  setAreaToDelete(null);
+                }
+              }}
+              className="bg-red-600 hover:bg-red-700"
+            >
+              Excluir
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      {/* Diálogo de confirmação para deletar item */}
+      <AlertDialog open={!!itemToDelete} onOpenChange={() => setItemToDelete(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Excluir Item</AlertDialogTitle>
+            <AlertDialogDescription>
+              Tem certeza que deseja excluir este item?
+              Esta ação não pode ser desfeita.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancelar</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={() => {
+                if (itemToDelete) {
+                  deleteItem(itemToDelete.areaId, itemToDelete.itemId);
+                  setItemToDelete(null);
+                }
+              }}
+              className="bg-red-600 hover:bg-red-700"
+            >
+              Excluir
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 };

@@ -13,9 +13,9 @@ import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
-import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger, DropdownMenuSeparator } from "@/components/ui/dropdown-menu";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { Plus, Building, Calendar, User, FileText, CheckCircle, Clock, AlertCircle, ArrowLeft, Send, Download, CheckCircle2, XCircle, AlertTriangle, Eye, ClipboardCheck, Trash2, MoreVertical, Edit, Grid, List, ChevronRight, ChevronLeft, PauseCircle, RotateCcw, FileTextIcon, MessageSquare, CheckSquare, X, Globe, BarChart3 } from "lucide-react";
+import { Plus, Building, Calendar, User, FileText, CheckCircle, Clock, AlertCircle, ArrowLeft, Send, Download, CheckCircle2, XCircle, AlertTriangle, Eye, ClipboardCheck, Trash2, MoreVertical, Edit, Grid, List, ChevronRight, ChevronLeft, PauseCircle, RotateCcw, FileTextIcon, MessageSquare, CheckSquare, X, Globe, BarChart3, Search, Filter } from "lucide-react";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { collection, getDocs, query, orderBy, doc, updateDoc, deleteDoc, where, addDoc, getDoc } from "firebase/firestore";
 import { db } from "@/lib/firebase";
@@ -137,6 +137,10 @@ const Projetos = () => {
   const [deletingProject, setDeletingProject] = useState<string | null>(null);
   const [showNewProjectModal, setShowNewProjectModal] = useState(false);
   const [selectedClienteForNew, setSelectedClienteForNew] = useState<string>('none');
+  const [filtroNomeCliente, setFiltroNomeCliente] = useState('');
+  const [filtroStatusCliente, setFiltroStatusCliente] = useState('todos');
+  const [buscaExpandida, setBuscaExpandida] = useState(false);
+  const [filtroExpandido, setFiltroExpandido] = useState(false);
 
   const isAdmin = userData?.type === 'admin';
 
@@ -386,6 +390,16 @@ const Projetos = () => {
       projeto.clienteId === selectedClient.id || 
       projeto.cliente?.id === selectedClient.id
     );
+  };
+
+  const getClientesFiltrados = () => {
+    return clientes.filter(cliente => {
+      const nomeMatch = cliente.nome.toLowerCase().includes(filtroNomeCliente.toLowerCase()) ||
+                        cliente.empresa.toLowerCase().includes(filtroNomeCliente.toLowerCase()) ||
+                        cliente.email.toLowerCase().includes(filtroNomeCliente.toLowerCase());
+      const statusMatch = filtroStatusCliente === 'todos' || cliente.status === filtroStatusCliente;
+      return nomeMatch && statusMatch;
+    });
   };
 
   const getPriorityColor = (priority: string) => {
@@ -1018,7 +1032,7 @@ const Projetos = () => {
   // Removed project-details view - now using AdminProjectView component
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-6 overflow-x-hidden">
       {/* Botão Voltar - Minimalista */}
       {viewMode === 'project-list' && (
         <div className="flex items-center">
@@ -1206,9 +1220,97 @@ const Projetos = () => {
               </div>
 
               {/* Tabela de Clientes */}
-              <Card>
-                <CardHeader>
-                  <CardTitle className="text-versys-primary">Clientes Ativos</CardTitle>
+              <Card className="overflow-hidden">
+                <CardHeader className="pb-4 overflow-x-clip">
+                  <div className="flex items-center justify-between gap-4">
+                    <CardTitle className="text-versys-primary">Projetos ({getClientesFiltrados().filter(c => c.status === 'ativo').length})</CardTitle>
+                    
+                    <div className="flex items-center gap-2 relative">
+                      {/* Botão de Busca */}
+                      <div className="relative">
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => setBuscaExpandida(true)}
+                          className={`h-9 w-9 p-0 transition-opacity ${buscaExpandida ? 'opacity-0 pointer-events-none' : 'opacity-100'}`}
+                        >
+                          <Search className="h-5 w-5" />
+                        </Button>
+                        
+                        {buscaExpandida && (
+                          <div className="absolute right-0 top-0 z-50 animate-in slide-in-from-right duration-200">
+                            <div className="relative bg-white rounded-md shadow-lg border border-gray-200">
+                              <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400 pointer-events-none" />
+                              <Input
+                                placeholder="Buscar..."
+                                value={filtroNomeCliente}
+                                onChange={(e) => setFiltroNomeCliente(e.target.value)}
+                                className="w-48 sm:w-64 pl-10 pr-10 h-9 border-0 focus-visible:ring-0"
+                                autoFocus
+                              />
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                onClick={() => {
+                                  setBuscaExpandida(false);
+                                  setFiltroNomeCliente('');
+                                }}
+                                className="absolute right-0 top-1/2 -translate-y-1/2 h-9 w-9 p-0 hover:bg-gray-100"
+                              >
+                                <X className="h-4 w-4" />
+                              </Button>
+                            </div>
+                          </div>
+                        )}
+                      </div>
+
+                      {/* Filtro de Status */}
+                      <DropdownMenu open={filtroExpandido} onOpenChange={setFiltroExpandido}>
+                        <DropdownMenuTrigger asChild>
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            className="h-9 w-9 p-0 relative"
+                          >
+                            <Filter className="h-5 w-5" />
+                            {filtroStatusCliente !== 'todos' && (
+                              <span className="absolute -top-1 -right-1 h-3 w-3 bg-versys-primary rounded-full" />
+                            )}
+                          </Button>
+                        </DropdownMenuTrigger>
+                        <DropdownMenuContent align="end" className="w-40">
+                          <DropdownMenuItem
+                            onClick={() => setFiltroStatusCliente('todos')}
+                            className={filtroStatusCliente === 'todos' ? 'bg-gray-100' : ''}
+                          >
+                            Todos
+                          </DropdownMenuItem>
+                          <DropdownMenuSeparator />
+                          <DropdownMenuItem
+                            onClick={() => setFiltroStatusCliente('ativo')}
+                            className={filtroStatusCliente === 'ativo' ? 'bg-green-50 text-green-700' : ''}
+                          >
+                            <span className="h-2 w-2 rounded-full bg-green-500 mr-2" />
+                            Ativo
+                          </DropdownMenuItem>
+                          <DropdownMenuItem
+                            onClick={() => setFiltroStatusCliente('suspenso')}
+                            className={filtroStatusCliente === 'suspenso' ? 'bg-yellow-50 text-yellow-700' : ''}
+                          >
+                            <span className="h-2 w-2 rounded-full bg-yellow-500 mr-2" />
+                            Suspenso
+                          </DropdownMenuItem>
+                          <DropdownMenuItem
+                            onClick={() => setFiltroStatusCliente('inativo')}
+                            className={filtroStatusCliente === 'inativo' ? 'bg-red-50 text-red-700' : ''}
+                          >
+                            <span className="h-2 w-2 rounded-full bg-red-500 mr-2" />
+                            Inativo
+                          </DropdownMenuItem>
+                        </DropdownMenuContent>
+                      </DropdownMenu>
+                    </div>
+                  </div>
                 </CardHeader>
                 <CardContent>
                   {loadingClientes ? (
@@ -1228,7 +1330,7 @@ const Projetos = () => {
                           <TableHead>Email</TableHead>
                           <TableHead>Status</TableHead>
                           <TableHead>Projetos</TableHead>
-                          <TableHead>Data de Criação</TableHead>
+                          <TableHead>Criação</TableHead>
                         </TableRow>
                       </TableHeader>
                       <TableBody>
@@ -1255,7 +1357,7 @@ const Projetos = () => {
                           </TableCell>
                           <TableCell className="text-gray-500">-</TableCell>
                         </TableRow>
-                        {clientes.filter(cliente => cliente.status === 'ativo').map((cliente) => (
+                        {getClientesFiltrados().filter(cliente => cliente.status === 'ativo').map((cliente) => (
                           <TableRow 
                             key={cliente.id} 
                             className="cursor-pointer hover:bg-versys-secondary/5"
@@ -1527,48 +1629,38 @@ const Projetos = () => {
                                   </div>
                                 </TableCell>
                                 <TableCell className="text-center">
-                                  <div className="flex items-center justify-center space-x-2">
-
-                                    <Button
-                                      variant="ghost"
-                                      className="h-8 w-8 p-0"
-                                      title="Visualizar locais no mapa"
-                                      onClick={e => {
+                                  <DropdownMenu>
+                                    <DropdownMenuTrigger asChild>
+                                      <Button 
+                                        variant="ghost" 
+                                        className="h-8 w-8 p-0"
+                                        onClick={(e) => e.stopPropagation()}
+                                      >
+                                        <MoreVertical className="h-4 w-4" />
+                                      </Button>
+                                    </DropdownMenuTrigger>
+                                    <DropdownMenuContent align="end">
+                                      <DropdownMenuItem onClick={(e) => {
+                                        e.stopPropagation();
+                                        handleViewDetails(projeto);
+                                      }}>
+                                        <Eye className="h-4 w-4 mr-2" />
+                                        Ver Detalhes
+                                      </DropdownMenuItem>
+                                      <DropdownMenuItem onClick={(e) => {
                                         e.stopPropagation();
                                         navigate(`/projetos/map/${projeto.id}`);
-                                      }}
-                                    >
-                                      <Globe className="h-5 w-5 text-blue-600" />
-                                    </Button>
-                                    <Button
-                                      variant="ghost"
-                                      className="h-8 w-8 p-0"
-                                      title="Ver relatório do projeto"
-                                      onClick={e => {
+                                      }}>
+                                        <Globe className="h-4 w-4 mr-2 text-blue-600" />
+                                        Ver no Mapa
+                                      </DropdownMenuItem>
+                                      <DropdownMenuItem onClick={(e) => {
                                         e.stopPropagation();
                                         navigate(`/relatorios?projectId=${projeto.id}`);
-                                      }}
-                                    >
-                                      <BarChart3 className="h-5 w-5 text-purple-600" />
-                                    </Button>
-                                    <DropdownMenu>
-                                      <DropdownMenuTrigger asChild>
-                                        <Button 
-                                          variant="ghost" 
-                                          className="h-8 w-8 p-0"
-                                          onClick={(e) => e.stopPropagation()}
-                                        >
-                                          <MoreVertical className="h-4 w-4" />
-                                        </Button>
-                                      </DropdownMenuTrigger>
-                                      <DropdownMenuContent align="end">
-                                        <DropdownMenuItem onClick={(e) => {
-                                          e.stopPropagation();
-                                          handleViewDetails(projeto);
-                                        }}>
-                                          <Eye className="h-4 w-4 mr-2" />
-                                          Ver Detalhes
-                                        </DropdownMenuItem>
+                                      }}>
+                                        <BarChart3 className="h-4 w-4 mr-2 text-purple-600" />
+                                        Ver Relatório
+                                      </DropdownMenuItem>
                                         {isAdmin && (
                                           <DropdownMenuItem onClick={(e) => {
                                             e.stopPropagation();
@@ -1620,7 +1712,6 @@ const Projetos = () => {
                                         )}
                                       </DropdownMenuContent>
                                     </DropdownMenu>
-                                  </div>
                                 </TableCell>
                               </TableRow>
                             ))}

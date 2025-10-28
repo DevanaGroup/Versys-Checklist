@@ -13,15 +13,16 @@ import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sh
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { toast } from "sonner";
 import { db } from "@/lib/firebase";
-import { doc, getDoc, updateDoc, collection, getDocs } from "firebase/firestore";
-import { ArrowLeft, Camera, Clock, X, Plus, Trash2, Paperclip, MessageCircle, Save, FileText, ChevronRight, ChevronLeft, Sparkles, MoreVertical } from "lucide-react";
+import { doc, getDoc, updateDoc, collection, getDocs, setDoc } from "firebase/firestore";
+import { ArrowLeft, Camera, Clock, X, Plus, Trash2, Paperclip, MessageCircle, Save, FileText, ChevronRight, ChevronLeft, Sparkles, MoreVertical, CheckCircle, MapPin } from "lucide-react";
 import { HierarchicalProjectSidebar } from "@/components/HierarchicalProjectSidebar";
-import { ProjectModule, NC, ResponseOption, RESPONSE_VALUES, WeightedQuestion } from "@/lib/types";
+import { ProjectModule, NC, ResponseOption, RESPONSE_VALUES, WeightedQuestion, Relatorio, RelatorioItem, MediaAttachment } from "@/lib/types";
 import { getStorage, ref, uploadBytes, getDownloadURL } from "firebase/storage";
 import { useAuthContext } from '@/contexts/AuthContext';
 import { usePageTitle } from '@/contexts/PageTitleContext';
 import { useHeaderActions } from '@/contexts/HeaderActionsContext';
 import { useIsMobile } from '@/hooks/use-mobile';
+import { useGeolocation } from '@/hooks/useGeolocation';
 
 // Configurações da OpenAI
 const OPENAI_ASSISTANT_ID = "asst_9dvrBEsSkU33QT9HwrzAYnT1";
@@ -99,6 +100,7 @@ const ProjectWrite = () => {
   const { setPageTitle } = usePageTitle();
   const { setRightAction } = useHeaderActions();
   const isMobile = useIsMobile();
+  const { location: gpsLocation } = useGeolocation(); // Localização já capturada
   
   const [projectDetails, setProjectDetails] = useState<ProjectDetail | null>(null);
   const [loading, setLoading] = useState(true);
@@ -115,7 +117,9 @@ const ProjectWrite = () => {
   const [photoDrawerOpen, setPhotoDrawerOpen] = useState<string | null>(null); // ID da pergunta com drawer aberto
   const [generatingGuidance, setGeneratingGuidance] = useState<Record<string, boolean>>({});
   const [showSituacaoAtual, setShowSituacaoAtual] = useState<Record<string, boolean>>({});
+  const [showPhotosDesktop, setShowPhotosDesktop] = useState<Record<string, boolean>>({});
   const [floatingButtonTop, setFloatingButtonTop] = useState<number>(200);
+  const [deleteNCModal, setDeleteNCModal] = useState<{ open: boolean; ncId: string; ncTitle: string }>({ open: false, ncId: '', ncTitle: '' });
   
   // Estados para importação de preset
   const [showPresetModal, setShowPresetModal] = useState(false);
@@ -182,7 +186,7 @@ const ProjectWrite = () => {
       const progresso = totalQuestions > 0 ? Math.round((answeredQuestions / totalQuestions) * 100) : 0;
 
       await updateDoc(doc(db, "projetos", id), {
-        weightedModules: modules,
+        modules: modules, // Padronizado para 'modules'
         progresso,
         nome: projectDetails.nome,
       });
@@ -275,11 +279,12 @@ const ProjectWrite = () => {
 
         setProjectDetails(projectData);
         
-        // Carregar estrutura hierárquica ponderada
-        if (data.weightedModules) {
-          console.log('📦 weightedModules encontrado:', data.weightedModules);
+        // Carregar estrutura hierárquica ponderada (buscar em modules ou weightedModules para compatibilidade)
+        const modulesData = data.modules || data.weightedModules;
+        if (modulesData) {
+          console.log('📦 Módulos encontrados:', modulesData);
           // Log detalhado da estrutura
-          data.weightedModules.forEach((module: any, mIdx: number) => {
+          modulesData.forEach((module: any, mIdx: number) => {
             console.log(`  Módulo ${mIdx}: ${module.titulo} (${module.itens?.length || 0} itens)`);
             module.itens?.forEach((item: any, iIdx: number) => {
               console.log(`    Item ${iIdx}: ${item.titulo} (${item.ncs?.length || 0} NCs)`);
@@ -287,12 +292,12 @@ const ProjectWrite = () => {
           });
           
           // Sanitizar IDs duplicados antes de carregar
-          const sanitizedModules = sanitizeDuplicateIds(data.weightedModules);
+          const sanitizedModules = sanitizeDuplicateIds(modulesData);
           setModules(sanitizedModules);
           
           // Log detalhado PÓS-CARREGAMENTO para verificar NCs e Respostas
           console.log('🔍 VERIFICAÇÃO DE NCs E RESPOSTAS:');
-          data.weightedModules.forEach((mod: any) => {
+          modulesData.forEach((mod: any) => {
             mod.itens?.forEach((item: any) => {
               if (item.ncs && item.ncs.length > 0) {
                 if (item.ncs.length > 1) {
@@ -319,8 +324,8 @@ const ProjectWrite = () => {
       });
           
           // Auto-selecionar primeira NC disponível
-          if (data.weightedModules.length > 0) {
-            const firstModule = data.weightedModules[0];
+          if (modulesData.length > 0) {
+            const firstModule = modulesData[0];
             if (firstModule.itens.length > 0) {
               const firstItem = firstModule.itens[0];
               console.log(`📍 Primeiro item: "${firstItem.titulo}" com ${firstItem.ncs?.length || 0} NCs`);
@@ -332,7 +337,7 @@ const ProjectWrite = () => {
             }
           }
         } else {
-          console.log('⚠️ weightedModules NÃO encontrado, convertendo de customAccordions...');
+          console.log('⚠️ modules NÃO encontrado, convertendo de customAccordions...');
           // Converter estrutura antiga para nova (primeira vez)
           loadHierarchicalStructure(projectData);
         }
@@ -537,6 +542,7 @@ const ProjectWrite = () => {
                 return {
                   ...q,
                   response: {
+                    ...q.response, // PRESERVAR todos os campos existentes
                     selectedOption: option,
                     score: score,
                     timestamp: new Date().toISOString(),
@@ -544,6 +550,7 @@ const ProjectWrite = () => {
                     answeredByName: userData?.displayName || 'Usuário',
                     mediaAttachments: q.response?.mediaAttachments || [],
                     comments: q.response?.comments || []
+                    // currentSituation, aiGuidance, userComment, etc. são preservados pelo spread
                   }
                 };
               }
@@ -639,6 +646,13 @@ const ProjectWrite = () => {
 
   const handleQuestionPhoto = async (questionId: string, file: File) => {
     if (!projectDetails) return;
+    
+    console.log('🎯 handleQuestionPhoto CHAMADO:', {
+      questionId,
+      fileName: file.name,
+      timestamp: Date.now()
+    });
+    
     setQuestionPhotoUploading(prev => ({ ...prev, [questionId]: true }));
     
     try {
@@ -669,28 +683,52 @@ const ProjectWrite = () => {
         reader.readAsDataURL(file);
       });
 
-      const location = await new Promise<{ latitude: number; longitude: number }>((resolve) => {
-        if (!navigator.geolocation) {
-          console.warn('Geolocalização não suportada');
-          resolve({ latitude: 0, longitude: 0 });
-          return;
-        }
-
-        navigator.geolocation.getCurrentPosition(
-          (position) => {
-            console.log('✅ Localização capturada:', position.coords.latitude, position.coords.longitude);
-            resolve({
-              latitude: position.coords.latitude,
-              longitude: position.coords.longitude
-            });
-          },
-          (error) => {
-            console.warn('❌ Erro na geolocalização:', error.message);
+      // Usar localização já capturada pelo hook, ou tentar obter se não disponível
+      let location = { latitude: 0, longitude: 0 };
+      
+      if (gpsLocation && gpsLocation.latitude !== 0 && gpsLocation.longitude !== 0) {
+        // Reutilizar localização já capturada
+        console.log('✅ Usando localização GPS já capturada:', {
+          latitude: gpsLocation.latitude,
+          longitude: gpsLocation.longitude
+        });
+        location = {
+          latitude: gpsLocation.latitude,
+          longitude: gpsLocation.longitude
+        };
+      } else {
+        // Fallback: tentar obter rapidamente (com cache permitido)
+        console.log('🌍 Tentando obter localização GPS rápida...');
+        location = await new Promise<{ latitude: number; longitude: number }>((resolve) => {
+          if (!navigator.geolocation) {
+            console.warn('⚠️ Geolocalização não suportada');
             resolve({ latitude: 0, longitude: 0 });
-          },
-          { timeout: 10000, enableHighAccuracy: true, maximumAge: 60000 }
-        );
-      });
+            return;
+          }
+
+          navigator.geolocation.getCurrentPosition(
+            (position) => {
+              console.log('✅ Localização obtida:', {
+                latitude: position.coords.latitude,
+                longitude: position.coords.longitude
+              });
+              resolve({
+                latitude: position.coords.latitude,
+                longitude: position.coords.longitude
+              });
+            },
+            (error) => {
+              console.warn('⚠️ Não foi possível obter GPS, continuando sem localização');
+              resolve({ latitude: 0, longitude: 0 });
+            },
+            { 
+              timeout: 5000, // Timeout curto (5s) já que é fallback
+              enableHighAccuracy: false, // Não precisa de alta precisão
+              maximumAge: 300000 // Permite cache de 5 minutos
+            }
+          );
+        });
+      }
 
       let firebaseUrl = '';
       try {
@@ -713,7 +751,50 @@ const ProjectWrite = () => {
       
       console.log('=== DADOS DA FOTO PREPARADOS (MODO PONDERADO) ===');
       
-      setQuestionPhotos(prev => ({ ...prev, [questionId]: photoData }));
+      // Criar objeto de mídia
+      const mediaAttachment: any = {
+        id: Date.now().toString(),
+        url: firebaseUrl || base64Data,
+        type: 'image',
+        createdAt: new Date().toISOString()
+      };
+      
+      // Adicionar coordenadas GPS apenas se existirem (Firebase não aceita undefined)
+      if (location.latitude !== 0) {
+        mediaAttachment.latitude = location.latitude;
+      }
+      if (location.longitude !== 0) {
+        mediaAttachment.longitude = location.longitude;
+      }
+      
+      // Adicionar APENAS ao mediaAttachments (não usar mais questionPhotos)
+      setModules(prevModules =>
+        prevModules.map(module => ({
+          ...module,
+          itens: module.itens.map(item => ({
+            ...item,
+            ncs: item.ncs.map(nc => ({
+              ...nc,
+              perguntas: nc.perguntas.map(q => {
+                if (q.id === questionId) {
+                  const currentAttachments = q.response?.mediaAttachments || [];
+                  console.log('📸 Adicionando foto aos mediaAttachments. Total atual:', currentAttachments.length);
+                  return {
+                    ...q,
+                    response: {
+                      ...q.response,
+                      mediaAttachments: [...currentAttachments, mediaAttachment]
+                    }
+                  };
+                }
+                return q;
+              })
+            }))
+          }))
+        }))
+      );
+      
+      console.log('✅ Foto adicionada aos mediaAttachments da pergunta');
       
       if (location.latitude !== 0 && location.longitude !== 0) {
         toast.success('✅ Foto salva com localização GPS!');
@@ -929,19 +1010,202 @@ const ProjectWrite = () => {
         });
       });
 
+      // Log das respostas para debug
+      console.log('🔍 Verificando currentSituation nas respostas:');
+      modules.forEach((mod, mIdx) => {
+        mod.itens.forEach((item, iIdx) => {
+          item.ncs.forEach((nc, nIdx) => {
+            nc.perguntas.forEach((pergunta, pIdx) => {
+              if (pergunta.response?.currentSituation) {
+                console.log(`  ✅ Módulo ${mIdx} > Item ${iIdx} > NC ${nIdx} > Pergunta ${pIdx}: "${pergunta.response.currentSituation}"`);
+              }
+            });
+          });
+        });
+      });
+
       const projectRef = doc(db, "projetos", id);
       await updateDoc(projectRef, {
         nome: projectDetails.nome,
-        weightedModules: modules,
+        modules: modules, // Padronizado para 'modules'
         progresso: progresso,
         ultimaAtualizacao: new Date().toISOString(),
         atualizadoPor: userData?.uid || ''
       });
 
+      // ATUALIZAR RELATÓRIO AUTOMATICAMENTE após salvar
+      console.log('🔄 Atualizando relatório após salvar projeto...');
+      try {
+        await updateRelatorioAfterProjectSave(id, modules);
+        console.log('✅ Relatório atualizado!');
+      } catch (error) {
+        console.error('⚠️ Erro ao atualizar relatório:', error);
+        // Não bloquear o salvamento por erro no relatório
+      }
+
       toast.success("Projeto salvo com sucesso!");
     } catch (error) {
       console.error("Erro ao salvar:", error);
       toast.error("Erro ao salvar projeto");
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  // Função para atualizar relatório após salvar projeto
+  const updateRelatorioAfterProjectSave = async (projectId: string, modules: ProjectModule[]) => {
+    try {
+      console.log('📝 Sincronizando relatório com dados do projeto...');
+      
+      // Buscar dados do projeto para info do cliente
+      const projectDocSnap = await getDoc(doc(db, 'projetos', projectId));
+      if (!projectDocSnap.exists()) return;
+      
+      const projectData = projectDocSnap.data() as any;
+      
+      const itensRelatorio: RelatorioItem[] = [];
+      
+      // Extrair dados dos módulos
+      modules.forEach((module, modIndex) => {
+        if (module.itens && Array.isArray(module.itens)) {
+          module.itens.forEach((item, itemIndex) => {
+            if (item.ncs && Array.isArray(item.ncs)) {
+              item.ncs.forEach((nc, ncIndex) => {
+                const itemId = `mod${modIndex}_item${itemIndex}_nc${ncIndex}`;
+                
+                // Extrair situação atual, orientação e fotos das perguntas
+                let currentSituation = '';
+                let clientGuidance = '';
+                let photos: string[] = [];
+                
+                if (nc.perguntas && Array.isArray(nc.perguntas)) {
+                  const situacoes = nc.perguntas
+                    .map(p => p.response?.currentSituation)
+                    .filter(s => s && s.trim() !== '');
+                  currentSituation = situacoes.join(' | ');
+                  
+                  const orientacoes = nc.perguntas
+                    .map(p => p.response?.aiGuidance)
+                    .filter(g => g && g.trim() !== '');
+                  clientGuidance = orientacoes.join(' | ');
+                  
+                  // Extrair todas as fotos das mediaAttachments
+                  nc.perguntas.forEach(pergunta => {
+                    if (pergunta.response?.mediaAttachments && Array.isArray(pergunta.response.mediaAttachments)) {
+                      pergunta.response.mediaAttachments.forEach(media => {
+                        if (media.url) {
+                          photos.push(media.url);
+                        }
+                      });
+                    }
+                  });
+                }
+                
+                console.log(`📸 NC "${nc.ncTitulo}": ${photos.length} foto(s) encontrada(s)`);
+                
+                itensRelatorio.push({
+                  id: itemId,
+                  category: module.titulo || `Módulo ${modIndex + 1}`,
+                  itemTitle: item.titulo || `Item ${itemIndex + 1}`,
+                  subItemId: nc.id || itemId,
+                  subItemTitle: nc.ncTitulo || `NC ${nc.numero}`,
+                  local: (nc as any).local || 'A definir',
+                  currentSituation: currentSituation,
+                  clientGuidance: clientGuidance,
+                  responsible: '',
+                  whatWasDone: '',
+                  startDate: '',
+                  endDate: '',
+                  status: nc.status || 'pending',
+                  evaluation: '',
+                  photos: photos,
+                  adequacyReported: false,
+                  adequacyStatus: (nc.status === 'completed' ? 'completed' : 'pending') as 'pending' | 'completed' | 'not_applicable',
+                  adequacyDetails: '',
+                  adequacyImages: [],
+                  adequacyDate: '',
+                  changesDescription: '',
+                  treatmentDeadline: '',
+                  updatedAt: new Date().toISOString(),
+                  updatedBy: userData?.uid || ''
+                });
+              });
+            }
+          });
+        }
+      });
+      
+      // Calcular estatísticas
+      const statistics = {
+        totalItems: itensRelatorio.length,
+        completedItems: itensRelatorio.filter(item => item.status === 'completed').length,
+        pendingItems: itensRelatorio.filter(item => item.status === 'pending').length,
+        inProgressItems: itensRelatorio.filter(item => item.status === 'in_progress').length
+      };
+
+      // Criar/atualizar documento ÚNICO do relatório
+      const relatorioDoc: Relatorio = {
+        id: projectId,
+        projectId,
+        projectName: projectData.nome || 'Projeto sem nome',
+        clientId: projectData.clienteId || '',
+        clientName: projectData.cliente?.nome || 'Cliente não informado',
+        clientEmail: projectData.cliente?.email || '',
+        itens: itensRelatorio,
+        statistics,
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
+        createdBy: userData?.uid || '',
+        updatedBy: userData?.uid || ''
+      };
+
+      console.log('💾 Salvando relatório atualizado:', {
+        totalItens: itensRelatorio.length,
+        itensComSituacao: itensRelatorio.filter(i => i.currentSituation).length,
+        itensComOrientacao: itensRelatorio.filter(i => i.clientGuidance).length
+      });
+
+      // Salvar como documento ÚNICO (ID = projectId)
+      await setDoc(doc(db, 'relatorios', projectId), relatorioDoc);
+      
+      console.log('✅ Relatório sincronizado com sucesso!');
+    } catch (error) {
+      console.error('❌ Erro ao sincronizar relatório:', error);
+      throw error;
+    }
+  };
+
+  // Função para concluir o projeto
+  const handleCompleteProject = async () => {
+    if (!projectDetails || !id) return;
+
+    // Verificar se o progresso está em 100%
+    if (projectDetails.progresso !== 100) {
+      toast.error("O projeto precisa estar 100% completo para ser concluído");
+      return;
+    }
+
+    try {
+      setSaving(true);
+      
+      const projectRef = doc(db, "projetos", id);
+      await updateDoc(projectRef, {
+        status: 'Concluído',
+        dataFinalizacao: new Date().toISOString(),
+        finalizadoPor: userData?.uid || '',
+        ultimaAtualizacao: new Date().toISOString()
+      });
+
+      toast.success("Projeto concluído com sucesso! 🎉");
+      
+      // Aguardar um pouco e voltar para a lista de projetos
+      setTimeout(() => {
+        navigate('/projetos');
+      }, 1500);
+      
+    } catch (error) {
+      console.error("Erro ao concluir projeto:", error);
+      toast.error("Erro ao concluir projeto");
     } finally {
       setSaving(false);
     }
@@ -1252,10 +1516,21 @@ const ProjectWrite = () => {
                       <div className="text-2xl font-bold text-blue-600">{projectDetails.progresso}%</div>
             </div>
                     <Progress value={projectDetails.progresso} className="w-32" />
-                    <Button onClick={handleSaveProject} disabled={saving}>
-                      <Save className="h-4 w-4 mr-2" />
-                      {saving ? "Salvando..." : "Salvar"}
-                    </Button>
+                    <div className="flex items-center gap-2">
+                      <Button onClick={handleSaveProject} disabled={saving}>
+                        <Save className="h-4 w-4 mr-2" />
+                        {saving ? "Salvando..." : "Salvar"}
+                      </Button>
+                      <Button 
+                        onClick={handleCompleteProject}
+                        className="bg-green-600 hover:bg-green-700 text-white disabled:opacity-50"
+                        disabled={saving || projectDetails.progresso !== 100}
+                        title={projectDetails.progresso !== 100 ? `Complete todas as perguntas (${projectDetails.progresso}%)` : 'Concluir projeto'}
+                      >
+                        <CheckCircle className="h-4 w-4 mr-2" />
+                        Concluir Projeto
+                      </Button>
+                    </div>
           </div>
         </div>
               </div>
@@ -1289,22 +1564,27 @@ const ProjectWrite = () => {
                                 >
                   <Plus className="h-4 w-4" />
                                 </Button>
-                {currentWeightedItem && currentWeightedItem.ncs.length > 1 && (
-                                <Button
-                    variant="ghost"
-                                  size="icon"
-                    onClick={() => removeNC(currentModuleId, currentItemId, currentNcId)}
-                  >
-                    <Trash2 className="h-4 w-4" />
-                                </Button>
-                )}
                               </div>
 
               {/* Perguntas */}
               {currentNC.perguntas && currentNC.perguntas.length > 0 && (
                 <div className="space-y-4">
                   {currentNC.perguntas.map((question: WeightedQuestion, index: number) => (
-                    <Card key={question.id} className="shadow-sm">
+                    <Card key={question.id} className="shadow-sm relative">
+                      {/* Botão Deletar NC - Canto Superior Direito */}
+                      {currentWeightedItem && currentWeightedItem.ncs.length > 1 && (
+                        <div className="absolute top-4 right-4 z-10">
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            className="h-8 w-8 text-red-600 hover:text-red-700 hover:bg-red-50"
+                            onClick={() => setDeleteNCModal({ open: true, ncId: currentNcId, ncTitle: currentNC.ncTitulo })}
+                          >
+                            <Trash2 className="h-4 w-4" />
+                          </Button>
+                        </div>
+                      )}
+                      
                       <CardHeader className="pb-4">
                         {/* Título da NC - Editável inline */}
                         <Input
@@ -1323,8 +1603,29 @@ const ProjectWrite = () => {
                             );
                           }}
                           placeholder="Título da NC..."
-                          className="text-lg font-semibold border-none p-0 h-auto bg-transparent focus-visible:ring-0 shadow-none mb-3 hover:bg-gray-50 px-2 py-1 -mx-2 rounded transition-colors"
+                          className="text-lg font-semibold border-none p-0 h-auto bg-transparent focus-visible:ring-0 shadow-none mb-2 hover:bg-gray-50 px-2 py-1 -mx-2 rounded transition-colors"
                         />
+                        
+                        {/* Campo Local - mesmo estilo do título */}
+                        <Input
+                          value={(currentNC as any).local || ''}
+                          onChange={(e) => {
+                            setModules(prevModules =>
+                              prevModules.map(module => ({
+                                ...module,
+                                itens: module.itens.map(item => ({
+                                  ...item,
+                                  ncs: item.ncs.map(nc => 
+                                    nc.id === currentNcId ? { ...nc, local: e.target.value } : nc
+                                  )
+                                }))
+                              }))
+                            );
+                          }}
+                          placeholder="📍 Local (ex: Portaria Principal, Setor A, Câmera 5...)"
+                          className="text-sm text-gray-600 border-none p-0 h-auto bg-transparent focus-visible:ring-0 shadow-none mb-3 hover:bg-gray-50 px-2 py-1 -mx-2 rounded transition-colors"
+                        />
+                        
                         <div className="text-sm text-gray-600 font-normal">
                           {question.text}
                         </div>
@@ -1514,6 +1815,108 @@ const ProjectWrite = () => {
                           </div>
                         )}
 
+                        {/* Fotos Anexadas - Desktop (só mostra se showPhotosDesktop estiver true) */}
+                        {!isMobile && showPhotosDesktop[question.id] && question.response?.mediaAttachments && question.response.mediaAttachments.length > 0 && (
+                          <div className="pt-4 border-t border-gray-200">
+                            <div className="flex items-center gap-2 mb-3">
+                              <Camera className="h-4 w-4 text-gray-600" />
+                              <span className="text-sm font-medium text-gray-700">
+                                {question.response.mediaAttachments.length} foto(s) anexada(s)
+                              </span>
+                            </div>
+                            <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
+                              {question.response.mediaAttachments.map((media, idx) => (
+                                <div key={idx} className="relative group">
+                                  <img
+                                    src={media.url}
+                                    alt={`Foto ${idx + 1}`}
+                                    className="w-full h-32 object-cover rounded-lg border border-gray-200 cursor-pointer hover:opacity-90 transition-opacity"
+                                    onClick={() => window.open(media.url, '_blank')}
+                                  />
+                                  
+                                  {/* Dropdown sobreposto */}
+                                  <div className="absolute top-2 right-2 opacity-0 group-hover:opacity-100 transition-opacity">
+                                    <DropdownMenu>
+                                      <DropdownMenuTrigger asChild>
+                                        <Button
+                                          variant="ghost"
+                                          size="icon"
+                                          className="h-7 w-7 rounded-full bg-black/50 hover:bg-black/70 backdrop-blur-sm"
+                                        >
+                                          <MoreVertical className="h-3 w-3 text-white" />
+                                        </Button>
+                                      </DropdownMenuTrigger>
+                                      <DropdownMenuContent align="end">
+                                        <DropdownMenuItem onClick={() => window.open(media.url, '_blank')}>
+                                          <FileText className="h-4 w-4 mr-2" />
+                                          Abrir em Nova Aba
+                                        </DropdownMenuItem>
+                                        {media.latitude && media.longitude && (
+                                          <DropdownMenuItem
+                                            onClick={() => window.open(`https://www.google.com/maps?q=${media.latitude},${media.longitude}`, '_blank')}
+                                          >
+                                            <MapPin className="h-4 w-4 mr-2" />
+                                            Ver no Mapa
+                                          </DropdownMenuItem>
+                                        )}
+                                        <DropdownMenuItem
+                                          className="text-red-600 focus:text-red-600 focus:bg-red-50"
+                                          onClick={() => {
+                                            setModules(prevModules =>
+                                              prevModules.map(module => ({
+                                                ...module,
+                                                itens: module.itens.map(item => ({
+                                                  ...item,
+                                                  ncs: item.ncs.map(nc => ({
+                                                    ...nc,
+                                                    perguntas: nc.perguntas.map(q => {
+                                                      if (q.id === question.id) {
+                                                        const updatedAttachments = (q.response?.mediaAttachments || []).filter((_, i) => i !== idx);
+                                                        return {
+                                                          ...q,
+                                                          response: {
+                                                            ...q.response,
+                                                            mediaAttachments: updatedAttachments
+                                                          }
+                                                        };
+                                                      }
+                                                      return q;
+                                                    })
+                                                  }))
+                                                }))
+                                              }))
+                                            );
+                                            toast.success('Foto removida');
+                                          }}
+                                        >
+                                          <Trash2 className="h-4 w-4 mr-2" />
+                                          Remover
+                                        </DropdownMenuItem>
+                                      </DropdownMenuContent>
+                                    </DropdownMenu>
+                                  </div>
+                                  
+                                  {/* GPS Badge */}
+                                  {media.latitude && media.longitude && (
+                                    <div className="absolute bottom-2 right-2 bg-black/70 text-white px-2 py-1 rounded text-[10px]">
+                                      📍 GPS
+                                    </div>
+                                  )}
+                                </div>
+                              ))}
+                              
+                              {/* Botão + para adicionar mais fotos */}
+                              <button
+                                onClick={() => document.getElementById(`file-${question.id}`)?.click()}
+                                className="w-full h-32 rounded-lg border-2 border-dashed border-gray-300 hover:border-versys-primary hover:bg-versys-primary/5 transition-colors flex flex-col items-center justify-center gap-2 text-gray-400 hover:text-versys-primary"
+                              >
+                                <Plus className="h-8 w-8" />
+                                <span className="text-xs">Adicionar</span>
+                              </button>
+                            </div>
+                          </div>
+                        )}
+
                         <div className="flex gap-2 pt-4 border-t border-gray-200 justify-center">
                           <input
                             type="file"
@@ -1534,7 +1937,16 @@ const ProjectWrite = () => {
                               if (isMobile) {
                                 setPhotoDrawerOpen(question.id);
                               } else {
-                                document.getElementById(`file-${question.id}`)?.click();
+                                // Toggle: mostrar/ocultar fotos no desktop
+                                const newPhotoState = !showPhotosDesktop[question.id];
+                                setShowPhotosDesktop(prev => ({
+                                  ...prev,
+                                  [question.id]: newPhotoState
+                                }));
+                                // Se abrir fotos, fechar comentários
+                                if (newPhotoState) {
+                                  setShowSituacaoAtual(prev => ({ ...prev, [question.id]: false }));
+                                }
                               }
                             }}
                             disabled={questionPhotoUploading[question.id]}
@@ -1547,7 +1959,7 @@ const ProjectWrite = () => {
                             ) : (
                               <>
                                 <Paperclip className="h-4 w-4 mr-2" />
-                                Anexar Foto
+                                {!isMobile && showPhotosDesktop[question.id] ? 'Ocultar Fotos' : 'Anexar Foto'}
                               </>
                             )}
                                       </Button>
@@ -1556,12 +1968,13 @@ const ProjectWrite = () => {
                             variant="ghost" 
                                         size="sm"
                             onClick={() => {
-                              // Alterna entre mostrar e ocultar
-                              if (showSituacaoAtual[question.id] === true) {
-                                setShowSituacaoAtual(prev => ({ ...prev, [question.id]: false }));
-                              } else {
-                                // Abre o campo
-                                setShowSituacaoAtual(prev => ({ ...prev, [question.id]: true }));
+                              // Toggle: mostrar/ocultar comentários
+                              const newCommentState = !showSituacaoAtual[question.id];
+                              setShowSituacaoAtual(prev => ({ ...prev, [question.id]: newCommentState }));
+                              
+                              // Se abrir comentários, fechar fotos
+                              if (newCommentState) {
+                                setShowPhotosDesktop(prev => ({ ...prev, [question.id]: false }));
                                 
                                 // Focar no campo após um delay
                                 setTimeout(() => {
@@ -1698,67 +2111,141 @@ const ProjectWrite = () => {
           </SheetHeader>
           
           <div className="mt-6 space-y-4">
-            {/* Exibir fotos já anexadas */}
-            {photoDrawerOpen && questionPhotos[photoDrawerOpen] && (
-              <div className="space-y-2">
-                <h4 className="text-sm font-medium text-gray-700">Fotos anexadas:</h4>
-                <div className="flex items-start gap-3 p-3 bg-gray-50 rounded-lg border border-gray-200">
-                  {/* Foto à esquerda */}
-                  <div className="relative rounded-lg overflow-hidden border border-gray-200 w-[100px] h-[100px] flex-shrink-0">
-                    <img 
-                      src={questionPhotos[photoDrawerOpen].url} 
-                      alt="Foto anexada" 
-                      className="w-full h-full object-cover cursor-pointer"
-                      onClick={() => window.open(questionPhotos[photoDrawerOpen].url, '_blank')}
-                    />
-                  </div>
+            {/* Exibir TODAS as fotos (do estado + do Firebase) */}
+            {photoDrawerOpen && (() => {
+              // Buscar a pergunta atual
+              let currentQuestion: WeightedQuestion | null = null;
+              for (const module of modules) {
+                for (const item of module.itens) {
+                  for (const nc of item.ncs) {
+                    const found = nc.perguntas.find(q => q.id === photoDrawerOpen);
+                    if (found) {
+                      currentQuestion = found;
+                      break;
+                    }
+                  }
+                }
+              }
+              
+              if (!currentQuestion) return null;
+              
+              // Coletar todas as fotos (só dos mediaAttachments, pois questionPhotos é adicionado lá também)
+              const allPhotos = [];
+              
+              // Usar apenas mediaAttachments (que já contém todas as fotos)
+              if (currentQuestion.response?.mediaAttachments) {
+                currentQuestion.response.mediaAttachments.forEach((media, idx) => {
+                  allPhotos.push({
+                    source: 'saved',
+                    media,
+                    index: idx
+                  });
+                });
+              }
+              
+              if (allPhotos.length === 0) return null;
+              
+              return (
+                <div className="space-y-2">
+                  <h4 className="text-sm font-medium text-gray-700">
+                    {allPhotos.length} foto(s) anexada(s):
+                  </h4>
                   
-                  {/* Informações à direita */}
-                  <div className="flex-1 min-w-0">
-                    <div className="flex items-center justify-between mb-2">
-                      <div className="flex items-center gap-2 text-gray-600">
-                        <Camera className="h-4 w-4" />
-                        <span className="text-sm">Foto anexada</span>
+                  {allPhotos.map((photoItem, idx) => (
+                    <div key={idx} className="flex items-start gap-3 p-3 bg-gray-50 rounded-lg border border-gray-200">
+                      {/* Foto à esquerda */}
+                      <div className="relative rounded-lg overflow-hidden border border-gray-200 w-[100px] h-[100px] flex-shrink-0">
+                        <img 
+                          src={photoItem.media.url} 
+                          alt={`Foto ${idx + 1}`}
+                          className="w-full h-full object-cover cursor-pointer"
+                          onClick={() => window.open(photoItem.media.url, '_blank')}
+                        />
                       </div>
                       
-                      {/* Dropdown de ações */}
-                      <DropdownMenu>
-                        <DropdownMenuTrigger asChild>
-                          <button className="p-1 hover:bg-gray-100 rounded-full transition-colors">
-                            <MoreVertical className="h-4 w-4 text-gray-600" />
-                          </button>
-                        </DropdownMenuTrigger>
-                        <DropdownMenuContent align="end">
-                          <DropdownMenuItem
-                            className="text-red-600 focus:text-red-600 focus:bg-red-50"
-                            onClick={() => {
-                              setQuestionPhotos(prev => {
-                                const updated = { ...prev };
-                                delete updated[photoDrawerOpen];
-                                return updated;
-                              });
-                            }}
-                          >
-                            <Trash2 className="h-4 w-4 mr-2" />
-                            Remover Foto
-                          </DropdownMenuItem>
-                        </DropdownMenuContent>
-                      </DropdownMenu>
-                    </div>
-                    
-                    {questionPhotos[photoDrawerOpen].latitude !== 0 && (
-                      <div className="text-xs text-green-600 mb-2">
-                        📍 GPS: {questionPhotos[photoDrawerOpen].latitude.toFixed(6)}, {questionPhotos[photoDrawerOpen].longitude.toFixed(6)}
+                      {/* Informações à direita */}
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center justify-between mb-2">
+                          <div className="flex items-center gap-2 text-gray-600">
+                            <Camera className="h-4 w-4" />
+                            <span className="text-sm">Foto {idx + 1}</span>
+                          </div>
+                          
+                          {/* Dropdown de ações */}
+                          <DropdownMenu>
+                            <DropdownMenuTrigger asChild>
+                              <button className="p-1 hover:bg-gray-100 rounded-full transition-colors">
+                                <MoreVertical className="h-4 w-4 text-gray-600" />
+                              </button>
+                            </DropdownMenuTrigger>
+                            <DropdownMenuContent align="end">
+                              <DropdownMenuItem
+                                onClick={() => window.open(photoItem.media.url, '_blank')}
+                              >
+                                <FileText className="h-4 w-4 mr-2" />
+                                Abrir em Nova Aba
+                              </DropdownMenuItem>
+                              {photoItem.media.latitude && photoItem.media.longitude && (
+                                <DropdownMenuItem
+                                  onClick={() => window.open(`https://www.google.com/maps?q=${photoItem.media.latitude},${photoItem.media.longitude}`, '_blank')}
+                                >
+                                  <MapPin className="h-4 w-4 mr-2" />
+                                  Ver no Mapa
+                                </DropdownMenuItem>
+                              )}
+                              <DropdownMenuItem
+                                className="text-red-600 focus:text-red-600 focus:bg-red-50"
+                                onClick={() => {
+                                  // Remover dos mediaAttachments
+                                  setModules(prevModules =>
+                                    prevModules.map(module => ({
+                                      ...module,
+                                      itens: module.itens.map(item => ({
+                                        ...item,
+                                        ncs: item.ncs.map(nc => ({
+                                          ...nc,
+                                          perguntas: nc.perguntas.map(q => {
+                                            if (q.id === photoDrawerOpen) {
+                                              const updatedAttachments = (q.response?.mediaAttachments || []).filter((_, i) => i !== idx);
+                                              return {
+                                                ...q,
+                                                response: {
+                                                  ...q.response,
+                                                  mediaAttachments: updatedAttachments
+                                                }
+                                              };
+                                            }
+                                            return q;
+                                          })
+                                        }))
+                                      }))
+                                    }))
+                                  );
+                                  toast.success('Foto removida');
+                                }}
+                              >
+                                <Trash2 className="h-4 w-4 mr-2" />
+                                Remover Foto
+                              </DropdownMenuItem>
+                            </DropdownMenuContent>
+                          </DropdownMenu>
+                        </div>
+                        
+                        {photoItem.media.latitude && photoItem.media.latitude !== 0 && (
+                          <div className="text-xs text-green-600 mb-2">
+                            📍 GPS: {photoItem.media.latitude.toFixed(6)}, {photoItem.media.longitude.toFixed(6)}
+                          </div>
+                        )}
+                        
+                        <div className="text-xs text-gray-400">
+                          {new Date(photoItem.media.createdAt).toLocaleString('pt-BR')}
+                        </div>
                       </div>
-                    )}
-                    
-                    <div className="text-xs text-gray-400">
-                      {new Date(questionPhotos[photoDrawerOpen].createdAt).toLocaleString('pt-BR')}
                     </div>
-                  </div>
+                  ))}
                 </div>
-              </div>
-            )}
+              );
+            })()}
             
             {/* Botão para adicionar nova foto */}
             <div className="flex justify-center">
@@ -1782,6 +2269,47 @@ const ProjectWrite = () => {
           </div>
         </SheetContent>
       </Sheet>
+
+      {/* Modal de Confirmação para Deletar NC */}
+      <Dialog open={deleteNCModal.open} onOpenChange={(open) => !open && setDeleteNCModal({ open: false, ncId: '', ncTitle: '' })}>
+        <DialogContent className="w-[90vw] max-w-md sm:w-full rounded-lg">
+          <DialogHeader className="space-y-3">
+            <DialogTitle className="flex items-center justify-center sm:justify-start gap-2 text-red-600 text-xl">
+              <Trash2 className="h-6 w-6" />
+              Remover NC
+            </DialogTitle>
+            <DialogDescription className="text-left pt-2 text-base leading-relaxed">
+              Tem certeza que deseja remover a NC <strong className="text-foreground">"{deleteNCModal.ncTitle}"</strong>?
+              <br />
+              <br />
+              <span className="text-sm text-muted-foreground">
+                Esta ação não pode ser desfeita e todas as informações associadas serão perdidas.
+              </span>
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter className="flex-col sm:flex-row gap-3 mt-4">
+            <Button
+              variant="outline"
+              onClick={() => setDeleteNCModal({ open: false, ncId: '', ncTitle: '' })}
+              className="w-full sm:w-auto order-2 sm:order-1 h-11"
+            >
+              Cancelar
+            </Button>
+            <Button
+              variant="destructive"
+              onClick={() => {
+                removeNC(currentModuleId, currentItemId, deleteNCModal.ncId);
+                setDeleteNCModal({ open: false, ncId: '', ncTitle: '' });
+                toast.success('NC removida com sucesso!');
+              }}
+              className="w-full sm:w-auto order-1 sm:order-2 h-11"
+            >
+              <Trash2 className="h-4 w-4 mr-2" />
+              Remover NC
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 };

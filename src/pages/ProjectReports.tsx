@@ -11,10 +11,10 @@ import { Download, FileSpreadsheet, Filter, Search, ArrowLeft, FolderOpen, Build
 import { toast } from 'sonner';
 import { useAuthContext } from '@/contexts/AuthContext';
 import { RelatorioService } from '@/lib/relatorioService';
-import { RelatorioItem } from '@/lib/types';
+import { Relatorio, RelatorioItem } from '@/lib/types';
 import { db, storage } from '@/lib/firebase';
 import { ref, getBlob, uploadBytes, getDownloadURL } from 'firebase/storage';
-import { doc, updateDoc } from 'firebase/firestore';
+import { doc, updateDoc, getDoc, setDoc } from 'firebase/firestore';
 
 const ProjectReports = () => {
   const { userData } = useAuthContext();
@@ -86,7 +86,29 @@ const ProjectReports = () => {
     applyFilters();
   }, [relatorios, searchTerm, categoryFilter, statusFilter, articleFilter, localFilter, responsibleFilter]);
 
-  // Carregar relatórios da coleção 'relatorios'
+  // NOVA FUNÇÃO: Carregar relatório único do projeto
+  const loadRelatorioFromFirebase = async (projectId: string): Promise<Relatorio | null> => {
+    try {
+      if (!userData?.uid) return null;
+      
+      console.log('🔍 Buscando relatório único para projeto:', projectId);
+      const relatorioDoc = await getDoc(doc(db, 'relatorios', projectId));
+      
+      if (relatorioDoc.exists()) {
+        const data = relatorioDoc.data() as Relatorio;
+        console.log('✅ Relatório encontrado:', data.itens.length, 'itens');
+        return data;
+      }
+      
+      console.log('📄 Nenhum relatório encontrado para este projeto');
+      return null;
+    } catch (error) {
+      console.error('Erro ao carregar relatório:', error);
+      return null;
+    }
+  };
+
+  // ANTIGA FUNÇÃO (deprecada - manter apenas para migração)
   const loadFromRelatoriosCollection = async (projectId: string): Promise<RelatorioItem[] | null> => {
     try {
       if (!userData?.uid) return null;
@@ -164,7 +186,298 @@ const ProjectReports = () => {
     }
   };
 
-  // Criar ou atualizar relatórios baseados no projeto (evita duplicação)
+  // Função auxiliar para extrair situação atual das perguntas da NC
+  const extractCurrentSituation = (nc: any): string => {
+    console.log('🔍 Extraindo situação atual da NC:', nc.ncTitulo || nc.numero);
+    
+    if (nc.descricao) {
+      console.log('✅ Descrição encontrada:', nc.descricao);
+      return nc.descricao;
+    }
+    
+    // Se não tem descrição, tentar extrair das respostas das perguntas
+    if (nc.perguntas && Array.isArray(nc.perguntas)) {
+      console.log(`📋 NC tem ${nc.perguntas.length} perguntas`);
+      
+      const situacoes = nc.perguntas
+        .map((p: any, idx: number) => {
+          const situacao = p.response?.currentSituation;
+          if (situacao) {
+            console.log(`  ✅ Pergunta ${idx + 1} tem situação: "${situacao}"`);
+          }
+          return situacao;
+        })
+        .filter((s: any) => s && s.trim() !== '');
+      
+      if (situacoes.length > 0) {
+        const resultado = situacoes.join(' | ');
+        console.log(`✅ Situações encontradas: "${resultado}"`);
+        return resultado;
+      }
+      
+      console.log('⚠️ Nenhuma pergunta tem currentSituation');
+    } else {
+      console.log('⚠️ NC não tem perguntas');
+    }
+    
+    console.log('❌ Nenhuma situação atual encontrada');
+    return '';
+  };
+
+  // Função auxiliar para extrair orientação para o cliente das perguntas
+  const extractClientGuidance = (nc: any): string => {
+    if ((nc as any).orientacao) return (nc as any).orientacao;
+    
+    // Se não tem orientação, tentar extrair das respostas das perguntas (IA guidance)
+    if (nc.perguntas && Array.isArray(nc.perguntas)) {
+      const orientacoes = nc.perguntas
+        .map((p: any) => p.response?.aiGuidance)
+        .filter((g: any) => g && g.trim() !== '');
+      
+      if (orientacoes.length > 0) {
+        return orientacoes.join(' | ');
+      }
+    }
+    
+    return '';
+  };
+
+  // Função auxiliar para extrair fotos das mediaAttachments das perguntas
+  const extractPhotos = (nc: any): string[] => {
+    const photos: string[] = [];
+    
+    // Primeiro, verificar se há campo fotos direto na NC (compatibilidade)
+    if ((nc as any).fotos && Array.isArray((nc as any).fotos)) {
+      photos.push(...(nc as any).fotos);
+    }
+    
+    // Extrair fotos das mediaAttachments das perguntas
+    if (nc.perguntas && Array.isArray(nc.perguntas)) {
+      nc.perguntas.forEach((pergunta: any) => {
+        if (pergunta.response?.mediaAttachments && Array.isArray(pergunta.response.mediaAttachments)) {
+          pergunta.response.mediaAttachments.forEach((media: any) => {
+            if (media.url && !photos.includes(media.url)) {
+              photos.push(media.url);
+            }
+          });
+        }
+      });
+    }
+    
+    console.log(`📸 Extraídas ${photos.length} foto(s) da NC`);
+    return photos;
+  };
+
+  // NOVA FUNÇÃO: Criar ou atualizar relatório ÚNICO baseado no projeto
+  const createOrUpdateRelatorio = async (projectId: string) => {
+    try {
+      console.log('📝 Criando/atualizando relatório único para projeto:', projectId);
+      
+      // Buscar dados do projeto
+      const projectDocSnap = await getDoc(doc(db, 'projetos', projectId));
+      
+      if (!projectDocSnap.exists()) {
+        throw new Error('Projeto não encontrado');
+      }
+      
+      const projectData = projectDocSnap.data() as any;
+      console.log('✅ Projeto encontrado:', projectData.nome);
+      
+      // Verificar permissões
+      if (userData?.type === 'client' && projectData.clienteId !== userData.uid) {
+        toast.error('Você não tem permissão para acessar este projeto');
+        navigate('/client-projects');
+        return;
+      }
+
+      const itensRelatorio: RelatorioItem[] = [];
+      
+      // Buscar módulos (compatibilidade com ambos os nomes)
+      const modulesData = projectData.modules || projectData.weightedModules;
+      
+      // PROCESSAR MÓDULOS (Sistema NOVO com avaliação ponderada)
+      if (modulesData && Array.isArray(modulesData) && modulesData.length > 0) {
+        console.log('📊 Extraindo dados do sistema NOVO (modules):', modulesData.length, 'módulos');
+        
+        modulesData.forEach((module: any, modIndex: number) => {
+          if (module.itens && Array.isArray(module.itens)) {
+            module.itens.forEach((item: any, itemIndex: number) => {
+              if (item.ncs && Array.isArray(item.ncs)) {
+                item.ncs.forEach((nc: any, ncIndex: number) => {
+                  const itemId = `mod${modIndex}_item${itemIndex}_nc${ncIndex}`;
+                  
+                  // Extrair situação atual, orientação e fotos das perguntas
+                  const currentSituation = extractCurrentSituation(nc);
+                  const clientGuidance = extractClientGuidance(nc);
+                  const photos = extractPhotos(nc);
+                  
+                  console.log(`📝 NC "${nc.ncTitulo}": local="${(nc as any).local || 'A definir'}", situação="${currentSituation}", orientação="${clientGuidance}", fotos=${photos.length}`);
+                  
+                  itensRelatorio.push({
+                    id: itemId,
+                    category: module.titulo || `Módulo ${modIndex + 1}`,
+                    itemTitle: item.titulo || `Item ${itemIndex + 1}`,
+                    subItemId: nc.id || itemId,
+                    subItemTitle: nc.ncTitulo || `NC ${nc.numero}`,
+                    local: (nc as any).local || 'A definir',
+                    currentSituation: currentSituation,
+                    clientGuidance: clientGuidance,
+                    responsible: (nc as any).responsavel || '',
+                    whatWasDone: (nc as any).acaoRealizada || '',
+                    startDate: (nc as any).dataInicio || '',
+                    endDate: (nc as any).dataFim || '',
+                    status: nc.status || 'pending',
+                    evaluation: '',
+                    photos: photos,
+                    adequacyReported: (nc as any).adequacyReported || false,
+                    adequacyStatus: nc.status || 'pending',
+                    adequacyDetails: (nc as any).detalhes || '',
+                    adequacyImages: (nc as any).adequacyImages || [],
+                    adequacyDate: (nc as any).dataFim || '',
+                    changesDescription: (nc as any).mudancas || '',
+                    treatmentDeadline: (nc as any).prazo || '',
+                    updatedAt: new Date().toISOString(),
+                    updatedBy: userData?.uid || ''
+                  });
+                });
+              }
+            });
+          }
+        });
+      }
+      // PROCESSAR CUSTOM ACCORDIONS (Sistema ANTIGO)
+      else if (projectData.customAccordions && Array.isArray(projectData.customAccordions)) {
+        console.log('📊 Extraindo dados do sistema ANTIGO (customAccordions)');
+        
+        projectData.customAccordions.forEach((accordion: any) => {
+          if (accordion.items && Array.isArray(accordion.items)) {
+            accordion.items.forEach((item: any) => {
+              if (item.subItems && Array.isArray(item.subItems)) {
+                item.subItems.forEach((subItem: any) => {
+                  itensRelatorio.push({
+                    id: subItem.id,
+                    category: accordion.title || 'Categoria não informada',
+                    itemTitle: item.title || 'Item não informado',
+                    subItemId: subItem.id,
+                    subItemTitle: subItem.title || 'SubItem',
+                    local: subItem.location || 'Local não informado',
+                    currentSituation: subItem.currentSituation || '',
+                    clientGuidance: subItem.clientGuidance || '',
+                    responsible: subItem.responsible || '',
+                    whatWasDone: subItem.whatWasDone || '',
+                    startDate: subItem.startDate || '',
+                    endDate: subItem.endDate || '',
+                    status: subItem.status || 'pending',
+                    evaluation: subItem.evaluation || '',
+                    photos: Array.isArray(subItem.photos) 
+                      ? subItem.photos.map((photo: any) => typeof photo === 'string' ? photo : photo?.url || '')
+                      : [],
+                    adequacyReported: subItem.adequacyReported || false,
+                    adequacyStatus: subItem.adequacyStatus || 'pending',
+                    adequacyDetails: subItem.adequacyDetails || '',
+                    adequacyImages: subItem.adequacyImages || [],
+                    adequacyDate: subItem.adequacyDate || '',
+                    changesDescription: subItem.changesDescription || '',
+                    treatmentDeadline: subItem.treatmentDeadline || '',
+                    updatedAt: new Date().toISOString(),
+                    updatedBy: userData?.uid || ''
+                  });
+                });
+              }
+            });
+          }
+        });
+      } else {
+        console.warn('⚠️ Projeto sem dados (nem modules nem customAccordions)');
+        toast.warning('Este projeto não possui dados para gerar relatório');
+        return;
+      }
+
+      // Calcular estatísticas
+      const statistics = {
+        totalItems: itensRelatorio.length,
+        completedItems: itensRelatorio.filter(item => item.status === 'completed').length,
+        pendingItems: itensRelatorio.filter(item => item.status === 'pending').length,
+        inProgressItems: itensRelatorio.filter(item => item.status === 'in_progress').length
+      };
+
+      // Criar/atualizar documento ÚNICO do relatório
+      const relatorioDoc: Relatorio = {
+        id: projectId,
+        projectId,
+        projectName: projectData.nome || 'Projeto sem nome',
+        clientId: projectData.clienteId || '',
+        clientName: projectData.cliente?.nome || 'Cliente não informado',
+        clientEmail: projectData.cliente?.email || '',
+        itens: itensRelatorio,
+        statistics,
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
+        createdBy: userData?.uid || '',
+        updatedBy: userData?.uid || ''
+      };
+
+      console.log('💾 Salvando relatório único:', {
+        projectId,
+        totalItens: itensRelatorio.length,
+        statistics
+      });
+
+      // Salvar como documento ÚNICO (ID = projectId)
+      await setDoc(doc(db, 'relatorios', projectId), relatorioDoc);
+      
+      console.log('✅ Relatório único criado/atualizado com sucesso!');
+      toast.success(`Relatório criado com ${itensRelatorio.length} itens!`);
+      
+      // Carregar dados atualizados
+      setRelatorios(itensRelatorio);
+      setFilteredData(itensRelatorio);
+      
+      // Extrair categorias, artigos, locais, responsáveis
+      const uniqueCategories = Array.from(new Set(itensRelatorio.map(item => item.category).filter(cat => cat && cat.trim() !== '')));
+      setCategories(uniqueCategories.sort());
+      
+      const uniqueArticles = Array.from(new Set(itensRelatorio.map(item => item.itemTitle).filter(title => title && title.trim() !== '')));
+      setArticles(uniqueArticles.sort());
+      
+      const uniqueLocals = Array.from(new Set(itensRelatorio.map(item => item.local).filter(local => local && local.trim() !== '')));
+      setLocals(uniqueLocals.sort());
+      
+      const uniqueResponsibles = Array.from(new Set(itensRelatorio.map(item => item.responsible).filter(resp => resp && resp.trim() !== '')));
+      setResponsibles(uniqueResponsibles.sort());
+      
+    } catch (error) {
+      console.error('Erro ao criar/atualizar relatório:', error);
+      toast.error('Erro ao processar relatório: ' + (error as Error).message);
+    }
+  };
+
+  // Função auxiliar para extrair filtros dos dados
+  const extractFiltersFromData = (data: RelatorioItem[]) => {
+    // Categorias
+    const uniqueCategories = Array.from(new Set(data.map(item => item.category).filter(cat => cat && cat.trim() !== '')));
+    setCategories(uniqueCategories.sort());
+    
+    // Artigos
+    const uniqueArticles = Array.from(new Set(data.map(item => item.itemTitle).filter(title => title && title.trim() !== '')));
+    setArticles(uniqueArticles.sort());
+    
+    // Locais
+    const uniqueLocals = Array.from(new Set(data.map(item => item.local).filter(local => local && local.trim() !== '')));
+    setLocals(uniqueLocals.sort());
+    
+    // Responsáveis
+    const uniqueResponsibles = Array.from(new Set(data.map(item => item.responsible).filter(resp => resp && resp.trim() !== '')));
+    setResponsibles(uniqueResponsibles.sort());
+  };
+
+  // Função para atualizar relatório com novos dados do projeto
+  const updateRelatorioFromProject = async (projectId: string) => {
+    // Re-chamar a função principal que faz tudo
+    await createOrUpdateRelatorio(projectId);
+  };
+
+  // ANTIGA FUNÇÃO (deprecada - manter apenas para referência)
   const createRelatoriosFromProject = async (projectId: string) => {
     // Evitar execuções simultâneas que causam duplicação
     if (isCreatingRelatorios) {
@@ -225,8 +538,126 @@ const ProjectReports = () => {
       let newItemsCount = 0;
       let updatedItemsCount = 0;
       
-      // Processar customAccordions
-      if (projectData.customAccordions) {
+      // Debug: Verificar estrutura do projeto
+      console.log('🔍 Estrutura do projeto:', {
+        projectId,
+        temModules: !!projectData.modules,
+        temCustomAccordions: !!projectData.customAccordions,
+        modulesLength: projectData.modules?.length || 0,
+        customAccordionsLength: projectData.customAccordions?.length || 0,
+        projectName: projectData.nome
+      });
+      
+      // NOVO SISTEMA: Processar modules (avaliação ponderada)
+      if (projectData.modules && Array.isArray(projectData.modules) && projectData.modules.length > 0) {
+        console.log('📊 Processando sistema NOVO (modules com avaliação ponderada)');
+        
+        for (const module of projectData.modules) {
+          if (module.itens && Array.isArray(module.itens)) {
+            for (const item of module.itens) {
+              if (item.ncs && Array.isArray(item.ncs)) {
+                for (const nc of item.ncs) {
+                  const ncId = `${module.id}_${item.id}_${nc.id}`;
+                  
+                  let relatorioItem: RelatorioItem = {
+                    id: '',
+                    projectId,
+                    projectName: projectData.nome,
+                    clientId: projectData.clienteId || '',
+                    clientName: projectData.cliente?.nome || '',
+                    clientEmail: projectData.cliente?.email || '',
+                    category: module.titulo || 'Módulo não informado',
+                    itemTitle: item.titulo || 'Item não informado',
+                    subItemId: ncId,
+                    subItemTitle: nc.titulo || `NC ${nc.numero}`,
+                    local: nc.local || 'Local não informado',
+                    currentSituation: nc.descricao || '',
+                    clientGuidance: nc.orientacao || '',
+                    responsible: nc.responsavel || '',
+                    whatWasDone: nc.acaoRealizada || '',
+                    startDate: nc.dataInicio || '',
+                    endDate: nc.dataFim || '',
+                    status: nc.status || 'pending',
+                    evaluation: '',
+                    photos: nc.fotos || [],
+                    adequacyReported: nc.adequacyReported || false,
+                    adequacyStatus: nc.status || 'pending',
+                    adequacyDetails: nc.detalhes || '',
+                    adequacyImages: nc.adequacyImages || [],
+                    adequacyDate: nc.dataFim || '',
+                    changesDescription: nc.mudancas || '',
+                    treatmentDeadline: nc.prazo || '',
+                    createdAt: new Date().toISOString(),
+                    updatedAt: new Date().toISOString(),
+                    createdBy: userData?.uid || '',
+                    updatedBy: userData?.uid || ''
+                  };
+
+                  const existingItem = existingRelatorios.get(ncId);
+                  
+                  if (existingItem) {
+                    // PRESERVAR dados salvos pelo usuário
+                    const preservedData = {
+                      responsible: existingItem.data.responsible || relatorioItem.responsible,
+                      whatWasDone: existingItem.data.whatWasDone || relatorioItem.whatWasDone,
+                      startDate: existingItem.data.startDate || relatorioItem.startDate,
+                      endDate: existingItem.data.endDate || relatorioItem.endDate,
+                      status: existingItem.data.status || relatorioItem.status,
+                      evaluation: existingItem.data.evaluation || relatorioItem.evaluation,
+                      photos: existingItem.data.photos || relatorioItem.photos,
+                      adequacyReported: existingItem.data.adequacyReported || relatorioItem.adequacyReported,
+                      adequacyStatus: existingItem.data.adequacyStatus || relatorioItem.adequacyStatus,
+                      adequacyDetails: existingItem.data.adequacyDetails || relatorioItem.adequacyDetails,
+                      adequacyImages: existingItem.data.adequacyImages || relatorioItem.adequacyImages,
+                      adequacyDate: existingItem.data.adequacyDate || relatorioItem.adequacyDate,
+                      changesDescription: existingItem.data.changesDescription || relatorioItem.changesDescription,
+                      treatmentDeadline: existingItem.data.treatmentDeadline || relatorioItem.treatmentDeadline,
+                      
+                      // Campos atualizáveis do projeto
+                      projectName: relatorioItem.projectName,
+                      clientName: relatorioItem.clientName,
+                      clientEmail: relatorioItem.clientEmail,
+                      category: relatorioItem.category,
+                      itemTitle: relatorioItem.itemTitle,
+                      subItemTitle: relatorioItem.subItemTitle,
+                      local: relatorioItem.local,
+                      currentSituation: relatorioItem.currentSituation,
+                      clientGuidance: relatorioItem.clientGuidance,
+                      
+                      id: existingItem.id,
+                      projectId: relatorioItem.projectId,
+                      clientId: relatorioItem.clientId,
+                      subItemId: relatorioItem.subItemId,
+                      createdAt: existingItem.data.createdAt,
+                      updatedAt: new Date().toISOString(),
+                      createdBy: existingItem.data.createdBy || relatorioItem.createdBy,
+                      updatedBy: userData?.uid || ''
+                    };
+                    
+                    const docRef = doc(db, 'relatorios', existingItem.id);
+                    await updateDoc(docRef, preservedData);
+                    
+                    allRelatorios.push({ ...preservedData } as RelatorioItem);
+                    updatedItemsCount++;
+                  } else {
+                    // Criar novo
+                    const docRef = await addDoc(relatoriosCollection, relatorioItem);
+                    relatorioItem.id = docRef.id;
+                    allRelatorios.push(relatorioItem);
+                    newItemsCount++;
+                  }
+                }
+              }
+            }
+          }
+        }
+        
+        console.log(`✅ Sistema NOVO processado: ${newItemsCount} novos, ${updatedItemsCount} atualizados`);
+      }
+      // SISTEMA ANTIGO: Processar customAccordions
+      else if (projectData.customAccordions) {
+        console.log('📊 Processando sistema ANTIGO (customAccordions)');
+        
         for (const accordion of projectData.customAccordions) {
           if (accordion.items) {
             for (const item of accordion.items) {
@@ -395,6 +826,11 @@ const ProjectReports = () => {
             }
           }
         }
+        
+        console.log(`✅ Sistema ANTIGO processado: ${newItemsCount} novos, ${updatedItemsCount} atualizados`);
+      } else {
+        console.log('⚠️ Nenhum dado encontrado no projeto (nem modules nem customAccordions)');
+        toast.warning('Este projeto não possui dados para gerar relatório');
       }
       
       // Atualizar estado
@@ -429,14 +865,6 @@ const ProjectReports = () => {
         return a.localeCompare(b);
       });
       setCategories(sortedCategories);
-      
-      // Debug: verificar se há valores vazios nos arrays
-      console.log('🔍 DEBUG - Arrays populados:', {
-        categories: sortedCategories,
-        articles: uniqueArticles,
-        locals: uniqueLocals,
-        responsibles: uniqueResponsibles
-      });
       
       // Extrair e ordenar artigos
       const uniqueArticles = Array.from(new Set(allRelatorios.map(item => item.itemTitle).filter(title => title && title.trim() !== '')));
@@ -779,23 +1207,15 @@ const ProjectReports = () => {
     try {
       setLoading(true);
       
-      // Primeiro, verificar se há duplicatas
-      try {
-        const duplicatesCount = await RelatorioService.removeDuplicateRelatorios(projectId);
-        if (duplicatesCount > 0) {
-          toast.warning(`${duplicatesCount} itens duplicados foram removidos automaticamente!`);
-        }
-      } catch (error) {
-        console.error('Erro ao verificar duplicatas:', error);
-      }
+      console.log('📊 Carregando relatório do projeto:', projectId);
       
-      // Primeiro, tentar carregar dados existentes do Firebase
-      const existingRelatorios = await loadFromRelatoriosCollection(projectId);
+      // Tentar carregar relatório único do Firebase (nova estrutura)
+      const relatorioExistente = await loadRelatorioFromFirebase(projectId);
       
-      if (existingRelatorios && existingRelatorios.length > 0) {
-        console.log('📊 Carregando dados existentes do Firebase:', existingRelatorios.length, 'itens');
+      if (relatorioExistente && relatorioExistente.itens && relatorioExistente.itens.length > 0) {
+        console.log('✅ Carregando relatório da NOVA estrutura:', relatorioExistente.itens.length, 'itens');
         
-        const sortedData = sortRelatorios(existingRelatorios);
+        const sortedData = sortRelatorios(relatorioExistente.itens);
         setRelatorios(sortedData);
         setFilteredData(sortedData);
         
@@ -828,53 +1248,24 @@ const ProjectReports = () => {
         });
         setCategories(sortedCategories);
         
-        // Debug: verificar se há valores vazios nos arrays
-        console.log('🔍 DEBUG - Arrays populados (segunda parte):', {
-          categories: sortedCategories,
-          articles: uniqueArticles,
-          locals: uniqueLocals,
-          responsibles: uniqueResponsibles
-        });
-        
         // Extrair e ordenar artigos
         const uniqueArticles = Array.from(new Set(sortedData.map(item => item.itemTitle).filter(title => title && title.trim() !== '')));
-        const sortedArticles = uniqueArticles.sort((a, b) => {
-          // Extrair números dos artigos (ex: "1.1", "1.2", "2.1")
-          const parseArticleNumber = (title: string) => {
-            const match = title.match(/^(\d+)\.(\d+)/);
-            if (match) {
-              return [parseInt(match[1]), parseInt(match[2])];
-            }
-            return [0, 0];
-          };
-          
-          const [aMain, aSub] = parseArticleNumber(a);
-          const [bMain, bSub] = parseArticleNumber(b);
-          
-          if (aMain !== bMain) return aMain - bMain;
-          return aSub - bSub;
-        });
-        setArticles(sortedArticles);
+        setArticles(uniqueArticles.sort());
         
         // Extrair locais
         const uniqueLocals = Array.from(new Set(sortedData.map(item => item.local).filter(local => local && local.trim() !== '')));
-        setLocals(uniqueLocals);
+        setLocals(uniqueLocals.sort());
         
         // Extrair responsáveis
         const uniqueResponsibles = Array.from(new Set(sortedData.map(item => item.responsible).filter(resp => resp && resp.trim() !== '')));
-        setResponsibles(uniqueResponsibles);
+        setResponsibles(uniqueResponsibles.sort());
         
-              // Sincronizar novos itens do projeto
-      await syncNewItemsFromProject(projectId, sortedData);
-      
-      // Atualizar dados existentes com informações do projeto
-      await updateExistingRelatoriosFromProject(projectId, sortedData);
-      return;
+        return; // Dados já carregados
       }
       
-      // Se não há dados existentes, criar novos
-      console.log('📊 Nenhum dado existente encontrado, criando novos relatórios...');
-      await createRelatoriosFromProject(projectId);
+      // Se não há relatório, criar novo baseado no projeto
+      console.log('📄 Nenhum relatório encontrado, criando novo...');
+      await createOrUpdateRelatorio(projectId);
       
     } catch (error) {
       console.error('Erro ao carregar relatório do projeto:', error);
@@ -1208,8 +1599,80 @@ const ProjectReports = () => {
                 return;
               }
 
-              // Filtrar documentos problemáticos antes de salvar
-              const { collection, query, where, getDocs, getDoc, doc } = await import('firebase/firestore');
+    if (!projectId) {
+      toast.error('ID do projeto não encontrado');
+      return;
+    }
+
+    setSaving(true);
+    try {
+      // Carregar o documento único do relatório
+      const relatorioDoc = await getDoc(doc(db, 'relatorios', projectId));
+      
+      if (!relatorioDoc.exists()) {
+        console.error('❌ Documento de relatório não encontrado!');
+        toast.error('Relatório não encontrado');
+        return;
+      }
+
+      const relatorioData = relatorioDoc.data() as Relatorio;
+      console.log('✅ Relatório carregado:', relatorioData.itens.length, 'itens');
+
+      // Aplicar as mudanças locais aos itens
+      const itensAtualizados = relatorioData.itens.map(item => {
+        const mudancas = localChanges[item.id];
+        if (mudancas) {
+          console.log(`🔄 Aplicando mudanças ao item ${item.id}`);
+          return {
+            ...item,
+            ...mudancas,
+            updatedAt: new Date().toISOString(),
+            updatedBy: userData?.uid || ''
+          };
+        }
+        return item;
+      });
+
+      // Recalcular estatísticas
+      const statistics = {
+        totalItems: itensAtualizados.length,
+        completedItems: itensAtualizados.filter(item => item.status === 'completed').length,
+        pendingItems: itensAtualizados.filter(item => item.status === 'pending').length,
+        inProgressItems: itensAtualizados.filter(item => item.status === 'in_progress').length
+      };
+
+      // Atualizar documento único
+      const relatorioAtualizado: Relatorio = {
+        ...relatorioData,
+        itens: itensAtualizados,
+        statistics,
+        updatedAt: new Date().toISOString(),
+        updatedBy: userData?.uid || ''
+      };
+
+      console.log('💾 Salvando documento único com mudanças...');
+      await setDoc(doc(db, 'relatorios', projectId), relatorioAtualizado);
+
+      console.log('✅ Mudanças salvas com sucesso!');
+      toast.success(`${Object.keys(localChanges).length} alterações salvas com sucesso!`);
+
+      // Limpar mudanças locais
+      setLocalChanges({});
+      
+      // Atualizar estado local
+      setRelatorios(itensAtualizados);
+      setFilteredData(itensAtualizados);
+
+    } catch (error) {
+      console.error('❌ Erro ao salvar mudanças:', error);
+      toast.error('Erro ao salvar mudanças: ' + (error as Error).message);
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  // ANTIGA FUNÇÃO DE SALVAMENTO (deprecada)
+  const saveAllChangesOld = async () => {
               const validChanges: typeof localChanges = {};
               const invalidItems: string[] = [];
               

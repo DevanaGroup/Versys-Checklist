@@ -695,9 +695,6 @@ const Checklist = () => {
                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                   Baseado em
                 </th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                  Tópicos
-                </th>
                 <th className="px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">
                   Total
                 </th>
@@ -721,20 +718,6 @@ const Checklist = () => {
                     <div className="flex items-center gap-2">
                       <Package className="h-4 w-4 text-gray-400" />
                       <span className="text-sm text-gray-600">{checklist.itemNome}</span>
-                    </div>
-                  </td>
-                  <td className="px-6 py-4">
-                    <div className="flex flex-wrap gap-1">
-                      {checklist.topicos.slice(0, 2).map((topico) => (
-                        <Badge key={topico.id} variant="secondary" className="text-xs">
-                          {topico.titulo}
-                        </Badge>
-                      ))}
-                      {checklist.topicos.length > 2 && (
-                        <Badge variant="secondary" className="text-xs">
-                          +{checklist.topicos.length - 2}
-                        </Badge>
-                      )}
                     </div>
                   </td>
                   <td className="px-6 py-4 text-center">

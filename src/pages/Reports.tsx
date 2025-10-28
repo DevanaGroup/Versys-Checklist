@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
@@ -12,6 +13,8 @@ import { collection, getDocs, query, orderBy, where, doc, getDoc } from 'firebas
 import { db } from '@/lib/firebase';
 import { toast } from 'sonner';
 import { useAuthContext } from '@/contexts/AuthContext';
+import { calculateDetailedProjectScore, calculateProjectScore, getScoreColor } from '@/lib/weightedScoreService';
+import type { ProjectModule } from '@/lib/types';
 
 interface ProjectSummary {
   id: string;
@@ -24,6 +27,15 @@ interface ProjectSummary {
   pendingItems: number;
   inProgressItems: number;
   categories: string[];
+  // Novo sistema de avaliação ponderada
+  hasWeightedEvaluation?: boolean;
+  weightedScore?: {
+    pontuacaoAtual: number;
+    pontuacaoMaxima: number;
+    percentual: number;
+    ncsCompleted: number;
+    ncsTotal: number;
+  };
 }
 
 interface ReportData {
@@ -46,6 +58,7 @@ interface ReportData {
 
 const Reports = () => {
   const { userData } = useAuthContext();
+  const [searchParams] = useSearchParams();
   const [projects, setProjects] = useState<ProjectSummary[]>([]);
   const [selectedProject, setSelectedProject] = useState<ProjectSummary | null>(null);
   const [reportData, setReportData] = useState<ReportData[]>([]);
@@ -59,10 +72,23 @@ const Reports = () => {
   const [categories, setCategories] = useState<string[]>([]);
   const [statuses] = useState(['Pendente', 'Em Andamento', 'Concluído', 'Cancelado']);
 
+  // Carregar projeto específico da URL se houver projectId
   useEffect(() => {
-    if (!selectedProject) {
+    const projectId = searchParams.get('projectId');
+    console.log('🔍 URL projectId:', projectId);
+    
+    if (projectId) {
+      console.log('📊 Carregando projeto da URL:', projectId);
+      loadSingleProject(projectId);
+    } else if (!selectedProject) {
+      console.log('📋 Carregando lista de projetos');
       loadProjects();
-    } else {
+    }
+  }, [searchParams]);
+
+  useEffect(() => {
+    if (selectedProject) {
+      console.log('📊 Projeto selecionado, carregando dados:', selectedProject.id);
       loadProjectReportData(selectedProject.id);
     }
   }, [selectedProject]);
@@ -70,6 +96,113 @@ const Reports = () => {
   useEffect(() => {
     applyFilters();
   }, [reportData, searchTerm, categoryFilter, statusFilter]);
+
+  const loadSingleProject = async (projectId: string) => {
+    try {
+      setLoading(true);
+      console.log('🔍 Buscando projeto no Firebase:', projectId);
+      const projectDoc = await getDoc(doc(db, 'projetos', projectId));
+      
+      if (projectDoc.exists()) {
+        const projectData = projectDoc.data() as any;
+        console.log('✅ Projeto encontrado:', projectData.nome);
+        const projectName = projectData.nome || 'Projeto sem nome';
+        const clientName = projectData.cliente?.nome || 'Cliente não informado';
+        
+        let totalItems = 0;
+        let completedItems = 0;
+        let pendingItems = 0;
+        let inProgressItems = 0;
+        const categoriesSet = new Set<string>();
+        let hasWeightedEvaluation = false;
+        let weightedScore = undefined;
+
+        // Buscar módulos (compatibilidade)
+        const modulesData = projectData.modules || projectData.weightedModules;
+        
+        console.log('🔍 Verificando estrutura do projeto:', {
+          temModules: !!modulesData,
+          temCustomAccordions: !!projectData.customAccordions,
+          modulesLength: modulesData?.length || 0,
+          customAccordionsLength: projectData.customAccordions?.length || 0
+        });
+
+        // Verificar se usa novo sistema de módulos
+        if (modulesData && Array.isArray(modulesData) && modulesData.length > 0) {
+          console.log('✅ Usando sistema NOVO (modules)');
+          hasWeightedEvaluation = true;
+          weightedScore = calculateProjectScore(modulesData as ProjectModule[]);
+          
+          modulesData.forEach((module: ProjectModule) => {
+            if (module.itens && Array.isArray(module.itens)) {
+              module.itens.forEach((item) => {
+                categoriesSet.add(module.titulo || 'Categoria não informada');
+                if (item.ncs && Array.isArray(item.ncs)) {
+                  item.ncs.forEach((nc) => {
+                    totalItems++;
+                    switch (nc.status) {
+                      case 'completed': completedItems++; break;
+                      case 'in_progress': inProgressItems++; break;
+                      default: pendingItems++;
+                    }
+                  });
+                }
+              });
+            }
+          });
+        } else if (projectData.customAccordions) {
+          console.log('✅ Usando sistema ANTIGO (customAccordions)');
+          // Sistema antigo
+          projectData.customAccordions.forEach((accordion: any) => {
+            accordion.items.forEach((item: any) => {
+              categoriesSet.add(item.category || accordion.title || 'Categoria não informada');
+              item.subItems.forEach((subItem: any) => {
+                totalItems++;
+                const status = subItem.adequacyStatus || 'Pendente';
+                switch (status) {
+                  case 'Concluído': completedItems++; break;
+                  case 'Em Andamento': inProgressItems++; break;
+                  default: pendingItems++;
+                }
+              });
+            });
+          });
+        } else {
+          console.warn('⚠️ Projeto não tem nem modules nem customAccordions');
+        }
+
+        const project: ProjectSummary = {
+          id: projectDoc.id,
+          name: projectName,
+          clientName,
+          clientId: projectData.clienteId || '',
+          createdAt: projectData.createdAt?.toDate?.()?.toISOString() || new Date().toISOString(),
+          totalItems,
+          completedItems,
+          pendingItems,
+          inProgressItems,
+          categories: Array.from(categoriesSet),
+          hasWeightedEvaluation,
+          weightedScore
+        };
+
+        console.log('✅ Projeto processado:', {
+          id: project.id,
+          name: project.name,
+          totalItems,
+          hasWeightedEvaluation
+        });
+        setSelectedProject(project);
+      } else {
+        toast.error('Projeto não encontrado');
+      }
+    } catch (error) {
+      console.error('Erro ao carregar projeto:', error);
+      toast.error('Erro ao carregar projeto');
+    } finally {
+      setLoading(false);
+    }
+  };
 
   const loadProjects = async () => {
     try {
@@ -92,7 +225,7 @@ const Reports = () => {
       const projectsList: ProjectSummary[] = [];
 
       for (const projectDoc of projectsSnapshot.docs) {
-        const projectData = projectDoc.data();
+        const projectData = projectDoc.data() as any;
         const projectName = projectData.nome || 'Projeto sem nome';
         const clientName = projectData.cliente?.nome || 'Cliente não informado';
         
@@ -101,8 +234,47 @@ const Reports = () => {
         let pendingItems = 0;
         let inProgressItems = 0;
         const categoriesSet = new Set<string>();
+        let hasWeightedEvaluation = false;
+        let weightedScore = undefined;
 
-        if (projectData.customAccordions) {
+        // Buscar módulos (compatibilidade)
+        const modulesData = projectData.modules || projectData.weightedModules;
+
+        // Verificar se usa novo sistema de módulos com avaliação ponderada
+        if (modulesData && Array.isArray(modulesData) && modulesData.length > 0) {
+          hasWeightedEvaluation = true;
+          
+          // Calcular pontuação ponderada
+          const score = calculateProjectScore(modulesData as ProjectModule[]);
+          weightedScore = score;
+          
+          // Contar itens do novo sistema
+          modulesData.forEach((module: ProjectModule) => {
+            if (module.itens && Array.isArray(module.itens)) {
+              module.itens.forEach((item) => {
+                categoriesSet.add(module.titulo || 'Categoria não informada');
+                
+                if (item.ncs && Array.isArray(item.ncs)) {
+                  item.ncs.forEach((nc) => {
+                    totalItems++;
+                    
+                    switch (nc.status) {
+                      case 'completed':
+                        completedItems++;
+                        break;
+                      case 'in_progress':
+                        inProgressItems++;
+                        break;
+                      default:
+                        pendingItems++;
+                    }
+                  });
+                }
+              });
+            }
+          });
+        } else if (projectData.customAccordions) {
+          // Sistema antigo
           projectData.customAccordions.forEach((accordion: any) => {
             accordion.items.forEach((item: any) => {
               const category = item.category || accordion.title || 'Categoria não informada';
@@ -137,7 +309,9 @@ const Reports = () => {
           completedItems,
           pendingItems,
           inProgressItems,
-          categories: Array.from(categoriesSet)
+          categories: Array.from(categoriesSet),
+          hasWeightedEvaluation,
+          weightedScore
         });
       }
 
@@ -148,6 +322,31 @@ const Reports = () => {
     } finally {
       setLoading(false);
     }
+  };
+
+  // Função auxiliar para extrair situação atual das perguntas da NC
+  const extractCurrentSituationFromNC = (nc: any): string => {
+    if (nc.descricao) return nc.descricao;
+    
+    if (nc.perguntas && Array.isArray(nc.perguntas)) {
+      const situacoes = nc.perguntas
+        .map((p: any) => p.response?.currentSituation)
+        .filter((s: any) => s && s.trim() !== '');
+      if (situacoes.length > 0) return situacoes.join(' | ');
+    }
+    return '';
+  };
+
+  const extractClientGuidanceFromNC = (nc: any): string => {
+    if ((nc as any).orientacao) return (nc as any).orientacao;
+    
+    if (nc.perguntas && Array.isArray(nc.perguntas)) {
+      const orientacoes = nc.perguntas
+        .map((p: any) => p.response?.aiGuidance)
+        .filter((g: any) => g && g.trim() !== '');
+      if (orientacoes.length > 0) return orientacoes.join(' | ');
+    }
+    return '';
   };
 
   const loadProjectReportData = async (projectId: string) => {
@@ -165,7 +364,69 @@ const Reports = () => {
         const projectName = projectData.nome || 'Projeto sem nome';
         const clientName = projectData.cliente?.nome || 'Cliente não informado';
 
-        if (projectData.customAccordions) {
+        // Buscar módulos (compatibilidade)
+        const modulesData = projectData.modules || projectData.weightedModules;
+
+        // NOVO SISTEMA: Processar modules (avaliação ponderada)
+        if (modulesData && Array.isArray(modulesData) && modulesData.length > 0) {
+          console.log('📊 Carregando dados do sistema NOVO (modules):', modulesData.length, 'módulos');
+          
+          modulesData.forEach((module: ProjectModule) => {
+            if (module.itens && Array.isArray(module.itens)) {
+              module.itens.forEach((item) => {
+                const category = module.titulo || 'Módulo não informado';
+                uniqueCategories.add(category);
+
+                if (item.ncs && Array.isArray(item.ncs)) {
+                  item.ncs.forEach((nc) => {
+                    const ncId = `${module.id}_${item.id}_${nc.id}`;
+                    
+                    // Mapear status do novo sistema para o formato do relatório
+                    let statusFormatado = 'Pendente';
+                    switch (nc.status) {
+                      case 'completed':
+                        statusFormatado = 'Concluído';
+                        break;
+                      case 'in_progress':
+                        statusFormatado = 'Em Andamento';
+                        break;
+                      default:
+                        statusFormatado = 'Pendente';
+                    }
+                    
+                    // Extrair situação e orientação das perguntas
+                    const currentSituation = extractCurrentSituationFromNC(nc);
+                    const clientGuidance = extractClientGuidanceFromNC(nc);
+                    
+                    console.log(`📝 Reports - NC "${nc.ncTitulo}": local="${(nc as any).local || 'A definir'}", situação="${currentSituation}"`);
+                    
+                    data.push({
+                      id: `${projectDoc.id}-${ncId}`,
+                      projectName,
+                      clientName,
+                      category,
+                      local: (nc as any).local || 'A definir',
+                      currentSituation: currentSituation,
+                      clientGuidance: clientGuidance,
+                      responsible: (nc as any).responsavel || '',
+                      whatWasDone: (nc as any).acaoRealizada || '',
+                      startDate: (nc as any).dataInicio || '',
+                      endDate: (nc as any).dataFim || '',
+                      status: statusFormatado,
+                      photos: (nc as any).fotos || [],
+                      evaluation: '',
+                      variationName: nc.ncTitulo || `NC ${nc.numero}`
+                    });
+                  });
+                }
+              });
+            }
+          });
+        }
+        // SISTEMA ANTIGO: Processar customAccordions
+        else if (projectData.customAccordions) {
+          console.log('📊 Carregando dados do sistema ANTIGO (customAccordions)');
+          
           projectData.customAccordions.forEach((accordion: any) => {
             accordion.items.forEach((item: any) => {
               const category = item.category || accordion.title || 'Categoria não informada';
@@ -192,9 +453,12 @@ const Reports = () => {
               });
             });
           });
+        } else {
+          console.warn('⚠️ Projeto não possui dados (nem modules nem customAccordions)');
         }
       }
 
+      console.log(`✅ ${data.length} itens carregados no relatório`);
       setReportData(data);
       setCategories(Array.from(uniqueCategories).sort());
     } catch (error) {
@@ -398,20 +662,7 @@ const Reports = () => {
                 </div>
               </div>
 
-              <div className="space-y-2">
-                <Label htmlFor="project">Projeto</Label>
-                <Select value={projectFilter} onValueChange={setProjectFilter}>
-                  <SelectTrigger>
-                    <SelectValue placeholder="Todos os projetos" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="all">Todos os projetos</SelectItem>
-                    {projects.map(project => (
-                      <SelectItem key={project} value={project}>{project}</SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
+              {/* Filtro de projeto removido temporariamente */}
 
               <div className="space-y-2">
                 <Label htmlFor="category">Categoria</Label>
@@ -446,6 +697,48 @@ const Reports = () => {
           </Card>
 
           {/* Estatísticas */}
+          {selectedProject && selectedProject.hasWeightedEvaluation && selectedProject.weightedScore && (
+            <Card className="mb-4 border-versys-primary">
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <TrendingUp className="h-5 w-5 text-versys-primary" />
+                  Pontuação Ponderada do Projeto
+                </CardTitle>
+                <CardDescription>
+                  Sistema de avaliação com perguntas ponderadas
+                </CardDescription>
+              </CardHeader>
+              <CardContent>
+                <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+                  <div className="text-center p-4 bg-gradient-to-br from-blue-50 to-blue-100 rounded-lg">
+                    <div className={`text-3xl font-bold ${getScoreColor(selectedProject.weightedScore.percentual)}`}>
+                      {selectedProject.weightedScore.percentual.toFixed(1)}%
+                    </div>
+                    <p className="text-xs text-muted-foreground mt-1">Percentual Geral</p>
+                  </div>
+                  <div className="text-center p-4 bg-gradient-to-br from-purple-50 to-purple-100 rounded-lg">
+                    <div className="text-2xl font-bold text-purple-600">
+                      {selectedProject.weightedScore.pontuacaoAtual.toFixed(2)}
+                    </div>
+                    <p className="text-xs text-muted-foreground mt-1">Pontuação Atual</p>
+                  </div>
+                  <div className="text-center p-4 bg-gradient-to-br from-indigo-50 to-indigo-100 rounded-lg">
+                    <div className="text-2xl font-bold text-indigo-600">
+                      {selectedProject.weightedScore.pontuacaoMaxima.toFixed(2)}
+                    </div>
+                    <p className="text-xs text-muted-foreground mt-1">Pontuação Máxima</p>
+                  </div>
+                  <div className="text-center p-4 bg-gradient-to-br from-green-50 to-green-100 rounded-lg">
+                    <div className="text-2xl font-bold text-green-600">
+                      {selectedProject.weightedScore.ncsCompleted}/{selectedProject.weightedScore.ncsTotal}
+                    </div>
+                    <p className="text-xs text-muted-foreground mt-1">NCs Concluídas</p>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+          )}
+          
           <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
             <Card>
               <CardContent className="p-6">

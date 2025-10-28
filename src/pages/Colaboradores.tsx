@@ -8,7 +8,7 @@ import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, D
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog";
 import { Badge } from "@/components/ui/badge";
 import { toast } from "sonner";
-import { Plus, Edit, Trash2, UserX, UserCheck, Search, Shield, User, Eye, EyeOff, MoreVertical } from "lucide-react";
+import { Plus, Edit, Trash2, UserX, UserCheck, Search, Shield, User, Eye, EyeOff, MoreVertical, Filter, X } from "lucide-react";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { auth, db } from "@/lib/firebase";
 import { collection, addDoc, getDocs, doc, updateDoc, deleteDoc, query, orderBy, where, setDoc } from "firebase/firestore";
@@ -42,11 +42,14 @@ const Colaboradores = () => {
   const [loading, setLoading] = useState(true);
   const [filtroNome, setFiltroNome] = useState("");
   const [filtroStatus, setFiltroStatus] = useState("todos");
+  const [filtroNivel, setFiltroNivel] = useState("todos");
   const [colaboradorEditando, setColaboradorEditando] = useState<Colaborador | null>(null);
   const [dialogAberto, setDialogAberto] = useState(false);
   const [dialogEdicaoAberto, setDialogEdicaoAberto] = useState(false);
   const [criandoColaborador, setCriandoColaborador] = useState(false);
   const [mostrarSenha, setMostrarSenha] = useState(false);
+  const [buscaExpandida, setBuscaExpandida] = useState(false);
+  const [filtroExpandido, setFiltroExpandido] = useState(false);
   const [novoColaborador, setNovoColaborador] = useState<Partial<Colaborador & { senha: string }>>({
     nome: "",
     email: "",
@@ -139,7 +142,8 @@ const Colaboradores = () => {
     const nomeMatch = colaborador.nome.toLowerCase().includes(filtroNome.toLowerCase()) ||
                      colaborador.email.toLowerCase().includes(filtroNome.toLowerCase());
     const statusMatch = filtroStatus === "todos" || colaborador.status === filtroStatus;
-    return nomeMatch && statusMatch;
+    const nivelMatch = filtroNivel === "todos" || colaborador.nivel === filtroNivel;
+    return nomeMatch && statusMatch && nivelMatch;
   });
 
   const handleCriarColaborador = async () => {
@@ -365,7 +369,7 @@ const Colaboradores = () => {
   };
 
   return (
-    <div className="space-y-4 sm:space-y-6">
+    <div className="space-y-4 sm:space-y-6 overflow-x-hidden">
       {/* Header responsivo */}
       <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-4">
         <div className="flex-1 min-w-0">
@@ -489,45 +493,124 @@ const Colaboradores = () => {
         </Dialog>
       </div>
 
-      {/* Filtros responsivos */}
-      <Card>
-        <CardContent className="p-4">
-          <div className="flex flex-col sm:flex-row gap-4 items-stretch sm:items-end">
-            <div className="flex-1">
-              <Label htmlFor="filtro-nome">Buscar</Label>
+      {/* Tabela de Colaboradores */}
+      <Card className="overflow-hidden">
+        <CardHeader className="pb-4 overflow-x-clip">
+          <div className="flex items-center justify-between gap-4">
+            <CardTitle>Lista de Colaboradores ({colaboradoresFiltrados.length})</CardTitle>
+            
+            <div className="flex items-center gap-2 relative">
+              {/* Botão de Busca */}
               <div className="relative">
-                <Search className="absolute left-3 top-3 h-4 w-4 text-gray-400" />
-                <Input
-                  id="filtro-nome"
-                  placeholder="Buscar por nome ou email..."
-                  value={filtroNome}
-                  onChange={(e) => setFiltroNome(e.target.value)}
-                  className="pl-10"
-                />
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => setBuscaExpandida(true)}
+                  className={`h-9 w-9 p-0 transition-opacity ${buscaExpandida ? 'opacity-0 pointer-events-none' : 'opacity-100'}`}
+                >
+                  <Search className="h-5 w-5" />
+                </Button>
+                
+                {buscaExpandida && (
+                  <div className="absolute right-0 top-0 z-50 animate-in slide-in-from-right duration-200">
+                    <div className="relative bg-white rounded-md shadow-lg border border-gray-200">
+                      <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400 pointer-events-none" />
+                      <Input
+                        placeholder="Buscar..."
+                        value={filtroNome}
+                        onChange={(e) => setFiltroNome(e.target.value)}
+                        className="w-48 sm:w-64 pl-10 pr-10 h-9 border-0 focus-visible:ring-0"
+                        autoFocus
+                      />
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => {
+                          setBuscaExpandida(false);
+                          setFiltroNome('');
+                        }}
+                        className="absolute right-0 top-1/2 -translate-y-1/2 h-9 w-9 p-0 hover:bg-gray-100"
+                      >
+                        <X className="h-4 w-4" />
+                      </Button>
+                    </div>
+                  </div>
+                )}
               </div>
-            </div>
-            <div className="w-full sm:w-auto">
-              <Label htmlFor="filtro-status">Status</Label>
-              <Select value={filtroStatus} onValueChange={setFiltroStatus}>
-                <SelectTrigger className="w-full sm:w-32">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="todos">Todos</SelectItem>
-                  <SelectItem value="ativo">Ativo</SelectItem>
-                  <SelectItem value="suspenso">Suspenso</SelectItem>
-                  <SelectItem value="inativo">Inativo</SelectItem>
-                </SelectContent>
-              </Select>
+
+              {/* Filtro de Status e Nível */}
+              <DropdownMenu open={filtroExpandido} onOpenChange={setFiltroExpandido}>
+                <DropdownMenuTrigger asChild>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    className="h-9 w-9 p-0 relative"
+                  >
+                    <Filter className="h-5 w-5" />
+                    {(filtroStatus !== 'todos' || filtroNivel !== 'todos') && (
+                      <span className="absolute -top-1 -right-1 h-3 w-3 bg-versys-primary rounded-full" />
+                    )}
+                  </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="end" className="w-48">
+                  {/* Filtros de Status */}
+                  <div className="px-2 py-1.5 text-xs font-semibold text-gray-500">Status</div>
+                  <DropdownMenuItem
+                    onClick={() => setFiltroStatus('todos')}
+                    className={filtroStatus === 'todos' ? 'bg-gray-100' : ''}
+                  >
+                    Todos os status
+                  </DropdownMenuItem>
+                  <DropdownMenuItem
+                    onClick={() => setFiltroStatus('ativo')}
+                    className={filtroStatus === 'ativo' ? 'bg-green-50 text-green-700' : ''}
+                  >
+                    <span className="h-2 w-2 rounded-full bg-green-500 mr-2" />
+                    Ativo
+                  </DropdownMenuItem>
+                  <DropdownMenuItem
+                    onClick={() => setFiltroStatus('suspenso')}
+                    className={filtroStatus === 'suspenso' ? 'bg-yellow-50 text-yellow-700' : ''}
+                  >
+                    <span className="h-2 w-2 rounded-full bg-yellow-500 mr-2" />
+                    Suspenso
+                  </DropdownMenuItem>
+                  <DropdownMenuItem
+                    onClick={() => setFiltroStatus('inativo')}
+                    className={filtroStatus === 'inativo' ? 'bg-red-50 text-red-700' : ''}
+                  >
+                    <span className="h-2 w-2 rounded-full bg-red-500 mr-2" />
+                    Inativo
+                  </DropdownMenuItem>
+                  
+                  <DropdownMenuSeparator />
+                  
+                  {/* Filtros de Nível */}
+                  <div className="px-2 py-1.5 text-xs font-semibold text-gray-500">Nível</div>
+                  <DropdownMenuItem
+                    onClick={() => setFiltroNivel('todos')}
+                    className={filtroNivel === 'todos' ? 'bg-gray-100' : ''}
+                  >
+                    Todos os níveis
+                  </DropdownMenuItem>
+                  <DropdownMenuItem
+                    onClick={() => setFiltroNivel('administrador')}
+                    className={filtroNivel === 'administrador' ? 'bg-purple-50 text-purple-700' : ''}
+                  >
+                    <Shield className="h-4 w-4 mr-2 text-purple-600" />
+                    Administrador
+                  </DropdownMenuItem>
+                  <DropdownMenuItem
+                    onClick={() => setFiltroNivel('colaborador')}
+                    className={filtroNivel === 'colaborador' ? 'bg-blue-50 text-blue-700' : ''}
+                  >
+                    <User className="h-4 w-4 mr-2 text-blue-600" />
+                    Colaborador
+                  </DropdownMenuItem>
+                </DropdownMenuContent>
+              </DropdownMenu>
             </div>
           </div>
-        </CardContent>
-      </Card>
-
-      {/* Tabela de Colaboradores */}
-      <Card>
-        <CardHeader>
-          <CardTitle>Lista de Colaboradores ({colaboradoresFiltrados.length})</CardTitle>
         </CardHeader>
         <CardContent>
           {/* Layout Desktop - Tabela */}
@@ -536,9 +619,9 @@ const Colaboradores = () => {
             <TableHeader>
               <TableRow>
                 <TableHead>Nome</TableHead>
-                <TableHead>Nível</TableHead>
-                <TableHead>Tipo</TableHead>
-                <TableHead>Status</TableHead>
+                <TableHead className="text-center">Nível</TableHead>
+                <TableHead className="text-center">Tipo</TableHead>
+                <TableHead className="text-center">Status</TableHead>
                 <TableHead className="text-center">Ações</TableHead>
               </TableRow>
             </TableHeader>
@@ -566,9 +649,9 @@ const Colaboradores = () => {
                         <div className="text-sm text-gray-500">{colaborador.email}</div>
                       </div>
                     </TableCell>
-                    <TableCell>{getNivelBadge(colaborador.nivel)}</TableCell>
-                    <TableCell>{getTipoBadge(colaborador.tipo)}</TableCell>
-                    <TableCell>{getStatusBadge(colaborador.status)}</TableCell>
+                    <TableCell className="text-center">{getNivelBadge(colaborador.nivel)}</TableCell>
+                    <TableCell className="text-center">{getTipoBadge(colaborador.tipo)}</TableCell>
+                    <TableCell className="text-center">{getStatusBadge(colaborador.status)}</TableCell>
                     <TableCell className="text-center">
                       <DropdownMenu>
                         <DropdownMenuTrigger asChild>
@@ -878,8 +961,10 @@ const Colaboradores = () => {
                     id="edit-email"
                     type="email"
                     value={colaboradorEditando.email}
-                    onChange={(e) => setColaboradorEditando({...colaboradorEditando, email: e.target.value})}
+                    disabled
+                    className="bg-gray-100 cursor-not-allowed"
                   />
+                  <p className="text-xs text-muted-foreground">O e-mail não pode ser alterado</p>
                 </div>
               </div>
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">

@@ -317,7 +317,7 @@ export const HierarchicalProjectSidebar = ({
   // Desktop: Sidebar normal
   return (
     <div className={cn("w-80 bg-white", className)}>
-      <div className="p-6 m-4 border border-gray-350 rounded-lg shadow-md bg-white h-[calc(100vh-8rem)] overflow-y-auto">
+      <div className="p-4 m-4 border border-gray-350 rounded-lg shadow-md bg-white h-[calc(100vh-8rem)] overflow-y-auto">
         <SidebarContent />
       </div>
     </div>
