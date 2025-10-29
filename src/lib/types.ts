@@ -96,6 +96,7 @@ export interface NC {
   numero: number; // NC 1, NC 2, NC 3...
   ncTitulo: string; // Título da NC (ex: "NC-1", "Documentação")
   descricao?: string;
+  local?: string; // Local da NC (ex: "Portaria Principal", "Setor A", etc.)
   perguntas: WeightedQuestion[];
   pontuacaoAtual: number;
   pontuacaoMaxima: number;

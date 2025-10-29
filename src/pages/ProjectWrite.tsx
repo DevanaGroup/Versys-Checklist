@@ -1608,7 +1608,7 @@ const ProjectWrite = () => {
                         
                         {/* Campo Local - mesmo estilo do título */}
                         <Input
-                          value={(currentNC as any).local || ''}
+                          value={currentNC.local || ''}
                           onChange={(e) => {
                             setModules(prevModules =>
                               prevModules.map(module => ({

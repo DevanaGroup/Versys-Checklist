@@ -415,11 +415,11 @@ const ProjectView = () => {
       {/* Conteúdo Principal */}
       <div className="flex-1 overflow-hidden w-full">
         {/* Conteúdo */}
-        <div className="p-4 md:p-6 md:m-4 md:border md:border-gray-350 md:rounded-lg md:shadow-md bg-white h-[calc(100vh-3.5rem)] md:h-[calc(100vh-8rem)] overflow-y-auto">
+        <div className="px-3 pt-2 pb-3 md:p-4 md:m-4 md:border md:border-gray-350 md:rounded-lg md:shadow-md bg-white h-[calc(100vh-3.5rem)] md:h-[calc(100vh-8rem)] overflow-y-auto">
           {currentNC && currentItem && currentModule ? (
             <div className="max-w-5xl mx-auto space-y-4 md:space-y-6">
               {/* Header Mobile - Verde com artigo atual */}
-              <div className="md:hidden -mx-4 -mt-4 mb-4 bg-versys-primary text-white px-4 py-3">
+              <div className="md:hidden -mx-3 -mt-2 mb-4 bg-versys-primary text-white px-4 py-3">
                 <div className="flex items-start gap-3">
                   <Button
                     variant="ghost"
@@ -469,7 +469,7 @@ const ProjectView = () => {
               })()}
 
               {/* Header Desktop */}
-              <div className="hidden md:block bg-white p-4 rounded-lg shadow-sm border border-gray-200 mb-4">
+              <div className="hidden md:block bg-white p-3 rounded-lg shadow-sm border border-gray-200 mb-2">
                 <div className="flex items-center justify-between">
                   <div className="flex items-center gap-4">
             <Button
@@ -495,22 +495,23 @@ const ProjectView = () => {
                     />
             <Button
                       onClick={() => navigate(`/projetos/write/${id}`)}
+                      variant="ghost"
+                      size="icon"
                     >
-                      <Edit className="h-4 w-4 mr-2" />
-                      Editar
+                      <Edit className="h-5 w-5" />
             </Button>
           </div>
                 </div>
               </div>
               {/* Header do Módulo e Item (Artigo) - Apenas Desktop */}
-              <div className="hidden md:block bg-white rounded-lg p-6 shadow-sm border border-gray-200">
-                <div className="mb-4">
-                  <Badge variant="outline" className="mb-2">
+              <div className="hidden md:block bg-white rounded-lg p-4 shadow-sm border border-gray-200">
+                <div className="mb-2">
+                  <Badge variant="outline" className="mb-1">
                     {currentModule.titulo}
                   </Badge>
-                  <h2 className="text-xl font-bold text-gray-900">{currentItem.titulo}</h2>
+                  <h2 className="text-lg font-bold text-gray-900">{currentItem.titulo}</h2>
                   {currentItem.descricao && (
-                    <p className="text-gray-600 mt-2">{currentItem.descricao}</p>
+                    <p className="text-sm text-gray-600 mt-1">{currentItem.descricao}</p>
                   )}
               </div>
             </div>
@@ -528,6 +529,12 @@ const ProjectView = () => {
                         <h3 className="text-lg font-bold text-gray-900 mb-2">
                           {currentNC.ncTitulo}
                         </h3>
+                        {currentNC.local && (
+                          <p className="text-sm text-gray-600 mb-1 flex items-center gap-1">
+                            <MapPin className="h-4 w-4" />
+                            {currentNC.local}
+                          </p>
+                        )}
                         <p className="text-sm text-gray-600">
                           {question.text}
                         </p>
@@ -555,23 +562,33 @@ const ProjectView = () => {
                               </div>
                               <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
                                 {question.response.mediaAttachments.map((media, idx) => (
-                                  <div key={idx} className="relative">
-                                    <img
-                                      src={media.url}
-                                      alt={`Foto ${idx + 1}`}
-                                      className="w-full h-32 object-cover rounded-lg border border-gray-200 cursor-pointer hover:opacity-90 transition-opacity"
-                                      onClick={() => window.open(media.url, '_blank')}
-                                    />
-                                    {media.latitude && media.longitude && (
-                                      <a
-                                        href={`https://www.google.com/maps?q=${media.latitude},${media.longitude}`}
-                                              target="_blank"
-                                              rel="noopener noreferrer"
-                                        className="absolute bottom-2 right-2 bg-white rounded-full p-1.5 shadow-md hover:bg-gray-100"
-                                        title="Ver localização no mapa"
-                                            >
-                                        <MapPin className="h-3 w-3 text-blue-600" />
-                                            </a>
+                                  <div key={idx} className="space-y-1">
+                                    <div className="relative">
+                                      <img
+                                        src={media.url}
+                                        alt={`Foto ${idx + 1}`}
+                                        className="w-full h-32 object-cover rounded-lg border border-gray-200 cursor-pointer hover:opacity-90 transition-opacity"
+                                        onClick={() => window.open(media.url, '_blank')}
+                                      />
+                                      {media.latitude && media.longitude && (
+                                        <a
+                                          href={`https://www.google.com/maps?q=${media.latitude},${media.longitude}`}
+                                          target="_blank"
+                                          rel="noopener noreferrer"
+                                          className="absolute bottom-2 right-2 bg-white rounded-full p-1.5 shadow-md hover:bg-gray-100"
+                                          title="Ver localização no mapa"
+                                        >
+                                          <MapPin className="h-3 w-3 text-blue-600" />
+                                        </a>
+                                      )}
+                                    </div>
+                                    {media.latitude && media.longitude && media.latitude !== 0 && (
+                                      <div className="text-xs text-green-600 flex items-center gap-1">
+                                        <MapPin className="h-3 w-3" />
+                                        <span className="truncate">
+                                          {media.latitude.toFixed(6)}, {media.longitude.toFixed(6)}
+                                        </span>
+                                      </div>
                                     )}
                                   </div>
                                 ))}
